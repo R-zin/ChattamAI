@@ -1,0 +1,27 @@
+# ChattamAI — Kerala Building Rules compliance RAG
+# Web framework
+fastapi==0.128.8
+uvicorn[standard]==0.39.0
+pydantic==2.13.4
+
+# Orchestration
+langgraph==0.6.11
+langchain-core==0.3.86
+
+# Embeddings (OpenAI) + vector store
+openai==2.46.0
+faiss-cpu==1.13.0
+numpy==2.0.2
+
+# LLM (Anthropic Claude, incl. local proxy support)
+anthropic==0.117.0
+
+# Document parsing
+pypdf==6.14.2
+
+# Config
+python-dotenv==1.2.1
+python-multipart==0.0.20
+
+# Database (existing models; unused by the RAG app for now)
+sqlalchemy==2.0.51

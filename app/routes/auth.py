@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Header, HTTPException
-
+import os
 from app.services.dbmodel import User
 
 auth_router = APIRouter()

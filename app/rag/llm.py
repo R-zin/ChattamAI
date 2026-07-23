@@ -44,3 +44,12 @@ class ClaudeClient:
             for block in message.content
             if getattr(block, "type", "") == "text"
         )
+class OpenRouter:
+    def __init__(self,max_tokens: int) -> None:
+        from openai import OpenAI
+        self._client = OpenAI(base_url=os.getenv("OPENROUTER_API_URL"),api_key=os.getenv("OPENROUTER_API_KEY"))
+        self.max_tokens = max_tokens
+        self.model = os.getenv("OPENROUTER_MODEL")
+    def complete(self, system: str, user: str) -> str:
+        resp = self._client.completions.create(
+            model=self.model, )

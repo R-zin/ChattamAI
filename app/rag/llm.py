@@ -51,5 +51,11 @@ class OpenRouter:
         self.max_tokens = max_tokens
         self.model = os.getenv("OPENROUTER_MODEL")
     def complete(self, system: str, user: str) -> str:
-        resp = self._client.completions.create(
-            model=self.model, )
+        resp = self._client.chat.completions.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            messages=[{"role":"system","content":"system"},{"role": "user", "content": user}],
+        )
+        return resp.choices[0].message.content
+
+

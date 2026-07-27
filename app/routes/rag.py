@@ -15,6 +15,7 @@ from app.schemas import (
     ComplianceResponse,
     HealthResponse,
     IngestResponse,
+    SetModelResponse, SetModelRequest,
 )
 
 router = APIRouter(prefix="/api", tags=["rag"])
@@ -41,6 +42,10 @@ def health(rag: RAGSystem = Depends(get_rag)) -> HealthResponse:
 
 class IngestRequest(BaseModel):
     data_dir: Optional[str] = None
+
+@router.post("/setmodel",response_model=SetModelResponse)
+async def set_model(data:SetModelRequest):
+
 
 
 @router.post("/ingest", response_model=IngestResponse)

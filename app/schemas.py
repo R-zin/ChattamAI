@@ -12,6 +12,11 @@ class IngestResponse(BaseModel):
     chunks: int = Field(..., description="Number of chunks indexed")
     index_size: int = Field(..., description="Total vectors in the index")
 
+class SetModelResponse(BaseModel):
+    status: str
+
+class SetModelRequest(BaseModel):
+    model_provider: str
 
 class ComplianceRequest(BaseModel):
     """Text-based compliance request (extracted plan details as free text)."""

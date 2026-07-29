@@ -12,6 +12,9 @@ jobs:
     name: Analyze Large Repository
     runs-on: ubuntu-latest
     timeout-minutes: 20  # Increased for multiple API calls
+    # Optional analysis: never block required checks if the secret is missing
+    # or the upstream API fails.
+    continue-on-error: true
 
     permissions:
       contents: read
@@ -27,21 +30,26 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Verify Secret Exists
+      - name: Check whether secret exists
+        id: secret
         env:
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+        # Non-fatal: emit an output and skip the run when the key is absent,
+        # instead of failing every push/PR (continue-on-error already set).
         run: |
           if [ -z "$NVIDIA_API_KEY" ]; then
-            echo "❌ NVIDIA_API_KEY is EMPTY or NOT SET"
-            exit 1
+            echo "NVIDIA_API_KEY is not set; downstream steps will be skipped."
           else
-            echo "✅ NVIDIA_API_KEY is set (length: ${#NVIDIA_API_KEY})"
+            echo "NVIDIA_API_KEY is set (length: ${#NVIDIA_API_KEY})."
           fi
+          echo "has_key=$([ -n "$NVIDIA_API_KEY" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
       - name: Install Dependencies
+        if: steps.secret.outputs.has_key == 'true'
         run: pip install openai
 
       - name: Run Chunked Repo Analysis
+        if: steps.secret.outputs.has_key == 'true'
         id: analysis
         env:
           NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
@@ -49,6 +57,7 @@ jobs:
           python .github/scripts/analyze_repo_large.py ${{ github.workspace }}
 
       - name: Upload Analysis Report
+        if: steps.secret.outputs.has_key == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: large-repo-analysis-report
@@ -56,7 +65,7 @@ jobs:
           retention-days: 30
 
       - name: Post Analysis as PR Comment
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.secret.outputs.has_key == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -76,7 +85,7 @@ jobs:
             });
 
       - name: Create Issue with Analysis
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && steps.secret.outputs.has_key == 'true'
         uses: actions/github-script@v7
         with:
           script: |

@@ -1,7 +1,6 @@
 import os
 import sys
 import time
-import math
 from pathlib import Path
 from openai import OpenAI
 
@@ -12,15 +11,48 @@ MODEL = "z-ai/glm-5.2"
 
 # File extensions to include
 INCLUDE_EXTENSIONS = {
-    ".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs",
-    ".cpp", ".c", ".h", ".cs", ".rb", ".php", ".swift", ".kt",
-    ".yml", ".yaml", ".json", ".toml", ".md", ".sh", ".sql"
+    ".py",
+    ".js",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".java",
+    ".go",
+    ".rs",
+    ".cpp",
+    ".c",
+    ".h",
+    ".cs",
+    ".rb",
+    ".php",
+    ".swift",
+    ".kt",
+    ".yml",
+    ".yaml",
+    ".json",
+    ".toml",
+    ".md",
+    ".sh",
+    ".sql",
 }
 # Directories to skip
 SKIP_DIRS = {
-    ".git", "node_modules", "__pycache__", ".venv", "venv",
-    "dist", "build", ".next", "vendor", ".mypy_cache", ".pytest_cache",
-    "coverage", "tests", "test", "spec", "docs"  # Skip tests/docs for core logic analysis
+    ".git",
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+    ".next",
+    "vendor",
+    ".mypy_cache",
+    ".pytest_cache",
+    "coverage",
+    "tests",
+    "test",
+    "spec",
+    "docs",  # Skip tests/docs for core logic analysis
 }
 MAX_FILE_SIZE_KB = 100
 MAX_CHUNK_TOKENS = 30000  # Safe limit per chunk to avoid context overflow
@@ -37,7 +69,10 @@ def collect_repo_files(root_path: str) -> list[dict]:
             continue
 
         suffix = file_path.suffix.lower()
-        if suffix not in INCLUDE_EXTENSIONS and file_path.name not in INCLUDE_EXTENSIONS:
+        if (
+            suffix not in INCLUDE_EXTENSIONS
+            and file_path.name not in INCLUDE_EXTENSIONS
+        ):
             continue
 
         size_kb = file_path.stat().st_size / 1024
@@ -46,11 +81,13 @@ def collect_repo_files(root_path: str) -> list[dict]:
 
         try:
             content = file_path.read_text(encoding="utf-8", errors="ignore")
-            files.append({
-                "path": str(file_path.relative_to(root)),
-                "content": content,
-                "tokens": len(content) // 4  # Rough estimate
-            })
+            files.append(
+                {
+                    "path": str(file_path.relative_to(root)),
+                    "content": content,
+                    "tokens": len(content) // 4,  # Rough estimate
+                }
+            )
         except Exception:
             continue
 
@@ -96,12 +133,12 @@ def call_nim(client, messages, max_tokens=4096):
                 messages=messages,
                 temperature=0.2,
                 top_p=0.8,
-                max_tokens=max_tokens
+                max_tokens=max_tokens,
             )
             return response.choices[0].message.content
         except Exception as e:
             if "rate limit" in str(e).lower() and attempt < 2:
-                print(f"  ⏳ Rate limited. Waiting 5 seconds...")
+                print("  ⏳ Rate limited. Waiting 5 seconds...")
                 time.sleep(5)
             else:
                 raise e
@@ -137,10 +174,13 @@ def main():
         print(f"🤖 Analyzing chunk {idx + 1}/{len(chunks)} ({len(chunk)} files)...")
 
         # Build chunk prompt
-        contents = "\n\n".join(f"### {f['path']}\n```{Path(f['path']).suffix[1:]}\n{f['content']}\n```" for f in chunk)
+        contents = "\n\n".join(
+            f"### {f['path']}\n```{Path(f['path']).suffix[1:]}\n{f['content']}\n```"
+            for f in chunk
+        )
 
         chunk_prompt = f"""You are analyzing a subset of a codebase. 
-Files in this chunk: {', '.join(file_names)}
+Files in this chunk: {", ".join(file_names)}
 
 {contents}
 
@@ -150,12 +190,21 @@ Provide a concise analysis (max 500 words) covering:
 3. **Code Smells**: Poor patterns, duplication, or complexity?
 Be direct. Use bullet points."""
 
-        summary = call_nim(client, [
-            {"role": "system", "content": "You are an expert code reviewer. Be concise and precise."},
-            {"role": "user", "content": chunk_prompt}
-        ], max_tokens=1024)
+        summary = call_nim(
+            client,
+            [
+                {
+                    "role": "system",
+                    "content": "You are an expert code reviewer. Be concise and precise.",
+                },
+                {"role": "user", "content": chunk_prompt},
+            ],
+            max_tokens=1024,
+        )
 
-        chunk_summaries.append(f"### Chunk {idx + 1} ({', '.join(file_names[:3])}...)\n{summary}")
+        chunk_summaries.append(
+            f"### Chunk {idx + 1} ({', '.join(file_names[:3])}...)\n{summary}"
+        )
         print(f"   ✅ Chunk {idx + 1} complete.\n")
 
         # Prevent rate limiting between chunks
@@ -169,7 +218,9 @@ Be direct. Use bullet points."""
 
     # Truncate if synthesis prompt is too large
     if len(combined_summaries) > 100000:
-        combined_summaries = combined_summaries[:100000] + "\n\n[Truncated due to size...]"
+        combined_summaries = (
+            combined_summaries[:100000] + "\n\n[Truncated due to size...]"
+        )
 
     synthesis_prompt = f"""You have analyzed a large repository in {len(chunks)} chunks. 
 Here are the findings from each chunk:
@@ -203,11 +254,17 @@ Structure your final report exactly like this:
 
 Format in clean Markdown."""
 
-    final_report = call_nim(client, [
-        {"role": "system",
-         "content": "You are a Principal Software Architect. Write a professional, actionable report."},
-        {"role": "user", "content": synthesis_prompt}
-    ], max_tokens=4096)
+    final_report = call_nim(
+        client,
+        [
+            {
+                "role": "system",
+                "content": "You are a Principal Software Architect. Write a professional, actionable report.",
+            },
+            {"role": "user", "content": synthesis_prompt},
+        ],
+        max_tokens=4096,
+    )
 
     # 5. Output Results
     print("=" * 60)
@@ -221,7 +278,7 @@ Format in clean Markdown."""
     # Set GitHub Actions outputs
     if os.getenv("GITHUB_OUTPUT"):
         with open(os.getenv("GITHUB_OUTPUT"), "a") as f:
-            f.write(f"analysis_complete=true\n")
+            f.write("analysis_complete=true\n")
             f.write(f"chunks_processed={len(chunks)}\n")
 
 

@@ -59,12 +59,18 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         ordered = sorted(resp.data, key=lambda d: d.index)
         matrix = np.array([d.embedding for d in ordered], dtype="float32")
         return matrix
+
+
 class NvidiaNemoEmbeddingProvider(EmbeddingProvider):
-    def __init__(self,dim:int=1536):
+    def __init__(self, dim: int = 1536):
         self.dim = dim
-        self.model_name  =os.getenv("NVIDIA_MODEL_NAME")
+        self.model_name = os.getenv("NVIDIA_MODEL_NAME")
         from openai import OpenAI
-        self._client = OpenAI(api_key=os.getenv("NVIDA_API_KEY"),base_url=os.getenv("NVIDIA_API_URL"))
+
+        self._client = OpenAI(
+            api_key=os.getenv("NVIDA_API_KEY"), base_url=os.getenv("NVIDIA_API_URL")
+        )
+
     def embed(self, texts: List[str]) -> np.ndarray:
         if not texts:
             return np.empty((0, self.dim), dtype="float32")
@@ -73,6 +79,3 @@ class NvidiaNemoEmbeddingProvider(EmbeddingProvider):
         ordered = sorted(resp.data, key=lambda d: d.index)
         matrix = np.array([d.embedding for d in ordered], dtype="float32")
         return matrix
-
-
-

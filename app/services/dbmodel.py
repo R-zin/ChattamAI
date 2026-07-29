@@ -2,15 +2,18 @@ import hashlib
 import os
 from datetime import datetime, timedelta
 
-from database import Base
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, ForeignKey, String
 from sqlalchemy.orm import relationship
 
-TIME_OUT = int(os.getenv("TIME_OUT"))
+from app.services.database import Base
+
+# Session lifetime in seconds; overridable via TIME_OUT. Read lazily so the
+# module imports even if the variable is malformed, and has a sane default.
+DEFAULT_TIME_OUT = int(os.getenv("TIME_OUT", "3600"))
 
 
 def expiry_time():
-    return datetime.now() + timedelta(seconds=TIME_OUT)
+    return datetime.now() + timedelta(seconds=DEFAULT_TIME_OUT)
 
 
 def hash_password(password):
@@ -20,9 +23,9 @@ def hash_password(password):
 class User(Base):
     __tablename__ = "user"
     user_id = Column(String, primary_key=True)
-    email = Column(String)
-    password = Column(String, default=hash_password)
-    created_at = Column(DateTime)
+    email = Column(String, unique=True, nullable=False)
+    password = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
     sessions = relationship(
         "userSession", back_populates="user", cascade="all, delete, delete-orphan"
     )

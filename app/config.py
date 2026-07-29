@@ -49,6 +49,10 @@ class Settings(BaseModel):
     llm_model: str = os.getenv("LLM_MODEL", "claude-3-5-sonnet-20241022")
     llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "2048"))
 
+    # --- Auth / DB scaffolding (unused by the RAG app today; see DEVELOPMENT.md §7) ---
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./chattamai.db")
+    session_timeout_seconds: int = int(os.getenv("TIME_OUT", "3600"))
+
     model_config = {"arbitrary_types_allowed": True}
 
     def ensure_dirs(self) -> None:

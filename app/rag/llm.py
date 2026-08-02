@@ -10,9 +10,20 @@ import os
 
 from app.config import get_settings
 
+# Per-request timeout (seconds) and retry budget for the LLM/embeddings HTTP
+# clients. Read from env with sane defaults so operators can tune latency
+# without a redeploy; passed to the SDK constructors (Anthropic / OpenAI both
+# accept `timeout` and `max_retries`).
+_LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "60"))
+_LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "2"))
+
 
 class ClaudeClient:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        timeout: float = _LLM_TIMEOUT,
+        max_retries: int = _LLM_MAX_RETRIES,
+    ) -> None:
         from anthropic import Anthropic
 
         settings = get_settings()
@@ -21,7 +32,7 @@ class ClaudeClient:
                 "No Anthropic credentials found. Set ANTHROPIC_AUTH_TOKEN "
                 "(or ANTHROPIC_API_KEY) in the environment."
             )
-        kwargs = {}
+        kwargs = {"timeout": timeout, "max_retries": max_retries}
         if settings.anthropic_base_url:
             kwargs["base_url"] = settings.anthropic_base_url
         # Prefer explicit token, fall back to SDK's own env handling.
@@ -47,12 +58,19 @@ class ClaudeClient:
 
 
 class OpenRouter:
-    def __init__(self, max_tokens: int) -> None:
+    def __init__(
+        self,
+        max_tokens: int,
+        timeout: float = _LLM_TIMEOUT,
+        max_retries: int = _LLM_MAX_RETRIES,
+    ) -> None:
         from openai import OpenAI
 
         self._client = OpenAI(
             base_url=os.getenv("OPENROUTER_API_URL"),
             api_key=os.getenv("OPENROUTER_API_KEY"),
+            timeout=timeout,
+            max_retries=max_retries,
         )
         self.max_tokens = max_tokens
         self.model = os.getenv("OPENROUTER_MODEL")
@@ -62,7 +80,7 @@ class OpenRouter:
             model=self.model,
             max_tokens=self.max_tokens,
             messages=[
-                {"role": "system", "content": "system"},
+                {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
         )

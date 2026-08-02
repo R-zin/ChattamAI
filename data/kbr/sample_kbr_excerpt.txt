@@ -1,0 +1,123 @@
+================================================================================
+SAMPLE / SUBSET -- KERALA MUNICIPALITY BUILDING RULES (KBR)
+================================================================================
+Document label : Representative SAMPLE excerpt for offline testing only.
+Status         : SUBSET of the Kerala Building Rules, prepared as a deterministic
+                 fixture for the ChattamAI compliance RAG pipeline. The rule
+                 numbering below follows KBR-style convention ("Rule 5", "5.3",
+                 "11.2", etc.) so that rule-reference extraction has stable,
+                 citable anchors. Figures are internally consistent for this
+                 sample and are indicative, NOT a substitute for the gazetted
+                 rules. Always verify against the official Kerala Building Rules
+                 (as amended) before acting on any value.
+Source file    : data/kbr/sample_kbr_excerpt.txt
+--------------------------------------------------------------------------------
+
+
+PART A -- APPLICABILITY, PLOT AREA AND BUILT-UP AREA
+
+Rule 5   Applicability and minimum plot
+  5.1    These rules apply to all building construction, reconstruction and
+         addition within the local-self-government (LSGD) area to which they
+         extend, for the occupancy categories defined in Rule 12.
+
+  5.2    The minimum plot area required for a residential building of Group A1
+         occupancy shall be 3 cents (about 121.4 square metres). Accessory
+         buildings and additions to existing structures are exempt from this
+         minimum plot requirement.
+
+  5.3    Plot area means the area of the whole parcel of land including the
+         portion occupied by the building. Built-up area means the area covered
+         by the building measured to the outer face of the external walls,
+         excluding open verandas, balconies and projecting cornices that do not
+         rest on the ground. The total built-up area of all floors shall not
+         exceed the floor space index limit in Rule 7 applied to the plot area.
+
+
+PART B -- FLOOR SPACE INDEX (FSI), NUMBER OF FLOORS AND HEIGHT
+
+Rule 7   Floor space index, number of floors and height
+  7.1    Floor Space Index (FSI) is the ratio of the total built-up area of all
+         floors to the plot area. For Group A1 (residential) occupancy on a
+         plot of 240.0 square metres, the maximum permissible FSI shall be 2.0
+         where the abutting road width is not less than 7.0 metres.
+
+  7.2    Worked example for this sample: for a plot area of 240.0 square metres
+         and a permissible FSI of 2.0, the maximum total built-up area is
+         240.0 x 2.0 = 480.0 square metres across all floors.
+
+  7.3    The maximum number of floors for a Group A1 residential building under
+         this sample shall be 3 floors. A building of 3 floors with a total
+         built-up area of 480.0 square metres gives an average of 160.0 square
+         metres per floor, which is within the FSI limit of rule 7.1.
+
+  7.4    Building height means the vertical distance measured from the average
+         ground level abutting the building to the highest point of the roof.
+         For a Group A1 residential building of not more than 3 floors the
+         maximum building height shall be 11.0 metres.
+
+
+PART C -- SETBACKS (FRONT, REAR AND SIDES) AND ROAD WIDTH
+
+5.3 Setbacks (open spaces) for Residential (Group A1) buildings
+  5.3.1  The minimum front setback from the plot boundary abutting the road
+         shall be 3.0 metres.
+
+  5.3.2  The minimum rear setback from the plot boundary opposite the road
+         shall be 2.0 metres.
+
+  5.3.3  The minimum side setback from each side boundary shall be 1.5 metres.
+         Where a side abuts a common passage of width not less than 1.0 metre,
+         the side setback on that side may be relaxed to 1.0 metre.
+
+  5.3.4  Road width means the width of the public or private street abutting
+         the plot, measured between the plot boundaries on either side. A
+         minimum road width of 7.0 metres is required to avail the FSI of 2.0
+         in rule 7.1; for roads narrower than 7.0 metres but not less than 4.5
+         metres the permissible FSI is reduced proportionately.
+
+
+PART D -- PARKING AND OCCUPANCY
+
+11.2 Parking
+  11.2.1 For every residential dwelling unit of built-up area exceeding 150.0
+         square metres, a minimum of one car-parking space of not less than
+         12.5 square metres per space shall be provided within the plot or
+         within the building footprint.
+
+  11.2.2 Parking spaces provided in the open at ground level shall not be
+         counted towards the built-up area for the purpose of FSI in rule 7.1,
+         provided they remain permanently open to the sky and are used only
+         for parking.
+
+Rule 12  Occupancy classification
+  12.1   Buildings are classified by occupancy. Group A1 means residential
+         occupancies, including one-family and two-family dwelling units and
+         apartment houses where sleeping accommodation is provided for normal
+         residential purposes, with or without cooking or dining facilities.
+
+  12.2   The occupancy classification determines the applicable FSI, height,
+         setback, parking and fire-safety provisions in these rules. A change
+         of occupancy requires the whole building to conform to the provisions
+         for the new occupancy.
+
+
+PART E -- FIRE SAFETY AND STAIRCASE NOTE
+
+Rule 16  Fire safety and staircase
+  16.1   A residential building having more than two floors, or a building
+         height exceeding 7.5 metres, shall be provided with not less than one
+         enclosed staircase of minimum width 1.2 metres leading to a place of
+         refuge or open space at ground level.
+
+  16.2   For a building of more than three floors, a second independent
+         staircase shall be provided. The maximum travel distance from any
+         occupied room to the nearest staircase exit shall not exceed 22.5
+         metres.
+
+  16.3   Fire safety note for this sample: the values above are illustrative
+         of KBR practice for low-rise residential buildings. Buildings of
+         higher occupancy classes or greater height are additionally subject
+         to the National Building Code and approvals from the Fire and Rescue
+         Services. This is a SAMPLE excerpt -- confirm against the official
+         rules for the actual occupancy and height of any plan under review.

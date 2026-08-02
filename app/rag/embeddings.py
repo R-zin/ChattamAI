@@ -19,8 +19,20 @@ import numpy as np
 # Default cache TTL (seconds) and capacity, overridable via env for tuning.
 _DEFAULT_CACHE_TTL = float(os.getenv("EMBEDDING_CACHE_TTL", "300"))
 _DEFAULT_CACHE_MAXSIZE = int(os.getenv("EMBEDDING_CACHE_MAXSIZE", "1024"))
-# Max texts sent per underlying `embeddings.create` call when batching.
-_DEFAULT_BATCH_SIZE = int(os.getenv("EMBEDDING_BATCH_SIZE", "128"))
+
+
+def _default_batch_size() -> int:
+    """Max texts per ``embeddings.create`` call (Settings.embedding_batch_size)."""
+    try:
+        from app.config import get_settings
+
+        return int(get_settings().embedding_batch_size)
+    except Exception:
+        return 128
+
+
+# Deprecated alias (kept for any external importers); prefer _default_batch_size().
+_DEFAULT_BATCH_SIZE = _default_batch_size()
 
 
 def _cache_key(text: str) -> str:
@@ -102,9 +114,9 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         """
         if not texts:
             return np.empty((0, self.dim), dtype="float32")
-        size = batch_size or _DEFAULT_BATCH_SIZE
+        size = batch_size or _default_batch_size()
         if size <= 0:
-            size = _DEFAULT_BATCH_SIZE
+            size = _default_batch_size()
         chunks = [texts[i : i + size] for i in range(0, len(texts), size)]
         parts = [self.embed(chunk) for chunk in chunks]
         return np.concatenate(parts, axis=0)

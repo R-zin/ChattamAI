@@ -7,26 +7,29 @@ ANTHROPIC_AUTH_TOKEN from the environment (the local proxy in this project).
 from __future__ import annotations
 
 import os
+from typing import Optional
 
 from app.config import get_settings
 
 # Per-request timeout (seconds) and retry budget for the LLM/embeddings HTTP
-# clients. Read from env with sane defaults so operators can tune latency
-# without a redeploy; passed to the SDK constructors (Anthropic / OpenAI both
-# accept `timeout` and `max_retries`).
-_LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "60"))
-_LLM_MAX_RETRIES = int(os.getenv("LLM_MAX_RETRIES", "2"))
+# clients. Defaults come from Settings (LLM_TIMEOUT / LLM_MAX_RETRIES env vars)
+# so operators can tune latency via config; passed to the SDK constructors
+# (Anthropic / OpenAI both accept `timeout` and `max_retries`).
 
 
 class ClaudeClient:
     def __init__(
         self,
-        timeout: float = _LLM_TIMEOUT,
-        max_retries: int = _LLM_MAX_RETRIES,
+        timeout: Optional[float] = None,
+        max_retries: Optional[int] = None,
     ) -> None:
         from anthropic import Anthropic
 
         settings = get_settings()
+        if timeout is None:
+            timeout = settings.llm_timeout
+        if max_retries is None:
+            max_retries = settings.llm_max_retries
         if not (settings.anthropic_api_key or os.getenv("ANTHROPIC_AUTH_TOKEN")):
             raise RuntimeError(
                 "No Anthropic credentials found. Set ANTHROPIC_AUTH_TOKEN "
@@ -61,10 +64,16 @@ class OpenRouter:
     def __init__(
         self,
         max_tokens: int,
-        timeout: float = _LLM_TIMEOUT,
-        max_retries: int = _LLM_MAX_RETRIES,
+        timeout: Optional[float] = None,
+        max_retries: Optional[int] = None,
     ) -> None:
         from openai import OpenAI
+
+        settings = get_settings()
+        if timeout is None:
+            timeout = settings.llm_timeout
+        if max_retries is None:
+            max_retries = settings.llm_max_retries
 
         self._client = OpenAI(
             base_url=os.getenv("OPENROUTER_API_URL"),

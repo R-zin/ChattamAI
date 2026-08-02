@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from app.rag.system import RAGSystem
+from app.routes.auth import require_auth
 from app.schemas import (
     ComplianceRequest,
     ComplianceResponse,
@@ -43,6 +44,7 @@ def health(rag: RAGSystem = Depends(get_rag)) -> HealthResponse:
 
 class IngestRequest(BaseModel):
     data_dir: Optional[str] = None
+    rebuild: bool = False
 
 
 @router.post("/setmodel", response_model=SetModelResponse)
@@ -51,18 +53,26 @@ async def set_model(data: SetModelRequest) -> SetModelResponse:
     return SetModelResponse(status="ok")
 
 
-@router.post("/ingest", response_model=IngestResponse)
+@router.post(
+    "/ingest",
+    response_model=IngestResponse,
+    dependencies=[Depends(require_auth)],
+)
 def ingest(
     body: IngestRequest = IngestRequest(), rag: RAGSystem = Depends(get_rag)
 ) -> IngestResponse:
     try:
-        result = rag.ingest(body.data_dir)
+        result = rag.ingest(body.data_dir, rebuild=body.rebuild)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return IngestResponse(**result)
 
 
-@router.post("/check", response_model=ComplianceResponse)
+@router.post(
+    "/check",
+    response_model=ComplianceResponse,
+    dependencies=[Depends(require_auth)],
+)
 def check(
     body: ComplianceRequest, rag: RAGSystem = Depends(get_rag)
 ) -> ComplianceResponse:

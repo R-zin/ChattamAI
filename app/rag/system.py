@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import threading
 import time
 from typing import Optional
@@ -39,14 +38,6 @@ from app.rag.vectorstore import RuleVectorStore
 
 logger = logging.getLogger(__name__)
 
-# --- Cache tuning (env-overridable; coordinator may surface these in Settings) ---
-_EMBEDDING_CACHE_TTL = float(os.getenv("EMBEDDING_CACHE_TTL", "300"))
-_EMBEDDING_CACHE_MAXSIZE = int(os.getenv("EMBEDDING_CACHE_MAXSIZE", "1024"))
-_ANALYSIS_CACHE_TTL = float(os.getenv("ANALYSIS_CACHE_TTL", "300"))
-_ANALYSIS_CACHE_MAXSIZE = int(os.getenv("ANALYSIS_CACHE_MAXSIZE", "512"))
-# Toggle embeddings cache off if a deployment must avoid in-process memoisation.
-_USE_EMBEDDING_CACHE = os.getenv("EMBEDDING_CACHE_ENABLED", "1") not in ("0", "false")
-
 
 class AnalysisMemo:
     """Small in-process TTL memo for the analyze step.
@@ -54,12 +45,18 @@ class AnalysisMemo:
     Keyed by ``(facts_hash, index_version)``; values are
     ``(analysis_json, violations)``. Thread-safe, best-effort. Exposes the
     minimal ``get``/``put`` interface the ``analyze`` node consumes (see
-    app/rag/graph.py), plus ``stats()`` for observability.
+    app/rag/graph.py), plus ``stats()`` for observability. Defaults come from
+    ``Settings.analysis_cache_ttl`` / ``Settings.analysis_cache_maxsize``.
     """
 
     def __init__(
-        self, ttl: float = _ANALYSIS_CACHE_TTL, maxsize: int = _ANALYSIS_CACHE_MAXSIZE
+        self, ttl: Optional[float] = None, maxsize: Optional[int] = None
     ) -> None:
+        settings = get_settings()
+        if ttl is None:
+            ttl = settings.analysis_cache_ttl
+        if maxsize is None:
+            maxsize = settings.analysis_cache_maxsize
         self.ttl = ttl
         self.maxsize = max(1, maxsize)
         self._lock = threading.Lock()
@@ -149,7 +146,8 @@ class RAGSystem:
 
         # Analysis memo: skip the analysis LLM on an identical re-check.
         self._analysis_memo = AnalysisMemo(
-            ttl=_ANALYSIS_CACHE_TTL, maxsize=_ANALYSIS_CACHE_MAXSIZE
+            ttl=self.settings.analysis_cache_ttl,
+            maxsize=self.settings.analysis_cache_maxsize,
         )
 
         # Embeddings are required for retrieval; surface a clear error if missing.
@@ -170,9 +168,11 @@ class RAGSystem:
                 # Wrap with the query-embedding cache (transparent: same embed() API).
                 self._provider = (
                     EmbeddingCache(
-                        base, ttl=_EMBEDDING_CACHE_TTL, maxsize=_EMBEDDING_CACHE_MAXSIZE
+                        base,
+                        ttl=self.settings.embedding_cache_ttl,
+                        maxsize=self.settings.embedding_cache_maxsize,
                     )
-                    if _USE_EMBEDDING_CACHE
+                    if self.settings.embedding_cache_enabled
                     else base
                 )
                 self.embeddings_ready = True

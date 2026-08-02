@@ -10,7 +10,6 @@ Python 3.9 compatible: ``from __future__ import annotations`` and no PEP 604
 
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
@@ -22,27 +21,48 @@ from sqlalchemy.orm import relationship
 
 from app.services.database import Base
 
-# --- Auth settings (read from env with safe defaults) -------------------------
-# NOTE for the coordinator: these are intentionally read via os.getenv here so
-# auth works without touching app/config.py (which is out of scope). They should
-# be promoted into app.config.Settings later:
-#   SECRET_KEY            — JWT signing key. MUST be overridden in production.
-#   AUTH_ALGORITHM        — JWT algorithm (default HS256).
-#   TIME_OUT              — access-token / session TTL in seconds (default 3600).
-#   AUTH_REQUIRED         — "true" to enforce auth on protected routes (default off).
-#   ADMIN_KEY             — optional admin header to gate /auth/register.
-SECRET_KEY = os.getenv("SECRET_KEY", "chattamai-insecure-dev-secret-change-me")
-AUTH_ALGORITHM = os.getenv("AUTH_ALGORITHM", "HS256")
+# --- Auth settings (source: app.config.Settings; overridden here only as a fallback) ---
+#   Settings.secret_key            (SECRET_KEY)      — JWT signing key. MUST be
+#                                                     overridden in production.
+#   Settings.auth_algorithm        (AUTH_ALGORITHM)  — JWT algorithm (HS256).
+#   Settings.session_timeout_seconds (TIME_OUT)      — token TTL (3600).
+#   Settings.auth_required         (AUTH_REQUIRED)   — enforce auth on protected routes.
+#   Settings.admin_key             (ADMIN_KEY)       — admin header to gate /auth/register.
+_INSECURE_DEFAULT_SECRET = "chattamai-insecure-dev-secret-change-me"
 
-# Session/token lifetime in seconds; overridable via TIME_OUT. Read lazily so the
-# module imports even if the variable is malformed, and has a sane default.
-DEFAULT_TIME_OUT = int(os.getenv("TIME_OUT", "3600"))
+
+def _auth_secret() -> str:
+    try:
+        from app.config import get_settings
+
+        return get_settings().secret_key
+    except Exception:
+        return _INSECURE_DEFAULT_SECRET
+
+
+def _auth_algorithm() -> str:
+    try:
+        from app.config import get_settings
+
+        return get_settings().auth_algorithm
+    except Exception:
+        return "HS256"
+
+
+def _token_ttl_seconds() -> int:
+    try:
+        from app.config import get_settings
+
+        return int(get_settings().session_timeout_seconds)
+    except Exception:
+        return 3600
+
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def expiry_time() -> datetime:
-    return datetime.utcnow() + timedelta(seconds=DEFAULT_TIME_OUT)
+    return datetime.utcnow() + timedelta(seconds=_token_ttl_seconds())
 
 
 def hash_password(password: str) -> str:
@@ -73,15 +93,15 @@ def create_access_token(
     expire = datetime.utcnow() + (
         expires_delta
         if expires_delta is not None
-        else timedelta(seconds=DEFAULT_TIME_OUT)
+        else timedelta(seconds=_token_ttl_seconds())
     )
     claims: Dict[str, Any] = {"sub": user_id, "email": email, "exp": expire}
-    return jwt.encode(claims, SECRET_KEY, algorithm=AUTH_ALGORITHM)
+    return jwt.encode(claims, _auth_secret(), algorithm=_auth_algorithm())
 
 
 def decode_access_token(token: str) -> Dict[str, Any]:
     """Decode + validate a JWT. Raises ``jose.JWTError`` if invalid/expired."""
-    return jwt.decode(token, SECRET_KEY, algorithms=[AUTH_ALGORITHM])
+    return jwt.decode(token, _auth_secret(), algorithms=[_auth_algorithm()])
 
 
 def new_id() -> str:
@@ -118,7 +138,4 @@ __all__ = [
     "new_id",
     "expiry_time",
     "JWTError",
-    "SECRET_KEY",
-    "AUTH_ALGORITHM",
-    "DEFAULT_TIME_OUT",
 ]

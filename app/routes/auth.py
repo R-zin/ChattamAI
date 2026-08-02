@@ -5,8 +5,7 @@ on ``GET /api/health`` keeps passing. Nothing here is applied to the RAG routes;
 the :func:`require_auth` dependency is exported for the coordinator to attach to
 ``/api/ingest`` / ``/api/check`` later.
 
-Environment (read via os.getenv with safe defaults; to be promoted into
-``app.config.Settings`` by the coordinator):
+Environment (via ``app.config.Settings``):
 
 - ``SECRET_KEY``     — JWT signing key. Override in production.
 - ``AUTH_ALGORITHM`` — JWT algorithm (default ``HS256``).
@@ -18,19 +17,16 @@ Environment (read via os.getenv with safe defaults; to be promoted into
 
 from __future__ import annotations
 
-import os
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.schemas import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from app.services.database import SessionLocal
 from app.services.dbmodel import (
-    AUTH_ALGORITHM,
-    DEFAULT_TIME_OUT,
-    SECRET_KEY,
     User,
     create_access_token,
     decode_access_token,
@@ -44,15 +40,17 @@ auth_router = APIRouter(prefix="/auth", tags=["auth"])
 # tokenUrl points at the OAuth2 "password" login so Swagger's Authorize flow works.
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
-_TRUTHY = {"1", "true", "yes", "on"}
+
+def _token_ttl() -> int:
+    return int(get_settings().session_timeout_seconds)
 
 
 def _auth_required() -> bool:
-    return os.getenv("AUTH_REQUIRED", "").strip().lower() in _TRUTHY
+    return bool(get_settings().auth_required)
 
 
 def _admin_key() -> Optional[str]:
-    return os.getenv("ADMIN_KEY")
+    return get_settings().admin_key
 
 
 def get_db():
@@ -124,7 +122,7 @@ def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     token = create_access_token(user_id=user.user_id, email=user.email)
-    return TokenResponse(access_token=token, expires_in=DEFAULT_TIME_OUT)
+    return TokenResponse(access_token=token, expires_in=_token_ttl())
 
 
 @auth_router.post(
@@ -142,7 +140,7 @@ def login_json(
             headers={"WWW-Authenticate": "Bearer"},
         )
     token = create_access_token(user_id=user.user_id, email=user.email)
-    return TokenResponse(access_token=token, expires_in=DEFAULT_TIME_OUT)
+    return TokenResponse(access_token=token, expires_in=_token_ttl())
 
 
 def get_current_user(
@@ -193,6 +191,16 @@ def require_auth(
     return get_current_user(token=token, db=db)
 
 
+__all__ = [
+    "auth_router",
+    "oauth2_scheme",
+    "get_db",
+    "get_current_user",
+    "require_auth",
+    "auth_config",
+]
+
+
 @auth_router.get("/me", response_model=UserResponse, operation_id="read_me")
 def read_me(current_user: User = Depends(get_current_user)) -> UserResponse:
     """Return the authenticated user. Always requires a valid token."""
@@ -205,6 +213,6 @@ def read_me(current_user: User = Depends(get_current_user)) -> UserResponse:
     )
 
 
-# Surface active auth config for logs/debug (never the secret value).
-AUTH_CONFIG = {"algorithm": AUTH_ALGORITHM, "ttl_seconds": DEFAULT_TIME_OUT}
-_ = SECRET_KEY  # re-exported for the coordinator; keep linters quiet
+def auth_config() -> dict:
+    """Surface active auth config for logs/debug (never the secret value)."""
+    return {"algorithm": get_settings().auth_algorithm, "ttl_seconds": _token_ttl()}

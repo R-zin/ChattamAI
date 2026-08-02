@@ -9,8 +9,12 @@ from pydantic import BaseModel, Field
 
 class IngestResponse(BaseModel):
     documents: int = Field(..., description="Number of source files processed")
-    chunks: int = Field(..., description="Number of chunks indexed")
+    chunks: int = Field(..., description="Number of chunks newly indexed")
     index_size: int = Field(..., description="Total vectors in the index")
+    skipped: int = Field(
+        default=0,
+        description="Chunks already present (content-hash dup) skipped during ingest",
+    )
 
 
 class SetModelResponse(BaseModel):

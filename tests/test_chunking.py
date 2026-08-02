@@ -1,17 +1,24 @@
 """Tests for ``app.rag.ingestion.chunk_text``.
 
-NOTE (reconciliation): these tests pin the CURRENT character-window behaviour.
-``chunk_text`` normalises whitespace and then slices fixed ``size`` windows with
-``step = size - overlap``; it does NOT respect sentence/word boundaries and may
-cut mid-word. The coordinator (agent-1) is landing sentence-aware chunking that
-never cuts mid-token — when that lands, the boundary/mid-word assertions here
-should be revisited. The empty-input and overlap-invariant tests are stable
-across both implementations.
+CURRENT (optimized) contract — agent-1 made ``chunk_text`` sentence-aware. It
+splits on sentence boundaries (never cutting mid-sentence), greedily packs whole
+sentences into ``size``-bounded chunks, and re-includes the trailing sentence(s)
+of the previous chunk up to ``overlap`` characters so context carries across the
+boundary. A single sentence longer than ``size`` falls back to a bounded
+char-split. Clause numbers like "8.1.2" are NOT treated as sentence boundaries.
+These tests pin the NEW behaviour (verified against the merged code).
 """
 
 from __future__ import annotations
 
 from app.rag.ingestion import chunk_text
+
+PARA = (
+    "Sentence one here. "
+    "Sentence two is a bit longer than one. "
+    "And a third sentence. "
+    "A fourth one follows too."
+)
 
 
 def test_empty_and_whitespace_input_returns_no_chunks():
@@ -19,64 +26,94 @@ def test_empty_and_whitespace_input_returns_no_chunks():
     assert chunk_text("   \n\t  ") == []
 
 
-def test_short_text_returns_single_chunk():
+def test_short_single_sentence_returns_single_chunk():
     text = "a short building description"
     assert chunk_text(text, size=1000, overlap=150) == [text]
 
 
 def test_text_is_whitespace_normalised():
-    # Newlines/tabs/runs of spaces collapse to single spaces before chunking.
     text = "plot   area:\n\n300   sq.m\t"
-    chunks = chunk_text(text, size=1000, overlap=0)
-    assert chunks == ["plot area: 300 sq.m"]
+    assert chunk_text(text, size=1000, overlap=0) == ["plot area: 300 sq.m"]
 
 
-def test_chunk_lengths_respect_size():
-    text = "abcdefghij" * 30  # 300 chars, no spaces
-    size = 100
-    chunks = chunk_text(text, size=size, overlap=0)
+def test_chunks_never_exceed_size():
+    chunks = chunk_text(PARA, size=60, overlap=15)
     assert len(chunks) >= 2
     for c in chunks:
-        assert len(c) <= size
+        assert len(c) <= 60
 
 
-def test_overlap_produces_shared_characters():
-    text = "".join(chr(ord("a") + (i % 26)) for i in range(50))
-    size, overlap = 20, 5
-    chunks = chunk_text(text, size=size, overlap=overlap)
-    assert len(chunks) >= 3
-    # Consecutive chunks share `overlap` trailing/leading characters (current
-    # fixed-step slicing guarantees this except at the tail).
-    for first, second in zip(chunks, chunks[1:]):
-        assert first[-overlap:] == second[:overlap]
+def test_chunks_split_on_sentence_boundaries_only():
+    # Every chunk is a run of whole sentences, so each ends with terminal
+    # punctuation rather than a sliced word.
+    chunks = chunk_text(PARA, size=60, overlap=15)
+    for c in chunks:
+        assert c.rstrip().endswith((".", "!", "?", ";"))
 
 
-def test_step_is_size_minus_overlap():
-    # With no whitespace, chunk starts land on multiples of (size - overlap).
-    text = "x" * 97
-    size, overlap = 20, 6
-    step = size - overlap  # 14
-    chunks = chunk_text(text, size=size, overlap=overlap)
-    # Reconstruct the window boundaries: chunk[i] == text[i*step : i*step + size].
-    for i, chunk in enumerate(chunks):
-        assert chunk == text[i * step : i * step + size]
+def test_no_sentence_is_split_across_chunks():
+    chunks = chunk_text(PARA, size=60, overlap=15)
+    sentences = [
+        "Sentence one here.",
+        "Sentence two is a bit longer than one.",
+        "And a third sentence.",
+        "A fourth one follows too.",
+    ]
+    # Each sentence must appear *whole* in at least one chunk (overlap may
+    # duplicate it, but it is never truncated).
+    for s in sentences:
+        assert any(s in c for c in chunks), s
 
 
-def test_full_coverage_of_source_text():
-    import re
+def test_sentences_are_packed_whole():
+    chunks = chunk_text(PARA, size=60, overlap=15)
+    # Verified concrete output of the greedy packer for this input.
+    assert chunks[0] == "Sentence one here. Sentence two is a bit longer than one."
 
-    raw = "The quick brown fox jumps over the lazy dog. " * 8
-    # chunk_text normalises whitespace first; coverage is over the normalised
-    # body it actually splits.
-    text = re.sub(r"\s+", " ", raw).strip()
-    size, overlap = 64, 16
-    chunks = chunk_text(raw, size=size, overlap=overlap)
-    step = max(1, size - overlap)
 
-    covered = [False] * len(text)
-    for i, chunk in enumerate(chunks):
-        start = i * step
-        assert chunk == text[start : start + size]  # current fixed-step slicing
-        for j in range(len(chunk)):
-            covered[start + j] = True
-    assert all(covered)
+def test_overlap_carries_the_trailing_sentence_forward():
+    chunks = chunk_text(PARA, size=60, overlap=15)
+    # The next chunk re-includes the previous chunk's trailing sentence so
+    # context is not lost at the boundary.
+    assert chunks[1].startswith("Sentence two is a bit longer than one.")
+
+
+def test_last_sentence_always_bridges_even_at_overlap_zero():
+    # The immediately-preceding sentence is ALWAYS re-included as the bridge into
+    # the next chunk (context is never fully dropped), even when overlap == 0;
+    # `overlap` only budgets pulling in *additional* earlier sentences.
+    chunks = chunk_text(PARA, size=60, overlap=0)
+    assert chunks[1].startswith("Sentence two is a bit longer than one.")
+
+
+def test_larger_overlap_pulls_in_additional_context():
+    # A generous overlap budget re-includes MORE than just the last sentence.
+    text = (
+        "Alpha is short. Beta mid length here. "
+        "Gamma is a medium sentence. Delta closes it."
+    )
+    small = chunk_text(text, size=40, overlap=0)
+    big = chunk_text(text, size=40, overlap=40)
+    # At overlap=40 the second chunk re-includes both "Alpha" and "Beta".
+    assert "Alpha is short." in big[1]
+    # ... so the bridged second chunk is longer than under overlap=0.
+    assert len(big[1]) > len(small[1])
+
+
+def test_clause_number_is_not_split():
+    # "8.1.2" must not be treated as a sentence boundary (no cut mid-number).
+    text = "Rule 8.1.2 governs setbacks. The minimum shall be three metres."
+    chunks = chunk_text(text, size=1000, overlap=0)
+    assert chunks == [text]
+    # Even when chunked, the clause number stays intact inside some chunk.
+    small = chunk_text(text, size=40, overlap=10)
+    assert any("8.1.2" in c for c in small)
+
+
+def test_overlong_single_sentence_is_bounded():
+    long_sentence = "x" * 100 + "."
+    chunks = chunk_text("Intro sentence. " + long_sentence, size=50, overlap=10)
+    # Falls back to a char-window split for the over-long sentence: nothing
+    # exceeds `size`.
+    for c in chunks:
+        assert len(c) <= 50

@@ -59,17 +59,35 @@ def test_full_run_calls_extract_analyze_summarize_in_order(fake_provider, index_
     assert out["analysis_json"]  # raw analyzer output preserved
 
 
-def test_analyze_malformed_json_yields_no_violations_but_still_summarizes(
+def test_analyze_malformed_json_sets_error_after_failed_repair(
     fake_provider, index_dir
 ):
-    # CURRENT: malformed analyze JSON -> violations=[] (silently) and the
-    # summarize step still runs. Phase-2 (agent-2) will instead record an error.
+    # CURRENT: a malformed analyze body triggers ONE repair retry; when the retry
+    # also fails, the node sets ``error="parse_failed: ..."`` instead of silently
+    # returning zeros. The summarize step still runs.
+    from app.rag.graph import SYSTEM_ANALYZE_REPAIR
+
     store = make_populated_store(fake_provider, index_dir)
-    llm = FakeLLM(analyze_mode="malformed")
+    llm = FakeLLM(analyze_mode="malformed", repair_mode="malformed")
     out = _graph(store, llm).invoke({"plan_text": PLAN, "top_k": 3})
+
     assert out["violations"] == []
     assert out["summary"] == SUMMARY_TEXT
-    assert "error" not in out  # current silent behaviour
+    assert out.get("error", "").startswith("parse_failed")
+    # The repair retry actually fired (a second analyze-style LLM call).
+    assert any(c["system"] == SYSTEM_ANALYZE_REPAIR for c in llm.calls)
+
+
+def test_analyze_repair_retry_recovers_valid_json(fake_provider, index_dir):
+    # CURRENT: when the FIRST analyze body is malformed but the repair retry
+    # returns valid JSON, the violations are recovered and NO error is set.
+    store = make_populated_store(fake_provider, index_dir)
+    llm = FakeLLM(analyze_mode="malformed", repair_mode="ok")
+    out = _graph(store, llm).invoke({"plan_text": PLAN, "top_k": 3})
+
+    assert out["violations"] == ANALYZE_PAYLOAD["violations"]
+    assert "error" not in out or out.get("error") is None
+    assert out["summary"] == SUMMARY_TEXT
 
 
 # -- empty index / insufficient path ---------------------------------------

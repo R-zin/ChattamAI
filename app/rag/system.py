@@ -5,12 +5,35 @@ ingest (build the rule index) and check (run a compliance analysis).
 
 from __future__ import annotations
 
+import os
 from typing import Optional
 
 from app.config import get_settings
 from app.rag.graph import Context, build_compliance_graph
-from app.rag.ingestion import chunk_text, load_kbr_documents, load_plan_text
+from app.rag.ingestion import (
+    chunk_text,
+    extract_rule_id,
+    load_kbr_documents,
+    load_plan_text,
+)
 from app.rag.vectorstore import RuleVectorStore
+
+
+def _default_score_threshold() -> float:
+    """Minimum cosine-similarity for a retrieval hit (higher score = better).
+
+    Read from the MIN_SCORE env var, default ``0.0`` (keep everything). Kept
+    here, read via os.getenv with a safe default — not added to config.Settings
+    because config.py is owned by another agent (the coordinator can promote it
+    to a Settings flag during integration).
+    """
+    raw = os.getenv("MIN_SCORE")
+    if not raw:
+        return 0.0
+    try:
+        return float(raw)
+    except ValueError:
+        return 0.0
 
 
 class RAGSystem:
@@ -22,6 +45,7 @@ class RAGSystem:
         self._store: Optional[RuleVectorStore] = None
         self._llm = None
         self._graph = None
+        self.score_threshold = _default_score_threshold()
 
         # Embeddings are required for retrieval; surface a clear error if missing.
         try:
@@ -47,7 +71,11 @@ class RAGSystem:
             self._llm_error = str(exc)
 
         if self._provider is not None:
-            self._store = RuleVectorStore(self._provider, self.settings.index_dir)
+            self._store = RuleVectorStore(
+                self._provider,
+                self.settings.index_dir,
+                score_threshold=self.score_threshold,
+            )
             self._store.load_or_create()
 
         if self._store is not None and self._llm is not None:
@@ -57,24 +85,41 @@ class RAGSystem:
             self._graph = build_compliance_graph(ctx)
 
     # ------------------------------------------------------------------
-    def ingest(self, data_dir: Optional[str] = None) -> dict:
+    def ingest(self, data_dir: Optional[str] = None, rebuild: bool = False) -> dict:
+        """Index the Kerala Building Rules documents.
+
+        Idempotent by default: chunks already in the index (matched by content
+        hash) are skipped, so re-running ingest does not duplicate vectors.
+        Pass ``rebuild=True`` to drop the existing index and rebuild from the
+        source documents.
+        """
         if not self.embeddings_ready or self._store is None:
             raise RuntimeError(
                 getattr(self, "_embed_error", "Embeddings are not configured.")
             )
+        if rebuild:
+            self._store.reset()
+
         docs = load_kbr_documents(data_dir)
         total_chunks = 0
+        added = 0
         for text, source in docs:
             chunks = chunk_text(text)
             if not chunks:
                 continue
-            metas = [{"source": source, "chunk": i + 1} for i in range(len(chunks))]
-            self._store.add_texts(chunks, metas)
+            metas = []
+            for i, chunk in enumerate(chunks):
+                # Prefer a real rule/section header detected in the chunk; fall
+                # back to a stable positional id so every excerpt is citable.
+                rid = extract_rule_id(chunk) or f"{source}#chunk-{i + 1}"
+                metas.append({"source": source, "chunk": i + 1, "rule_id": rid})
+            added += self._store.add_texts(chunks, metas, dedup=not rebuild)
             total_chunks += len(chunks)
         return {
             "documents": len(docs),
-            "chunks": total_chunks,
+            "chunks": added,
             "index_size": self._store.size,
+            "skipped": total_chunks - added,
         }
 
     # ------------------------------------------------------------------
@@ -100,7 +145,12 @@ class RAGSystem:
             "summary": result.get("summary", ""),
             "violations": result.get("violations", []),
             "retrieved_rules": [
-                {"source": meta.get("source", ""), "excerpt": text, "score": score}
+                {
+                    "source": meta.get("source", ""),
+                    "rule_id": meta.get("rule_id"),
+                    "excerpt": text,
+                    "score": score,
+                }
                 for text, meta, score in result.get("retrieved", [])
             ],
         }

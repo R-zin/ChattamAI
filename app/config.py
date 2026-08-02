@@ -32,8 +32,34 @@ class Settings(BaseModel):
     chunk_size: int = int(os.getenv("CHUNK_SIZE", "1000"))
     chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "150"))
 
+    # --- Latency / cost caches (single source of truth; env aliases below) ---
+    embedding_cache_ttl: float = float(os.getenv("EMBEDDING_CACHE_TTL", "300"))
+    embedding_cache_maxsize: int = int(os.getenv("EMBEDDING_CACHE_MAXSIZE", "1024"))
+    embedding_batch_size: int = int(os.getenv("EMBEDDING_BATCH_SIZE", "128"))
+    embedding_cache_enabled: bool = os.getenv("EMBEDDING_CACHE_ENABLED", "1") not in (
+        "0",
+        "false",
+    )
+    analysis_cache_ttl: float = float(os.getenv("ANALYSIS_CACHE_TTL", "300"))
+    analysis_cache_maxsize: int = int(os.getenv("ANALYSIS_CACHE_MAXSIZE", "512"))
+
     # --- Retrieval ---
     top_k: int = int(os.getenv("TOP_K", "6"))
+    # Minimum cosine-similarity for a retrieved rule chunk to be used.
+    # Scores are higher=better; 0.0 keeps everything (off).
+    min_score: float = float(os.getenv("MIN_SCORE", "0.0"))
+
+    # --- OCR (image / image-PDF plans; plan.md Phase 3) ---
+    # Opt-in feature flag, OFF by default so a box without the Tesseract binary
+    # and the Pillow/pytesseract/PyMuPDF deps still boots and serves text/PDF
+    # plans unchanged. OCR deps are lazily imported only when this is on; see
+    # app/rag/ocr.py. Requires the system `tesseract` binary at runtime.
+    ocr_enabled: bool = os.getenv("OCR_ENABLED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
     # --- Embeddings (OpenAI) ---
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
@@ -48,6 +74,22 @@ class Settings(BaseModel):
     anthropic_base_url: Optional[str] = os.getenv("ANTHROPIC_BASE_URL")
     llm_model: str = os.getenv("LLM_MODEL", "claude-3-5-sonnet-20241022")
     llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "2048"))
+    llm_timeout: float = float(os.getenv("LLM_TIMEOUT", "60"))
+    llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "2"))
+
+    # --- Auth (see app/services/dbmodel.py + app/routes/auth.py) ---
+    # SECRET_KEY must be overridden in production (the default is insecure).
+    secret_key: str = os.getenv("SECRET_KEY", "chattamai-insecure-dev-secret-change-me")
+    auth_algorithm: str = os.getenv("AUTH_ALGORITHM", "HS256")
+    admin_key: Optional[str] = os.getenv("ADMIN_KEY")
+    # Opt-in protection of mutating/paid routes; OFF by default so the
+    # credential-less CI smoke test on /api/health keeps passing.
+    auth_required: bool = os.getenv("AUTH_REQUIRED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
     # --- Auth / DB scaffolding (unused by the RAG app today; see DEVELOPMENT.md §7) ---
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./chattamai.db")

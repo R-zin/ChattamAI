@@ -49,6 +49,18 @@ class Settings(BaseModel):
     # Scores are higher=better; 0.0 keeps everything (off).
     min_score: float = float(os.getenv("MIN_SCORE", "0.0"))
 
+    # --- OCR (image / image-PDF plans; plan.md Phase 3) ---
+    # Opt-in feature flag, OFF by default so a box without the Tesseract binary
+    # and the Pillow/pytesseract/PyMuPDF deps still boots and serves text/PDF
+    # plans unchanged. OCR deps are lazily imported only when this is on; see
+    # app/rag/ocr.py. Requires the system `tesseract` binary at runtime.
+    ocr_enabled: bool = os.getenv("OCR_ENABLED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
     # --- Embeddings (OpenAI) ---
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
     openai_base_url: Optional[str] = os.getenv("OPENAI_BASE_URL")  # optional proxy

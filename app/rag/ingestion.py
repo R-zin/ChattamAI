@@ -1,7 +1,9 @@
 """Document ingestion: read Kerala Building Rules and building-plan uploads.
 
-Supports plain text and text-based PDFs. Image-only floor plans are out of scope
-for this pass (they need OCR / layout analysis) — see plan.md Phase 2.
+Supports plain text and text-based PDFs. Image and image-only-PDF floor plans are
+handled via the opt-in OCR pipeline (app/rag/ocr.py, plan.md Phase 3) — gated behind
+``Settings.ocr_enabled`` so a box without Tesseract still boots and behaves exactly
+as before unless OCR is explicitly enabled.
 """
 
 from __future__ import annotations
@@ -12,9 +14,14 @@ from typing import List, Tuple
 
 from app.config import get_settings
 
-# Extensions we know how to read directly.
+# Extensions we know how to read directly (no OCR required).
 _TEXT_EXTS = {".txt", ".md", ".text"}
 _PDF_EXTS = {".pdf"}
+
+# Image suffixes routed to the OCR pipeline when ``Settings.ocr_enabled`` is on.
+# Mirrors app.rag.ocr.IMAGE_EXTS but kept as a literal set here so this module
+# stays importable without the OCR deps.
+_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"}
 
 # Sentence boundary: end-of-sentence punctuation (optionally followed by a
 # closing quote/bracket) then whitespace. Legal/rule text uses ".", ";", ":",
@@ -206,11 +213,34 @@ def chunk_text(
     return chunk_sentences(text, size=size, overlap=overlap)
 
 
+def _ocr_image_plan(path: Path) -> str:
+    """OCR an image floor plan to text (requires OCR enabled + deps + Tesseract)."""
+    from app.rag.ocr import image_to_text, normalize_ocr_text
+
+    return normalize_ocr_text(image_to_text(path))
+
+
 def load_plan_text(path: Path) -> str:
-    """Extract text from an uploaded building-plan file (txt or pdf)."""
+    """Extract text from an uploaded building-plan file.
+
+    ``.txt/.md`` are read verbatim (byte-identical) and ``.pdf`` defaults to the
+    text extractor (:func:`_read_pdf`). Image plans (``.png/.jpg/.jpeg/.tiff/.tif/
+    .bmp/.webp``) go through the opt-in OCR pipeline **only** when
+    ``Settings.ocr_enabled`` is True; otherwise a clear ``ValueError`` is raised so
+    the caller can tell the user OCR is disabled/unsupported. This preserves the
+    ``Path -> str`` contract consumed by ``RAGSystem.check_plan_file``.
+    """
     suffix = path.suffix.lower()
     if suffix in _TEXT_EXTS:
         return path.read_text(encoding="utf-8", errors="ignore")
     if suffix in _PDF_EXTS:
         return _read_pdf(path)
+    if suffix in _IMAGE_EXTS:
+        if not get_settings().ocr_enabled:
+            raise ValueError(
+                f"Plan file '{suffix}' is an image and requires OCR, but OCR is "
+                "disabled. Set OCR_ENABLED=true and install Tesseract "
+                "(see plan.md Phase 3), or upload a text/PDF plan."
+            )
+        return _ocr_image_plan(path)
     raise ValueError(f"Unsupported plan file type: {suffix}")

@@ -29,7 +29,22 @@ def _default_score_threshold() -> float:
 
 
 class RAGSystem:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        provider=None,
+        llm=None,
+        index_dir: Optional[str] = None,
+    ) -> None:
+        """Build the system.
+
+        Optional *test seams* (additive, backward-compatible): pass ``provider``
+        (an ``EmbeddingProvider``) and/or ``llm`` (an object with
+        ``complete(system, user) -> str``) to inject fakes and skip the real
+        OpenAI/Anthropic construction; pass ``index_dir`` to point the FAISS
+        store at a tmp dir. When any of these is omitted the real client /
+        configured index dir is used exactly as before, so default startup is
+        unchanged.
+        """
         self.settings = get_settings()
         self.embeddings_ready = False
         self.llm_ready = False
@@ -40,32 +55,40 @@ class RAGSystem:
         self.score_threshold = _default_score_threshold()
 
         # Embeddings are required for retrieval; surface a clear error if missing.
-        try:
-            from app.rag.embeddings import OpenAIEmbeddingProvider
-
-            self._provider = OpenAIEmbeddingProvider(
-                model=self.settings.embedding_model,
-                dim=self.settings.embedding_dim,
-                api_key=self.settings.openai_api_key,
-                base_url=self.settings.openai_base_url,
-            )
+        if provider is not None:
+            self._provider = provider
             self.embeddings_ready = True
-        except RuntimeError as exc:
-            self._embed_error = str(exc)
+        else:
+            try:
+                from app.rag.embeddings import OpenAIEmbeddingProvider
+
+                self._provider = OpenAIEmbeddingProvider(
+                    model=self.settings.embedding_model,
+                    dim=self.settings.embedding_dim,
+                    api_key=self.settings.openai_api_key,
+                    base_url=self.settings.openai_base_url,
+                )
+                self.embeddings_ready = True
+            except RuntimeError as exc:
+                self._embed_error = str(exc)
 
         # LLM is required for analysis.
-        try:
-            from app.rag.llm import ClaudeClient
-
-            self._llm = ClaudeClient()
+        if llm is not None:
+            self._llm = llm
             self.llm_ready = True
-        except RuntimeError as exc:
-            self._llm_error = str(exc)
+        else:
+            try:
+                from app.rag.llm import ClaudeClient
+
+                self._llm = ClaudeClient()
+                self.llm_ready = True
+            except RuntimeError as exc:
+                self._llm_error = str(exc)
 
         if self._provider is not None:
             self._store = RuleVectorStore(
                 self._provider,
-                self.settings.index_dir,
+                index_dir or self.settings.index_dir,
                 score_threshold=self.score_threshold,
             )
             self._store.load_or_create()

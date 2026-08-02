@@ -46,6 +46,9 @@ class Context:
     llm: object  # ClaudeClient
     store: object  # RuleVectorStore
     default_top_k: int = 6
+    # Optional analysis memo (RAGSystem owns it). Maps
+    # (facts_hash, index_version) -> (analysis_json, violations). ``None`` = off.
+    analysis_cache: object = None
 
 
 # --------------------------------------------------------------------------
@@ -125,9 +128,36 @@ def analyze(state: ComplianceState, ctx: Context) -> dict:
     )
 
     span = _node_span(state, "analyze")
+    facts = state["facts"]
     rules_text = format_rules_for_prompt(state["retrieved"])
-    user = build_analyze_user(state["facts"], rules_text)
+    user = build_analyze_user(facts, rules_text)
     span.measure_in(user)
+
+    # Analysis memo: an identical re-check (same facts against the same index
+    # contents) skips the LLM entirely. Keyed by (facts_hash, index_version).
+    memo = ctx.analysis_cache
+    memo_key = None
+    if memo is not None:
+        try:
+            import hashlib
+
+            facts_hash = hashlib.sha256(facts.encode("utf-8")).hexdigest()
+            index_version = getattr(ctx.store, "size", 0)
+            memo_key = (facts_hash, index_version)
+            hit = memo.get(memo_key) if hasattr(memo, "get") else None
+            if hit is not None:
+                cached_json, cached_violations = hit
+                span.measure_out(cached_json)
+                logger.info("analyze: analysis-cache hit (skipping LLM)")
+                return {
+                    "analysis_json": cached_json,
+                    "violations": cached_violations,
+                    "telemetry": span.finish(),
+                }
+        except Exception:  # caching is best-effort; never break the node
+            logger.debug("analyze: memo lookup failed", exc_info=True)
+            memo_key = None
+
     raw = ctx.llm.complete(SYSTEM_ANALYZE, user)
     span.measure_out(raw)
 
@@ -139,6 +169,7 @@ def analyze(state: ComplianceState, ctx: Context) -> dict:
         span.measure_out(raw, repaired)
         violations, err = _parse_violations(repaired)
         if err is None:
+            _memo_put(memo, memo_key, repaired, violations)
             return {
                 "analysis_json": repaired,
                 "violations": violations,
@@ -152,6 +183,7 @@ def analyze(state: ComplianceState, ctx: Context) -> dict:
             "error": f"parse_failed: {err}",
             "telemetry": span.finish(),
         }
+    _memo_put(memo, memo_key, raw, violations)
     return {"analysis_json": raw, "violations": violations, "telemetry": span.finish()}
 
 
@@ -313,6 +345,18 @@ def _extract_json(raw: str) -> Optional[dict]:
                 except (json.JSONDecodeError, ValueError):
                     return None
     return None
+
+
+def _memo_put(
+    memo: object, key: object, analysis_json: str, violations: List[dict]
+) -> None:
+    """Best-effort store of a successful analyze result into the memo cache."""
+    if memo is None or key is None or not hasattr(memo, "put"):
+        return
+    try:
+        memo.put(key, (analysis_json, violations))
+    except Exception:  # caching must never break the node
+        logger.debug("analyze: memo store failed", exc_info=True)
 
 
 def _parse_violations(raw: str) -> Tuple[List[dict], Optional[str]]:

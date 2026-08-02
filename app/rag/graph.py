@@ -134,7 +134,10 @@ def analyze(state: ComplianceState, ctx: Context) -> dict:
     span.measure_in(user)
 
     # Analysis memo: an identical re-check (same facts against the same index
-    # contents) skips the LLM entirely. Keyed by (facts_hash, index_version).
+    # CONTENTS) skips the LLM entirely. Keyed by (facts_hash, index_version), where
+    # index_version is the store's content fingerprint — a rebuild that swaps
+    # content but keeps the same size still invalidates the cache (store.size
+    # alone would have gone stale).
     memo = ctx.analysis_cache
     memo_key = None
     if memo is not None:
@@ -142,7 +145,12 @@ def analyze(state: ComplianceState, ctx: Context) -> dict:
             import hashlib
 
             facts_hash = hashlib.sha256(facts.encode("utf-8")).hexdigest()
-            index_version = getattr(ctx.store, "size", 0)
+            content_version = getattr(ctx.store, "content_version", None)
+            index_version = (
+                content_version()
+                if callable(content_version)
+                else getattr(ctx.store, "size", 0)
+            )
             memo_key = (facts_hash, index_version)
             hit = memo.get(memo_key) if hasattr(memo, "get") else None
             if hit is not None:

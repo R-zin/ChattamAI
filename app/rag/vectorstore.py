@@ -48,6 +48,20 @@ class RuleVectorStore:
         self._metas: List[dict] = []
         self._hashes: set[str] = set()
 
+    def content_version(self) -> str:
+        """Fingerprint of the index contents (changes on any add/reset/rebuild).
+
+        Derived from the set of per-chunk content hashes, so it reflects WHAT is
+        indexed, not just HOW MANY items (unlike ``size``). Used as part of the
+        analysis-memo key so a rebuild that swaps content but keeps the same
+        count still invalidates cached analyses. Falls back to "size:N" when a
+        store has no hashes (empty index).
+        """
+        if not self._hashes:
+            return f"size:{len(self._texts)}"
+        joined = "|".join(sorted(self._hashes))
+        return f"content:{_content_hash(joined)}"
+
     # -- persistence -------------------------------------------------------
     def _load(self) -> bool:
         if not self.index_path.exists() or not self.meta_path.exists():

@@ -174,7 +174,6 @@ def get_current_user(
 
 def require_auth(
     token: Optional[str] = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
 ) -> Optional[User]:
     """Opt-in guard for protected endpoints. OFF by default.
 
@@ -188,7 +187,11 @@ def require_auth(
     """
     if not _auth_required():
         return None
-    return get_current_user(token=token, db=db)
+    db: Session = next(get_db())
+    try:
+        return get_current_user(token=token, db=db)
+    finally:
+        db.close()
 
 
 __all__ = [

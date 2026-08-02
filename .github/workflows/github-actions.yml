@@ -7,6 +7,34 @@ on:
     branches: [main]
 
 jobs:
+  # Unit + API suite, fully offline (fakes drive OpenAI/Anthropic seams). Runs the
+  # same checks `pytest -q` runs locally on the 3.12 CI interpreter, before the
+  # credential-less boot smoke. Creds are emptied explicitly so nothing in the
+  # runner environment can leak real keys into a test.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run offline test suite
+        env:
+          OPENAI_API_KEY: ""
+          ANTHROPIC_AUTH_TOKEN: ""
+          ANTHROPIC_API_KEY: ""
+        run: pytest -q
+
   smoke:
     runs-on: ubuntu-latest
     steps:

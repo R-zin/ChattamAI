@@ -1,0 +1,13 @@
+# ChattamAI — development / test dependencies
+# Install alongside runtime deps:  pip install -r requirements.txt -r requirements-dev.txt
+-r requirements.txt
+
+# Testing
+pytest==8.4.2
+pytest-asyncio==1.2.0
+httpx==0.28.1
+respx==0.22.0        # mock OpenAI/Anthropic HTTP in tests
+coverage==7.10.7
+
+# Lint / format (CI uses the ruff GitHub Action; pin for local parity)
+ruff==0.14.5

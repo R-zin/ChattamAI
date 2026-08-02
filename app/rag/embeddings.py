@@ -14,6 +14,21 @@ from typing import List
 import numpy as np
 
 
+def l2_normalize(matrix: np.ndarray) -> np.ndarray:
+    """Return row-wise L2-normalized float32 vectors.
+
+    Normalising turns inner product into cosine similarity, so the vector
+    store can rank by true similarity (higher = more similar) instead of raw
+    L2 distance. Zero vectors are left as-is (norm floored to avoid div-by-0).
+    """
+    matrix = np.asarray(matrix, dtype="float32")
+    if matrix.ndim == 1:
+        matrix = matrix.reshape(1, -1)
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    norms = np.maximum(norms, 1e-12)
+    return matrix / norms
+
+
 class EmbeddingProvider(ABC):
     """Turns text into fixed-size vectors."""
 
@@ -23,6 +38,10 @@ class EmbeddingProvider(ABC):
     def embed(self, texts: List[str]) -> np.ndarray:
         """Return a (len(texts), dim) float32 array."""
         raise NotImplementedError
+
+    def embed_normalized(self, texts: List[str]) -> np.ndarray:
+        """Return L2-normalized embeddings (unit length) for cosine search."""
+        return l2_normalize(self.embed(texts))
 
 
 class OpenAIEmbeddingProvider(EmbeddingProvider):
@@ -38,8 +57,6 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
         from openai import OpenAI
 
         if api_key is None:
-            import os
-
             api_key = os.getenv("OPENAI_API_KEY")
         if not api_key:
             raise RuntimeError(
@@ -68,7 +85,7 @@ class NvidiaNemoEmbeddingProvider(EmbeddingProvider):
         from openai import OpenAI
 
         self._client = OpenAI(
-            api_key=os.getenv("NVIDA_API_KEY"), base_url=os.getenv("NVIDIA_API_URL")
+            api_key=os.getenv("NVIDIA_API_KEY"), base_url=os.getenv("NVIDIA_API_URL")
         )
 
     def embed(self, texts: List[str]) -> np.ndarray:

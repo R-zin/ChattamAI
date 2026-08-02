@@ -36,3 +36,6 @@ chattamai.db
 
 # AgentHub
 .agenthub/
+
+# Claude Code harness (subagent worktrees)
+.claude/

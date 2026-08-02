@@ -22,18 +22,10 @@ from app.rag.vectorstore import RuleVectorStore
 def _default_score_threshold() -> float:
     """Minimum cosine-similarity for a retrieval hit (higher score = better).
 
-    Read from the MIN_SCORE env var, default ``0.0`` (keep everything). Kept
-    here, read via os.getenv with a safe default — not added to config.Settings
-    because config.py is owned by another agent (the coordinator can promote it
-    to a Settings flag during integration).
+    Sourced from ``Settings.min_score`` (``MIN_SCORE`` env var, default ``0.0``
+    keeps everything).
     """
-    raw = os.getenv("MIN_SCORE")
-    if not raw:
-        return 0.0
-    try:
-        return float(raw)
-    except ValueError:
-        return 0.0
+    return get_settings().min_score
 
 
 class RAGSystem:

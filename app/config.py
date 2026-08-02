@@ -34,6 +34,9 @@ class Settings(BaseModel):
 
     # --- Retrieval ---
     top_k: int = int(os.getenv("TOP_K", "6"))
+    # Minimum cosine-similarity for a retrieved rule chunk to be used.
+    # Scores are higher=better; 0.0 keeps everything (off).
+    min_score: float = float(os.getenv("MIN_SCORE", "0.0"))
 
     # --- Embeddings (OpenAI) ---
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")

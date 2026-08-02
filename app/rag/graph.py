@@ -177,10 +177,11 @@ def analyze(state: ComplianceState, ctx: Context) -> dict:
             }
         # Still failing: surface the error rather than silently returning zeros.
         logger.error("analyze: repair retry failed to produce valid JSON")
+        msg = err if str(err).startswith("parse_failed") else f"parse_failed: {err}"
         return {
             "analysis_json": raw,
             "violations": [],
-            "error": f"parse_failed: {err}",
+            "error": msg,
             "telemetry": span.finish(),
         }
     _memo_put(memo, memo_key, raw, violations)

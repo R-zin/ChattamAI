@@ -66,3 +66,36 @@ class HealthResponse(BaseModel):
     index_size: int
     embeddings_ready: bool
     llm_ready: bool
+
+
+# --- Auth models (additive; existing RAG models above are unchanged) ---------
+
+
+class RegisterRequest(BaseModel):
+    """Payload for ``POST /auth/register``."""
+
+    email: str = Field(..., description="Unique user email", min_length=3)
+    password: str = Field(..., description="Plaintext password", min_length=8)
+
+
+class LoginRequest(BaseModel):
+    """Payload for ``POST /auth/login`` (JSON alternative to the OAuth2 form)."""
+
+    email: str = Field(..., description="User email")
+    password: str = Field(..., description="Plaintext password")
+
+
+class TokenResponse(BaseModel):
+    """JWT returned by ``POST /auth/login``."""
+
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int = Field(..., description="Token lifetime in seconds")
+
+
+class UserResponse(BaseModel):
+    """Public view of a registered user (never includes the password hash)."""
+
+    user_id: str
+    email: str
+    created_at: Optional[str] = None

@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.routes import auth as auth_routes
 from app.routes import rag as rag_routes
 
 
@@ -19,6 +20,13 @@ async def lifespan(app: FastAPI):
 
     # Build the system eagerly so readiness is known at startup.
     app.state.rag = RAGSystem()
+
+    # Create auth/DB tables on startup. Best-effort: a missing/unreachable DB is
+    # logged and never breaks the RAG boot (the RAG path does not use the DB).
+    from app.services.database_init import init_db_safe
+
+    init_db_safe()
+
     yield
 
 
@@ -40,6 +48,7 @@ app.add_middleware(
 )
 
 app.include_router(rag_routes.router)
+app.include_router(auth_routes.auth_router)
 
 
 @app.get("/")

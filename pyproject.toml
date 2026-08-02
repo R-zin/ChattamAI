@@ -1,0 +1,22 @@
+[project]
+name = "chattamai"
+version = "0.1.0"
+description = "Kerala Building Rules compliance RAG (FastAPI + LangGraph + FAISS)"
+requires-python = ">=3.9"
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.lint]
+# E731 (lambda assignment) is relaxed: tests use small throwaway lambdas.
+ignore = ["E731"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# asyncio_mode=auto lets async test functions run without explicit markers.
+asyncio_mode = "auto"
+addopts = "-ra"

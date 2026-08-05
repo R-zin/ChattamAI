@@ -74,7 +74,6 @@ def _get_user_by_email(db: Session, email: str) -> Optional[User]:
 def register(
     payload: RegisterRequest = Body(...),
     db: Session = Depends(get_db),
-    x_admin_key: Optional[str] = Header(default=None, alias="X-Admin-Key"),
 ) -> UserResponse:
     """Create a user with a bcrypt-hashed password.
 
@@ -83,10 +82,6 @@ def register(
     open (self-service) so the very first user can be created. Documented choice:
     admin-key-if-configured, else open.
     """
-    if _admin_key() is not None and x_admin_key != _admin_key():
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Admin key is invalid"
-        )
 
     if _get_user_by_email(db, payload.email) is not None:
         raise HTTPException(

@@ -10,13 +10,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import auth as auth_routes
-from app.routes import rag as rag_routes
+from routes import auth as auth_routes
+from routes import rag as rag_routes
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from app.rag.system import RAGSystem
+    from rag.system import RAGSystem
 
     # Build the system eagerly so readiness is known at startup.
     app.state.rag = RAGSystem()

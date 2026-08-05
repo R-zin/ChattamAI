@@ -152,6 +152,10 @@ data/kbr/            drop Kerala Building Rules documents here
 data/index/          generated FAISS index (rules.faiss) + rules_meta.json
 ```
 
+For a **line-referenced map of every function and where it lives** (full-system
+flowchart, call graph, and extension/test seams), see
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Limitations
 
 - Plan parsing supports **text-based** PDFs/txt, and **image / image-only-PDF plans

@@ -1,3 +1,45 @@
 .superdesign/tmp/
 frontend/node_modules/
 frontend/dist/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual envs
+.venv/
+.venv-tests/
+venv/
+env/
+
+# Tooling caches
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Env / secrets
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+
+# App data artifacts (built at runtime)
+data/index/rules.faiss
+data/index/rules_meta.json
+chattamai.db
+*.db
+
+# AgentHub
+.agenthub/
+
+# Claude Code harness (subagent worktrees)
+.claude/

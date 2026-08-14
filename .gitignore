@@ -1,3 +1,6 @@
+.superdesign/tmp/
+frontend/node_modules/
+frontend/dist/
 # Python
 __pycache__/
 *.py[cod]

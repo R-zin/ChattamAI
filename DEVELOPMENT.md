@@ -203,10 +203,10 @@ against fakes, so you can validate changes without OpenAI/Anthropic credentials:
 python scripts/bench_check.py --checks 5   # latency + cache-win summary
 pytest                                     # unit tests (fakes-backed)
 ```
-Note: a handful of tests still assert the *old* `IndexFlatL2` distance /
-lenient-parse behaviour and are being reconciled with the new cosine +
-strict-score semantics — they are not a signal that your change broke something
-if you only touched retrieval/parsing.
+Note: the suite is green (80 tests) against the *current* cosine + strict-score
+semantics. The old `IndexFlatL2` raw-distance / lenient-parse behaviour is fully
+reconciled — scores are now cosine similarities in [-1, 1] where higher = more
+similar. A failing test *is* a signal that your change broke something.
 
 ---
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { fetchHealth } from '../data.js'
 
 // Animated circular score ring (r=40 → C≈251.33)
 export function ScoreRing({ score = 78, max = 100, size = 128, color = 'var(--warn)' }) {
@@ -58,10 +59,20 @@ export function AnalysisTrace({ trace = [] }) {
 }
 
 export function AppFooter({ extra }) {
+  // Live index size from /api/health when the API is available; fetchHealth
+  // falls back to the demo value (2,481) when it is not.
+  const [indexSize, setIndexSize] = useState(2481)
+  useEffect(() => {
+    let live = true
+    fetchHealth()
+      .then((h) => { if (live && Number.isFinite(h?.index_size)) setIndexSize(h.index_size) })
+      .catch(() => {})
+    return () => { live = false }
+  }, [])
   return (
     <footer className="mt-auto px-8 py-6 border-t border-[#222C3A] flex justify-between items-center">
       <div className="text-[10px] mono text-[#5B6879] uppercase tracking-widest">
-        v0.1.0 • FAISS Index Size: 2,481 chunks {extra ? `• ${extra}` : ''}
+        v0.1.0 • FAISS Index Size: {indexSize.toLocaleString()} chunks {extra ? `• ${extra}` : ''}
       </div>
       <div className="text-[10px] mono text-[#5B6879] flex items-center gap-4">
         <span className="hover:text-[#22D3EE] transition-colors cursor-pointer">KBR Documentation</span>

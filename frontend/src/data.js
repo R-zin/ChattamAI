@@ -3,7 +3,7 @@
 // Honesty boundary (from the design system): the live FastAPI backend emits
 //   - extracted_facts: string[]
 //   - violations[]:     { rule_reference, severity(high|medium|low|info), description, plan_value?, required_value? }
-//   - retrieved_rules[]:{ source<filename>, rule_id:null, excerpt, score<FAISS L2, lower=more relevant> }
+//   - retrieved_rules[]:{ source<filename>, rule_id:null, excerpt, score<FAISS cosine, higher=more relevant> }
 // It does NOT emit an overall verdict enum, a 0-100 score, per-fact confidence,
 // rule numbering, page numbers, or persisted history. Those are PRESENTATIONAL —
 // we derive a display status from the real payload and treat the rest as framing.
@@ -172,7 +172,7 @@ export const kbrStats = [
   { label: 'Chunks Indexed', value: '2,481' },
   { label: 'Last Ingestion', value: '2026-08-02 09:14' },
   { label: 'Embedding Model', value: 'text-embedding-3-small' },
-  { label: 'Vector Store', value: 'FAISS · IndexFlatL2', ok: true },
+  { label: 'Vector Store', value: 'FAISS · IndexFlatIP (cosine)', ok: true },
 ]
 
 export const reports = [

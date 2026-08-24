@@ -103,3 +103,59 @@ class UserResponse(BaseModel):
     user_id: str
     email: str
     created_at: Optional[str] = None
+    totp_enabled: bool = False
+
+
+# --- TOTP / 2FA models (additive) ------------------------------------------
+
+
+class TotpSetupResponse(BaseModel):
+    """Returned by ``POST /auth/totp/setup``. The user scans the QR (or enters
+    ``secret`` manually) and then confirms with a first valid code."""
+
+    otpauth_uri: str
+    qr_png_data_uri: str  # "data:image/png;base64,...."
+    secret: str  # base32 manual-entry fallback
+
+
+class TotpEnableRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=8)
+
+
+class TotpEnableResponse(BaseModel):
+    enabled: bool
+    # Plaintext codes shown ONCE; only their sha256 hashes are stored.
+    recovery_codes: List[str]
+
+
+class TotpDisableRequest(BaseModel):
+    password: str
+    code: str = Field(..., min_length=6, max_length=8)
+
+
+class TotpStatusResponse(BaseModel):
+    totp_enabled: bool
+    totp_required: bool  # server-wide toggle, for UI messaging
+    recovery_codes_remaining: int
+
+
+class OtpRequiredResponse(BaseModel):
+    """Returned by login in place of ``TokenResponse`` when the user must pass
+    TOTP. ``otp_token`` is a short-lived, single-purpose challenge token (it is
+    rejected as a session token by the purpose claim)."""
+
+    otp_required: bool = True
+    otp_setup_required: bool = False  # True => user must enrol before proceeding
+    otp_token: str
+    token_type: str = "totp-challenge"
+    expires_in: int  # otp_challenge_ttl_seconds
+
+
+class TotpVerifyRequest(BaseModel):
+    otp_token: str
+    code: str = Field(..., min_length=6, max_length=8)
+
+
+class TotpRecoverRequest(BaseModel):
+    otp_token: str
+    recovery_code: str = Field(..., min_length=6)

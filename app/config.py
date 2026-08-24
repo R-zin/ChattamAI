@@ -92,6 +92,21 @@ class Settings(BaseModel):
     )
 
     # --- Auth / DB scaffolding (unused by the RAG app today; see DEVELOPMENT.md §7) ---
+    # --- TOTP / 2FA (opt-in per user; TOTP_REQUIRED forces enrolment server-wide) ---
+    # See app/routes/auth.py + app/services/totp.py. OFF by default keeps the
+    # credential-less smoke test and existing tests green.
+    totp_required: bool = os.getenv("TOTP_REQUIRED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    totp_issuer: str = os.getenv("TOTP_ISSUER", "ChattamAI")
+    # Seconds the pre-auth TOTP challenge token (``otp_token``) stays valid.
+    otp_challenge_ttl_seconds: int = int(os.getenv("OTP_CHALLENGE_TTL", "300"))
+    # Recovery codes issued (once) at enable-time; each is single-use.
+    totp_recovery_count: int = int(os.getenv("TOTP_RECOVERY_COUNT", "8"))
+
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./chattamai.db")
     session_timeout_seconds: int = int(os.getenv("TIME_OUT", "3600"))
 

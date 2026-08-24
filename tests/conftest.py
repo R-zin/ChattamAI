@@ -33,6 +33,16 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+# app/main.py (imported by the ``app_client`` fixture / TestClient) uses top-level
+# imports (``from routes import ...``, ``from rag.system import ...``), which require
+# the ``app/`` directory itself on ``sys.path``. Without this the TestClient path
+# errors with ``ModuleNotFoundError: No module named 'routes'``. Sibling modules use
+# the absolute ``from app...`` style, so putting both the root and ``app/`` on the
+# path satisfies every import style.
+APP_DIR = ROOT / "app"
+if str(APP_DIR) not in sys.path:
+    sys.path.append(str(APP_DIR))
+
 # The app's auth/DB layer (agent-4) reads DATABASE_URL at import of
 # ``app.services.database`` and creates an engine pointing at
 # ``sqlite:///./chattamai.db`` by default — which would write a stray DB file

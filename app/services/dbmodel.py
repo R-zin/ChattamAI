@@ -10,13 +10,15 @@ Python 3.9 compatible: ``from __future__ import annotations`` and no PEP 604
 
 from __future__ import annotations
 
+import hashlib
+import secrets
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy import Column, DateTime, ForeignKey, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String
 from sqlalchemy.orm import relationship
 
 from app.services.database import Base
@@ -109,15 +111,96 @@ def new_id() -> str:
     return uuid.uuid4().hex
 
 
+# --- TOTP / 2FA helpers -----------------------------------------------------
+
+
+def _otp_challenge_ttl_seconds() -> int:
+    try:
+        from app.config import get_settings
+
+        return int(get_settings().otp_challenge_ttl_seconds)
+    except Exception:
+        return 300
+
+
+def _recovery_count() -> int:
+    try:
+        from app.config import get_settings
+
+        return int(get_settings().totp_recovery_count)
+    except Exception:
+        return 8
+
+
+def create_otp_challenge_token(
+    user_id: str,
+    email: str,
+    setup_required: bool = False,
+) -> str:
+    """Short-lived, single-purpose token issued after a correct password for a
+    user who must complete TOTP. NOT an access token: the ``purpose`` claim is
+    what ``get_current_user`` uses to reject it as a session token."""
+    expire = datetime.utcnow() + timedelta(seconds=_otp_challenge_ttl_seconds())
+    claims: Dict[str, Any] = {
+        "sub": user_id,
+        "email": email,
+        "exp": expire,
+        "purpose": "totp",
+        "setup": setup_required,
+    }
+    return jwt.encode(claims, _auth_secret(), algorithm=_auth_algorithm())
+
+
+def decode_otp_challenge_token(token: str) -> Dict[str, Any]:
+    """Decode a challenge token and assert it is a TOTP challenge (not an
+    access token). Raises ``jose.JWTError`` otherwise."""
+    payload = jwt.decode(token, _auth_secret(), algorithms=[_auth_algorithm()])
+    if payload.get("purpose") != "totp":
+        raise JWTError("not a totp challenge token")
+    return payload
+
+
+def hash_recovery_code(code: str) -> str:
+    """Hash a recovery code for at-rest storage. A plain sha256 is correct here
+    (unlike passwords): recovery codes are single-use, high-entropy, machine-
+    generated secrets, so a slow salted KDF buys nothing and bcrypt's 72-byte
+    quirks (see requirements.txt) are needless risk."""
+    return hashlib.sha256(code.strip().lower().encode("utf-8")).hexdigest()
+
+
+def generate_recovery_codes(count: Optional[int] = None) -> List[str]:
+    """Generate ``count`` plaintext recovery codes (10 hex chars each). Shown to
+    the user ONCE at enable-time; only their hashes are stored."""
+    n = _recovery_count() if count is None else int(count)
+    return [secrets.token_hex(5) for _ in range(n)]
+
+
 class User(Base):
     __tablename__ = "user"
     user_id = Column(String, primary_key=True, default=new_id)
     email = Column(String, unique=True, nullable=False, index=True)
     password = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    # 2FA (TOTP). The base32 secret is set at setup-time; ``totp_enabled`` flips
+    # True only after the user proves they control the secret (first valid code).
+    totp_secret = Column(String, nullable=True)
+    totp_enabled = Column(Boolean, nullable=False, default=False)
     sessions = relationship(
         "UserSession", back_populates="user", cascade="all, delete, delete-orphan"
     )
+    recovery_codes = relationship(
+        "RecoveryCode", back_populates="user", cascade="all, delete, delete-orphan"
+    )
+
+
+class RecoveryCode(Base):
+    __tablename__ = "recovery_code"
+    code_id = Column(String, primary_key=True, default=new_id)
+    user_id = Column(String, ForeignKey("user.user_id"), nullable=False, index=True)
+    code_hash = Column(String, nullable=False)  # sha256 hex of the plaintext code
+    used_at = Column(DateTime, nullable=True)  # NULL = still available
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    user = relationship("User", back_populates="recovery_codes")
 
 
 class UserSession(Base):
@@ -131,10 +214,15 @@ class UserSession(Base):
 __all__ = [
     "User",
     "UserSession",
+    "RecoveryCode",
     "hash_password",
     "verify_password",
     "create_access_token",
     "decode_access_token",
+    "create_otp_challenge_token",
+    "decode_otp_challenge_token",
+    "hash_recovery_code",
+    "generate_recovery_codes",
     "new_id",
     "expiry_time",
     "JWTError",

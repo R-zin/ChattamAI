@@ -14,13 +14,27 @@ import Reports from './pages/Reports.jsx'
 import Projects from './pages/Projects.jsx'
 import Activity from './pages/Activity.jsx'
 import Settings from './pages/Settings.jsx'
+import Login from './pages/Login.jsx'
+import { apiAvailable, isAuthed } from './data.js'
+
+// Mock-mode exempt: when the API isn't configured the demo renders on static
+// data with no auth gating. With an API configured, unauthenticated visits to any
+// protected page redirect to /login; an expired token redirects via request()'s 401.
+function RequireAuth({ children }) {
+  if (apiAvailable() && !isAuthed()) return <Navigate to="/login" replace />
+  return children
+}
 
 export default function App() {
   return (
     <BrowserRouter>
       <ToastHost />
-      <AppShell>
-        <Routes>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+      </Routes>
+      <RequireAuth>
+        <AppShell>
+          <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/new-check" element={<NewCheck />} />
           <Route path="/analysis" element={<Analysis />} />
@@ -31,9 +45,10 @@ export default function App() {
           <Route path="/projects" element={<Projects />} />
           <Route path="/activity" element={<Activity />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </AppShell>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </AppShell>
+      </RequireAuth>
     </BrowserRouter>
   )
 }

@@ -14,11 +14,34 @@ from app.services.database import Base, engine
 logger = logging.getLogger(__name__)
 
 
+def _ensure_user_totp_columns() -> None:
+    """Additively ALTER an existing ``user`` table for the 2FA columns.
+
+    Fresh databases get these from ``create_all``; this is the only hand-migration
+    needed until Alembic lands (DEVELOPMENT.md §9). Standard ``ADD COLUMN`` is
+    safe on both SQLite and Postgres. Called under :func:`init_db_safe`, so a
+    failure is logged, never fatal."""
+    from sqlalchemy import inspect, text
+
+    cols = {c["name"] for c in inspect(engine).get_columns("user")}
+    with engine.begin() as conn:
+        if "totp_secret" not in cols:
+            conn.execute(text("ALTER TABLE user ADD COLUMN totp_secret VARCHAR"))
+        if "totp_enabled" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE user ADD COLUMN totp_enabled "
+                    "BOOLEAN NOT NULL DEFAULT 0"
+                )
+            )
+
+
 def init_db() -> None:
     """Create all tables (idempotent ``create_all``). Raises on failure."""
     from app.services import dbmodel  # noqa: F401  (register models on Base)
 
     Base.metadata.create_all(bind=engine)
+    _ensure_user_totp_columns()
 
 
 def init_db_safe() -> bool:

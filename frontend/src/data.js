@@ -14,6 +14,23 @@
 export const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 export const apiAvailable = () => API_URL.length > 0
 
+// ---- auth token storage (2FA / login, plan slice A) --------------------------
+// Stored in sessionStorage by default (closing the tab logs you out, matching the
+// 1-hr JWT); localStorage only when the user opts "remember me". Keyed 'chattam.*'
+// to match the existing sessionStorage convention.
+const TOKEN_KEY = 'chattam.token'
+export const getToken = () =>
+  sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY)
+export const setToken = (token, remember = false) => {
+  clearToken()
+  ;(remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token)
+}
+export const clearToken = () => {
+  sessionStorage.removeItem(TOKEN_KEY)
+  localStorage.removeItem(TOKEN_KEY)
+}
+export const isAuthed = () => !!getToken()
+
 export const embeddingModel = 'text-embedding-3-small (1536-dim)'
 export const analysisModel = 'claude-3-5-sonnet-20241022'
 
@@ -179,8 +196,18 @@ export const pipelineScript = [
 ]
 
 // ---- live API (optional) ----------------------------------------------------
-async function request(path, opts) {
-  const res = await fetch(`${API_URL}${path}`, opts)
+async function request(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) }
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+  const res = await fetch(`${API_URL}${path}`, { ...opts, headers })
+  if (res.status === 401) {
+    clearToken()
+    if (apiAvailable() && window.location.pathname !== '/login') {
+      window.location.assign('/login')
+    }
+    throw new Error('API 401')
+  }
   if (!res.ok) throw new Error(`API ${res.status}`)
   return res.json()
 }
@@ -207,4 +234,84 @@ export async function analyzePlan({ planText, file, top_k }) {
 export async function fetchHealth() {
   if (!apiAvailable()) return { status: 'ok', index_size: 2481, embeddings_ready: true, llm_ready: true }
   return request('/api/health')
+}
+
+// ---- auth / 2FA API (all live-only; mock-simulated when the API is unset) -------
+export async function login({ email, password }) {
+  if (!apiAvailable()) {
+    await new Promise((r) => setTimeout(r, 500))
+    return { access_token: 'demo-token', token_type: 'bearer', expires_in: 3600 }
+  }
+  const res = await fetch(`${API_URL}/auth/login/json`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  if (!res.ok) throw new Error(`Login failed (${res.status})`)
+  return res.json() // TokenResponse | OtpRequiredResponse
+}
+
+// These helpers go through the auth-aware request() choke point (bearer header +
+// 401 handling). The challenge-token calls (verify/recover) pass the otp_token in
+// the body, NOT as a bearer token, so they never collide with request()'s header.
+export async function totpSetup() {
+  if (!apiAvailable()) {
+    return {
+      otpauth_uri: 'otpauth://totp/ChattamAI:demo?secret=DEMO',
+      qr_png_data_uri: '',
+      secret: 'DEMO',
+    }
+  }
+  return request('/auth/totp/setup', { method: 'POST' })
+}
+
+export async function totpEnable({ code }) {
+  if (!apiAvailable()) return { enabled: true, recovery_codes: ['demo-recovery-code'] }
+  return request('/auth/totp/enable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  })
+}
+
+export async function totpDisable({ password, code }) {
+  if (!apiAvailable())
+    return { totp_enabled: false, totp_required: false, recovery_codes_remaining: 0 }
+  return request('/auth/totp/disable', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password, code }),
+  })
+}
+
+export async function totpStatus() {
+  if (!apiAvailable())
+    return { totp_enabled: false, totp_required: false, recovery_codes_remaining: 0 }
+  return request('/auth/totp/status')
+}
+
+// Complete a 2FA login. The challenge token goes in the body; no bearer header is
+// used because the request() helper only adds one when a stored access token exists.
+export async function totpVerify({ otpToken, code }) {
+  if (!apiAvailable())
+    return { access_token: 'demo-token', token_type: 'bearer', expires_in: 3600 }
+  const res = await fetch(`${API_URL}/auth/totp/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ otp_token: otpToken, code }),
+  })
+  if (!res.ok) throw new Error(`Verification failed (${res.status})`)
+  return res.json()
+}
+
+export async function totpRecover({ otpToken, recoveryCode }) {
+  if (!apiAvailable())
+    return { access_token: 'demo-token', token_type: 'bearer', expires_in: 3600 }
+  const res = await fetch(`${API_URL}/auth/totp/recover`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ otp_token: otpToken, recovery_code: recoveryCode }),
+  })
+  if (!res.ok) throw new Error(`Recovery failed (${res.status})`)
+  return res.json()
 }

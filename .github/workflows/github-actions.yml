@@ -1,12 +1,20 @@
 name: FastAPI CI
 
-on: [push]
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-  FastAPI-Installation:
+  # Unit + API suite, fully offline (fakes drive OpenAI/Anthropic seams). Runs the
+  # same checks `pytest -q` runs locally on the 3.12 CI interpreter, before the
+  # credential-less boot smoke. Creds are emptied explicitly so nothing in the
+  # runner environment can leak real keys into a test.
+  test:
     runs-on: ubuntu-latest
     steps:
-      - name: CheckOut Code
+      - name: Check out code
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -17,22 +25,50 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m venv .venv
-          source .venv/bin/activate
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install uvicorn
-      - name: Run FastAPI server and test health endpoint
-        run: |
-          source .venv/bin/activate
+          pip install -r requirements-dev.txt
 
+      - name: Run offline test suite
+        env:
+          OPENAI_API_KEY: ""
+          ANTHROPIC_AUTH_TOKEN: ""
+          ANTHROPIC_API_KEY: ""
+        run: pytest -q
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Boot server and smoke-test /api/health
+        env:
+          # Boot without real credentials; settings have defaults and the RAG
+          # system reports "degraded", so /api/health still returns 200.
+          OPENAI_API_KEY: ""
+          ANTHROPIC_AUTH_TOKEN: ""
+        run: |
           uvicorn app.main:app --host 127.0.0.1 --port 8000 &
           SERVER_PID=$!
 
-          # Wait for server to start
-          sleep 5
+          # Poll until the server responds (fail if it never comes up).
+          for i in $(seq 1 30); do
+            if curl --fail -s http://127.0.0.1:8000/ ; then break; fi
+            sleep 1
+          done
 
-          # Fail the workflow if /health doesn't return a 2xx response
-          curl --fail http://127.0.0.1:8000/health
+          # The app serves the health route under /api (not bare /health).
+          curl --fail http://127.0.0.1:8000/api/health
 
           kill $SERVER_PID

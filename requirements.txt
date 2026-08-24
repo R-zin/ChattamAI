@@ -19,9 +19,30 @@ anthropic==0.117.0
 # Document parsing
 pypdf==6.14.2
 
+# OCR (feature-flagged; see plan.md Phase 3). Imported lazily inside app/rag/ocr.py
+# and gated by OCR_ENABLED, so installs that only serve text/PDF plans are unaffected.
+# Pins chosen to support BOTH Python 3.9 (dev) and 3.12 (CI):
+#   - pillow:      10.x supports 3.8–3.12; capped <12 to stay clear of breaking changes.
+#   - pytesseract: pure-Python wrapper, requires_python >=3.8 (3.9 & 3.12 OK).
+#   - PyMuPDF:     capped <1.27 because 1.27+ bumps requires_python to >=3.10 (drops 3.9);
+#                  1.24–1.26 require >=3.9 and ship cp39-abi3 wheels that run on 3.9–3.12.
+# NOTE: the Tesseract OCR binary is a SYSTEM requirement, not a pip package:
+#   macOS: `brew install tesseract`   Debian/Ubuntu: `apt install tesseract-ocr`
+pillow>=10,<12
+pytesseract>=0.3.10
+PyMuPDF>=1.24,<1.27
+
 # Config
 python-dotenv==1.2.1
 python-multipart==0.0.20
 
 # Database (existing models; unused by the RAG app for now)
 sqlalchemy==2.0.51
+
+# Auth (password hashing + JWT). Both support Python 3.9 and 3.12.
+python-jose[cryptography]==3.5.0
+passlib[bcrypt]==1.7.4
+# passlib 1.7.4 reads ``bcrypt.__about__`` (removed in bcrypt>=4.1) and bcrypt>=5
+# hard-errors on passlib's internal >72-byte wrap-bug probe. Pin bcrypt<4.1 so the
+# pair works cleanly; passlib[bcrypt] alone would otherwise pull an incompatible bcrypt.
+bcrypt==4.0.1

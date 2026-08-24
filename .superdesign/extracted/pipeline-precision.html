@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Pipeline | ChattamAI</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@500;600&amp;display=swap" rel="stylesheet">
+    <meta name="view-transition" content="same-origin">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/2c0decd9-0a87-4e7f-bdaa-086443d94cdd" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/f9b693bc-ca87-47dc-9d32-4396400e5da9" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/638a6dbd-4127-46d5-8fd4-914f3c3fdeb0" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/f6eb8d5d-f182-42e1-b096-f95c864185ab" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/beb57a34-eebe-4cd9-aeab-86afe8a227f6" as="document">
+    <style>
+        :root {
+            --bg: #0A0E13;
+            --surface: #10151C;
+            --surface-2: #161D27;
+            --surface-3: #1C2531;
+            --border: #222C3A;
+            --border-strong: #2E3B4D;
+            --text: #E7ECF2;
+            --text-2: #9AA7B6;
+            --text-3: #5B6879;
+            --accent: #22D3EE;
+            --accent-strong: #0EA5C9;
+            --ok: #34D399;
+            --warn: #FBBF24;
+            --danger: #F87171;
+            --info: #94A3B8;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--text);
+            background-color: var(--bg);
+            margin: 0;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .blueprint-grid {
+            background-image: 
+                linear-gradient(to right, rgba(120, 150, 190, 0.045) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(120, 150, 190, 0.045) 1px, transparent 1px),
+                linear-gradient(to right, rgba(120, 150, 190, 0.07) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(120, 150, 190, 0.07) 1px, transparent 1px);
+            background-size: 20px 20px, 20px 20px, 100px 100px, 100px 100px;
+            pointer-events: none;
+            animation: drift 60s linear infinite;
+        }
+
+        @keyframes drift {
+            from { background-position: 0 0; }
+            to { background-position: 500px 500px; }
+        }
+
+        .sidebar-rail {
+            width: 2px;
+            background-color: var(--accent);
+            box-shadow: 0 0 8px var(--accent);
+        }
+
+        /* Node Animations */
+        .pulse-accent {
+            animation: pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.4); }
+            70% { box-shadow: 0 0 0 8px rgba(34, 211, 238, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0); }
+        }
+
+        .rotate-slow {
+            animation: rotate 8s linear infinite;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .flow-line-active {
+            background: linear-gradient(90deg, var(--accent) 0%, transparent 100%);
+            background-size: 200% 100%;
+            animation: flow 1.5s linear infinite;
+        }
+
+        @keyframes flow {
+            0% { background-position: 200% 0; }
+            100% { background-position: 0 0; }
+        }
+
+        .cursor-blink {
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            from, to { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        @view-transition { navigation: auto; }
+        ::view-transition { background-color: var(--bg); }
+        ::view-transition-old(main-nav), ::view-transition-new(main-nav) { animation: none; mix-blend-mode: normal; }
+        ::view-transition-old(brand), ::view-transition-new(brand) { animation: none; mix-blend-mode: normal; }
+        ::view-transition-old(main-content) { animation: 0.25s ease-out both fade-out; }
+        ::view-transition-new(main-content) { animation: 0.25s ease-in 0.1s both fade-in; }
+        @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div class="flex min-h-screen relative overflow-hidden">
+        <!-- Blueprint Grid Background -->
+        <div class="blueprint-grid absolute inset-0 z-0"></div>
+
+        <!-- Sidebar (Persistent) -->
+        <aside style="view-transition-name: main-nav" class="w-64 flex-shrink-0 bg-[#0C1117] border-r border-[#222C3A] z-20 flex flex-col">
+            <div class="p-6">
+                <div style="view-transition-name: brand" class="mb-8">
+                    <div class="text-xs mono font-semibold tracking-widest text-[#22D3EE] opacity-80 mb-0.5">KBR COMPLIANCE ENGINE</div>
+                    <h1 class="text-xl font-bold tracking-tight text-white">CHATTAMAI</h1>
+                </div>
+
+                <nav class="space-y-1">
+                    <a href="https://p.superdesign.dev/draft/2c0decd9-0a87-4e7f-bdaa-086443d94cdd" id="nav-dashboard" class="group flex items-center px-3 py-2 text-sm font-medium text-[#9AA7B6] hover:text-white hover:bg-[#161D27] transition-all duration-150">
+                        <iconify-icon icon="lucide:layout-dashboard" class="mr-3 text-lg opacity-70 group-hover:opacity-100"></iconify-icon>
+                        Dashboard
+                    </a>
+                    <a href="https://p.superdesign.dev/draft/f9b693bc-ca87-47dc-9d32-4396400e5da9" id="nav-new-check" class="group relative flex items-center px-3 py-2 text-sm font-medium rounded-md bg-[#161D27] text-white">
+                        <div class="absolute left-0 sidebar-rail h-4 rounded-full"></div>
+                        <iconify-icon icon="lucide:plus-square" class="mr-3 text-lg text-[#22D3EE]"></iconify-icon>
+                        New Compliance Check
+                    </a>
+                    <a href="#projects" id="nav-projects" class="group flex items-center px-3 py-2 text-sm font-medium text-[#9AA7B6] hover:text-white hover:bg-[#161D27] transition-all duration-150">
+                        <iconify-icon icon="lucide:folder" class="mr-3 text-lg opacity-70 group-hover:opacity-100"></iconify-icon>
+                        Projects
+                    </a>
+                    <a href="#reports" id="nav-reports" class="group flex items-center px-3 py-2 text-sm font-medium text-[#9AA7B6] hover:text-white hover:bg-[#161D27] transition-all duration-150">
+                        <iconify-icon icon="lucide:file-text" class="mr-3 text-lg opacity-70 group-hover:opacity-100"></iconify-icon>
+                        Reports
+                    </a>
+                    <a href="#knowledge" id="nav-knowledge-base" class="group flex items-center px-3 py-2 text-sm font-medium text-[#9AA7B6] hover:text-white hover:bg-[#161D27] transition-all duration-150">
+                        <iconify-icon icon="lucide:database" class="mr-3 text-lg opacity-70 group-hover:opacity-100"></iconify-icon>
+                        KBR Knowledge Base
+                    </a>
+                </nav>
+            </div>
+
+            <div class="mt-auto p-4">
+                <div class="bg-[#10151C] border border-[#222C3A] rounded-md p-4">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="w-1.5 h-1.5 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399]"></div>
+                        <span class="text-[11px] font-bold tracking-wider uppercase text-white">System Status</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] mono text-[#5B6879] uppercase tracking-wider">API Engine</span>
+                            <div class="w-1.5 h-1.5 rounded-full bg-[#34D399]"></div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] mono text-[#5B6879] uppercase tracking-wider">LLM Bridge</span>
+                            <div class="w-1.5 h-1.5 rounded-full bg-[#34D399]"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main style="view-transition-name: main-content" class="flex-1 flex flex-col z-10">
+            <!-- Header -->
+            <header class="h-20 flex items-center justify-between px-8 border-b border-[#222C3A] bg-[#0A0E13]/80 backdrop-blur-md sticky top-0 z-30">
+                <div>
+                    <div class="text-[10px] mono text-[#22D3EE] uppercase tracking-[0.2em] mb-0.5 flex items-center gap-2">
+                        <span class="flex h-2 w-2 relative">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                        </span>
+                        Processing Analysis
+                    </div>
+                    <h2 class="text-2xl font-semibold tracking-tight text-white">Analyzing Building Plan</h2>
+                    <p class="text-sm text-[#9AA7B6]">Residential Building — Kakkanad · <span class="mono text-[#22D3EE]">plan_014.pdf</span></p>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="text-right hidden sm:block">
+                        <div class="text-[10px] mono text-[#5B6879] uppercase">Elapsed Time</div>
+                        <div class="text-sm mono text-white">00:08.42</div>
+                    </div>
+                    <a href="#cancel" id="cancel-analysis" class="px-4 py-2 border border-[#222C3A] rounded-[4px] text-xs mono uppercase text-[#9AA7B6] hover:bg-[#161D27] hover:text-white transition-all">
+                        Abort Process
+                    </a>
+                </div>
+            </header>
+
+            <!-- Analysis Pipeline Visualization -->
+            <div class="flex-1 flex flex-col justify-center px-12 py-8">
+                <div class="max-w-6xl mx-auto w-full mb-16 relative">
+                    
+                    <!-- Pipeline Connections (Bottom Layer) -->
+                    <div class="absolute top-8 left-0 w-full flex justify-between px-8 z-0">
+                        <!-- Segment 1-2: COMPLETED -->
+                        <div class="flex-1 relative flex items-center h-[1px] bg-[#22D3EE]/40 mt-[31.5px]">
+                            <div class="absolute left-0 h-2 w-[1px] bg-[#22D3EE]/60 -translate-y-1/2"></div>
+                            <div class="absolute right-0 h-2 w-[1px] bg-[#22D3EE]/60 -translate-y-1/2"></div>
+                            <div class="absolute top-[-14px] left-1/2 -translate-x-1/2 text-[9px] mono text-[#22D3EE] opacity-60">Δt: 2.1s • facts: 14</div>
+                        </div>
+                        <div class="w-24"></div> <!-- spacer for node -->
+                        <!-- Segment 2-3: COMPLETED -->
+                        <div class="flex-1 relative flex items-center h-[1px] bg-[#22D3EE]/40 mt-[31.5px]">
+                            <div class="absolute left-0 h-2 w-[1px] bg-[#22D3EE]/60 -translate-y-1/2"></div>
+                            <div class="absolute right-0 h-2 w-[1px] bg-[#22D3EE]/60 -translate-y-1/2"></div>
+                            <div class="absolute top-[-14px] left-1/2 -translate-x-1/2 text-[9px] mono text-[#22D3EE] opacity-60">Δt: 3.8s • chunks: 2,481</div>
+                        </div>
+                        <div class="w-24"></div> <!-- spacer for node -->
+                        <!-- Segment 3-4: ACTIVE -->
+                        <div class="flex-1 relative flex items-center h-[1px] bg-[#222C3A] mt-[31.5px]">
+                            <div class="absolute left-0 h-2 w-[1px] bg-[#2E3B4D] -translate-y-1/2"></div>
+                            <div class="absolute right-0 h-2 w-[1px] bg-[#2E3B4D] -translate-y-1/2"></div>
+                            <div class="absolute inset-0 flow-line-active opacity-20"></div>
+                            <div class="absolute top-[-14px] left-1/2 -translate-x-1/2 text-[9px] mono text-[#5B6879]">analyzing...</div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-4 gap-4 relative z-10">
+                        
+                        <!-- Stage 01: EXTRACT FACTS -->
+                        <div class="flex flex-col items-center">
+                            <div class="w-16 h-16 rounded-full bg-[#0A0E13] flex items-center justify-center relative mb-4 border border-[#222C3A]">
+                                <svg class="absolute inset-0 w-full h-full -rotate-90">
+                                    <circle cx="32" cy="32" r="31" fill="none" stroke="currentColor" stroke-width="1.5" class="text-[#22D3EE]/10" />
+                                    <circle cx="32" cy="32" r="31" fill="none" stroke="currentColor" stroke-width="1.5" class="text-[#22D3EE]" stroke-dasharray="194.7" stroke-dashoffset="0" />
+                                </svg>
+                                <iconify-icon icon="lucide:check" class="text-xl text-[#22D3EE]"></iconify-icon>
+                                <span class="absolute -top-1 -right-1 bg-[#22D3EE] text-black text-[9px] mono font-bold px-1 rounded-sm">01</span>
+                                <span class="absolute -bottom-2 bg-[#0A0E13] border border-[#22D3EE]/40 text-[#22D3EE] text-[8px] mono px-1 rounded">100%</span>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-[10px] mono text-[#22D3EE] uppercase tracking-wider mb-1">EXTRACT FACTS</div>
+                                <div class="text-xs text-[#9AA7B6] max-w-[140px] mx-auto">Extracting regulated parameters</div>
+                            </div>
+                        </div>
+
+                        <!-- Stage 02: RETRIEVE RULES -->
+                        <div class="flex flex-col items-center">
+                            <div class="w-16 h-16 rounded-full bg-[#0A0E13] flex items-center justify-center relative mb-4 border border-[#222C3A]">
+                                <svg class="absolute inset-0 w-full h-full -rotate-90">
+                                    <circle cx="32" cy="32" r="31" fill="none" stroke="currentColor" stroke-width="1.5" class="text-[#22D3EE]/10" />
+                                    <circle cx="32" cy="32" r="31" fill="none" stroke="currentColor" stroke-width="1.5" class="text-[#22D3EE]" stroke-dasharray="194.7" stroke-dashoffset="0" />
+                                </svg>
+                                <iconify-icon icon="lucide:check" class="text-xl text-[#22D3EE]"></iconify-icon>
+                                <span class="absolute -top-1 -right-1 bg-[#22D3EE] text-black text-[9px] mono font-bold px-1 rounded-sm">02</span>
+                                <span class="absolute -bottom-2 bg-[#0A0E13] border border-[#22D3EE]/40 text-[#22D3EE] text-[8px] mono px-1 rounded">100%</span>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-[10px] mono text-[#22D3EE] uppercase tracking-wider mb-1">RETRIEVE RULES</div>
+                                <div class="text-xs text-[#9AA7B6] max-w-[140px] mx-auto">Searching Kerala Building Rules</div>
+                            </div>
+                        </div>
+
+                        <!-- Stage 03: ANALYZE (ACTIVE) -->
+                        <div class="flex flex-col items-center relative">
+                            <div class="w-16 h-16 rounded-full bg-[#0A0E13] flex items-center justify-center relative mb-4 border border-[#222C3A] pulse-accent">
+                                <svg class="absolute inset-0 w-full h-full -rotate-90">
+                                    <circle cx="32" cy="32" r="31" fill="none" stroke="currentColor" stroke-width="1.5" class="text-[#22D3EE]/10" />
+                                    <circle cx="32" cy="32" r="31" fill="none" stroke="currentColor" stroke-width="1.5" class="text-[#22D3EE]" stroke-dasharray="194.7" stroke-dashoffset="48.6" />
+                                </svg>
+                                <iconify-icon icon="lucide:sparkles" class="text-xl text-[#22D3EE] rotate-slow"></iconify-icon>
+                                <div class="absolute -bottom-14 left-1/2 -translate-x-1/2 w-48 text-center">
+                                    <span class="text-[9px] mono text-white bg-[#22D3EE]/10 border border-[#22D3EE]/20 px-2 py-0.5 rounded whitespace-nowrap">MATCHING KBR SECTION 4.2</span>
+                                </div>
+                                <span class="absolute -top-1 -right-1 bg-[#22D3EE] text-black text-[9px] mono font-bold px-1 rounded-sm">03</span>
+                                <span class="absolute -bottom-2 bg-[#0A0E13] border border-[#22D3EE]/40 text-[#22D3EE] text-[8px] mono px-1 rounded">75%</span>
+                            </div>
+                            <div class="text-center mt-4">
+                                <div class="text-[10px] mono text-[#E7ECF2] uppercase tracking-wider mb-1">ANALYZE</div>
+                                <div class="text-xs text-[#9AA7B6] max-w-[140px] mx-auto">Comparing plan against KBR</div>
+                            </div>
+                        </div>
+
+                        <!-- Stage 04: SUMMARIZE -->
+                        <div class="flex flex-col items-center">
+                            <div class="w-16 h-16 rounded-full bg-[#0A0E13] border border-[#222C3A] flex items-center justify-center relative mb-4 opacity-40">
+                                <svg class="absolute inset-0 w-full h-full -rotate-90">
+                                    <circle cx="32" cy="32" r="31" fill="none" stroke="currentColor" stroke-width="1" class="text-[#5B6879]/20" />
+                                </svg>
+                                <iconify-icon icon="lucide:file-text" class="text-xl text-[#5B6879]"></iconify-icon>
+                                <span class="absolute -top-1 -right-1 bg-[#222C3A] text-[#5B6879] text-[9px] mono font-bold px-1 rounded-sm">04</span>
+                                <span class="absolute -bottom-2 bg-[#0A0E13] border border-[#222C3A] text-[#5B6879] text-[8px] mono px-1 rounded">0%</span>
+                            </div>
+                            <div class="text-center opacity-40">
+                                <div class="text-[10px] mono text-[#5B6879] uppercase tracking-wider mb-1">SUMMARIZE</div>
+                                <div class="text-xs text-[#5B6879] max-w-[140px] mx-auto">Generating engineer report</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Activity Log -->
+                <div class="max-w-4xl mx-auto w-full">
+                    <div class="bg-[#0C1117] border border-[#222C3A] rounded-[4px] shadow-2xl">
+                        <div class="px-4 py-2 border-b border-[#222C3A] flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <iconify-icon icon="lucide:terminal" class="text-[#5B6879]"></iconify-icon>
+                                <span class="text-[10px] mono text-[#5B6879] uppercase tracking-widest">LIVE ANALYSIS LOG</span>
+                            </div>
+                            <div class="flex gap-1">
+                                <div class="w-2 h-2 rounded-full bg-[#222C3A]"></div>
+                                <div class="w-2 h-2 rounded-full bg-[#222C3A]"></div>
+                            </div>
+                        </div>
+                        <div class="p-6 h-64 overflow-y-auto mono text-xs leading-relaxed space-y-1">
+                            <div class="text-[#5B6879]"><span class="opacity-50">[00:01]</span> Parsing building plan structure...</div>
+                            <div class="text-[#5B6879]"><span class="opacity-50">[00:03]</span> Extracted building height: 12m</div>
+                            <div class="text-[#5B6879]"><span class="opacity-50">[00:03]</span> Extracted front setback: 1m</div>
+                            <div class="text-[#5B6879]"><span class="opacity-50">[00:03]</span> Extracted rear setback: 2m</div>
+                            <div class="text-[#5B6879]"><span class="opacity-50">[00:05]</span> Searching 2,481 indexed KBR chunks...</div>
+                            <div class="text-[#5B6879]"><span class="opacity-50">[00:06]</span> Retrieved 8 relevant rules for Kerala Zone 2...</div>
+                            <div class="text-white"><span class="text-[#22D3EE] mr-2">[00:08]</span> <span class="font-medium">Comparing setback requirements (KBR Section 4.2)...</span></div>
+                            <div class="text-white opacity-80 flex items-center gap-1">
+                                <span class="text-[#22D3EE] mr-2">[00:08]</span> 
+                                Generating compliance assessment...
+                                <span class="w-1.5 h-4 bg-[#22D3EE] cursor-blink"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <footer class="p-8 flex justify-between items-center">
+                <div class="text-[10px] mono text-[#5B6879] uppercase tracking-widest">
+                    v0.8.4-beta • Processing at Edge Node [BLR-1]
+                </div>
+                <div class="text-[10px] mono text-[#5B6879] flex items-center gap-4">
+                    <span class="text-[#22D3EE] animate-pulse">CPU: 18%</span>
+                    <span class="text-[#22D3EE] animate-pulse">MEM: 4.2GB</span>
+                    <span class="text-[#222C3A]">|</span>
+                    <a href="#logs" class="hover:text-[#22D3EE]">Raw Stream</a>
+                </div>
+            </footer>
+        </main>
+    </div>
+</body>
+</html>

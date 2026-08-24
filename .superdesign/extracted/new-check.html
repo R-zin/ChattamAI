@@ -1,0 +1,258 @@
+<!DOCTYPE html><html lang="en"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Compliance Check | ChattamAI</title>
+    <meta name="view-transition" content="same-origin">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/2c0decd9-0a87-4e7f-bdaa-086443d94cdd" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/638a6dbd-4127-46d5-8fd4-914f3c3fdeb0" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/f6eb8d5d-f182-42e1-b096-f95c864185ab" as="document">
+    <link rel="prefetch" href="https://p.superdesign.dev/draft/beb57a34-eebe-4cd9-aeab-86afe8a227f6" as="document">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@500;600&amp;display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0A0E13;
+            --surface: #10151C;
+            --surface-2: #161D27;
+            --surface-3: #1C2531;
+            --border: #222C3A;
+            --border-strong: #2E3B4D;
+            --text: #E7ECF2;
+            --text-2: #9AA7B6;
+            --text-3: #5B6879;
+            --accent: #22D3EE;
+            --accent-strong: #0EA5C9;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--text);
+            background-color: var(--bg);
+            margin: 0;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .blueprint-grid {
+            background-image: 
+                linear-gradient(to right, rgba(120, 150, 190, 0.045) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(120, 150, 190, 0.045) 1px, transparent 1px),
+                linear-gradient(to right, rgba(120, 150, 190, 0.07) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(120, 150, 190, 0.07) 1px, transparent 1px);
+            background-size: 20px 20px, 20px 20px, 100px 100px, 100px 100px;
+            pointer-events: none;
+        }
+
+        .accent-gradient {
+            background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+        }
+
+        .sidebar-rail {
+            width: 2px;
+            background-color: var(--accent);
+            box-shadow: 0 0 8px var(--accent);
+        }
+
+        .drop-zone-glow:hover {
+            box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
+            border-color: var(--accent);
+        }
+
+        @view-transition {
+            navigation: auto;
+        }
+
+        html {
+            background-color: var(--bg);
+        }
+
+        ::view-transition-old(sidebar), ::view-transition-new(sidebar) {
+            animation: none;
+            mix-blend-mode: normal;
+        }
+
+        ::view-transition-old(main-content) {
+            animation: 0.25s ease-out both fade-out;
+        }
+
+        ::view-transition-new(main-content) {
+            animation: 0.25s ease-in 0.1s both fade-in;
+        }
+
+        @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div class="flex min-h-screen relative overflow-hidden">
+        <!-- Blueprint Grid Background -->
+        <div class="blueprint-grid absolute inset-0 z-0"></div>
+
+        <!-- Sidebar (Persistent) -->
+        <aside style="view-transition-name: sidebar" class="w-64 flex-shrink-0 bg-[#0C1117] border-r border-[#222C3A] z-20 flex flex-col">
+            <div class="p-6">
+                <div class="mb-8">
+                    <div class="text-xs mono font-semibold tracking-widest text-[#22D3EE] opacity-80 mb-0.5">KBR COMPLIANCE ENGINE</div>
+                    <h1 class="text-xl font-bold tracking-tight text-white">CHATTAMAI</h1>
+                </div>
+
+                <nav class="space-y-1">
+                    <a href="https://p.superdesign.dev/draft/2c0decd9-0a87-4e7f-bdaa-086443d94cdd" id="nav-dashboard" class="group flex items-center px-3 py-2 text-sm font-medium text-[#9AA7B6] hover:text-white hover:bg-[#161D27] transition-all duration-150">
+                        <iconify-icon icon="lucide:layout-dashboard" class="mr-3 text-lg opacity-70 group-hover:opacity-100"></iconify-icon>
+                        Dashboard
+                    </a>
+                    <a href="https://p.superdesign.dev/draft/f9b693bc-ca87-47dc-9d32-4396400e5da9" id="nav-new-check" class="group relative flex items-center px-3 py-2 text-sm font-medium rounded-md bg-[#161D27] text-white">
+                        <div class="absolute left-0 sidebar-rail h-4 rounded-full"></div>
+                        <iconify-icon icon="lucide:plus-square" class="mr-3 text-lg text-[#22D3EE]"></iconify-icon>
+                        New Compliance Check
+                    </a>
+                    <a href="#projects" id="nav-projects" class="group flex items-center px-3 py-2 text-sm font-medium text-[#9AA7B6] hover:text-white hover:bg-[#161D27] transition-all duration-150">
+                        <iconify-icon icon="lucide:folder" class="mr-3 text-lg opacity-70 group-hover:opacity-100"></iconify-icon>
+                        Projects
+                    </a>
+                    <a href="#reports" id="nav-reports" class="group flex items-center px-3 py-2 text-sm font-medium text-[#9AA7B6] hover:text-white hover:bg-[#161D27] transition-all duration-150">
+                        <iconify-icon icon="lucide:file-text" class="mr-3 text-lg opacity-70 group-hover:opacity-100"></iconify-icon>
+                        Reports
+                    </a>
+                    <a href="#knowledge-base" id="nav-knowledge-base" class="group flex items-center px-3 py-2 text-sm font-medium text-[#9AA7B6] hover:text-white hover:bg-[#161D27] transition-all duration-150">
+                        <iconify-icon icon="lucide:database" class="mr-3 text-lg opacity-70 group-hover:opacity-100"></iconify-icon>
+                        KBR Knowledge Base
+                    </a>
+                    <a href="#activity" id="nav-activity" class="group flex items-center px-3 py-2 text-sm font-medium text-[#9AA7B6] hover:text-white hover:bg-[#161D27] transition-all duration-150">
+                        <iconify-icon icon="lucide:activity" class="mr-3 text-lg opacity-70 group-hover:opacity-100"></iconify-icon>
+                        Activity
+                    </a>
+                    <a href="#settings" id="nav-settings" class="group flex items-center px-3 py-2 text-sm font-medium text-[#9AA7B6] hover:text-white hover:bg-[#161D27] transition-all duration-150">
+                        <iconify-icon icon="lucide:settings" class="mr-3 text-lg opacity-70 group-hover:opacity-100"></iconify-icon>
+                        Settings
+                    </a>
+                </nav>
+            </div>
+
+            <div class="mt-auto p-4">
+                <div class="bg-[#10151C] border border-[#222C3A] rounded-md p-4">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="w-1.5 h-1.5 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399]"></div>
+                        <span class="text-[11px] font-bold tracking-wider uppercase text-white">System Status</span>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] mono text-[#5B6879] uppercase tracking-wider">API Engine</span>
+                            <div class="w-1.5 h-1.5 rounded-full bg-[#34D399]"></div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] mono text-[#5B6879] uppercase tracking-wider">Vector Store</span>
+                            <div class="w-1.5 h-1.5 rounded-full bg-[#34D399]"></div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] mono text-[#5B6879] uppercase tracking-wider">Claude LLM</span>
+                            <div class="w-1.5 h-1.5 rounded-full bg-[#34D399]"></div>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] mono text-[#5B6879] uppercase tracking-wider">KBR Knowledge</span>
+                            <div class="w-1.5 h-1.5 rounded-full bg-[#34D399]"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main style="view-transition-name: main-content" class="flex-1 flex flex-col z-10">
+            <!-- Header -->
+            <header class="h-20 flex items-center justify-between px-8 border-b border-[#222C3A] bg-[#0A0E13]/80 backdrop-blur-md sticky top-0 z-30">
+                <div>
+                    <div class="text-[10px] mono text-[#5B6879] uppercase tracking-[0.2em] mb-0.5">Building Analysis</div>
+                    <h2 class="text-2xl font-semibold tracking-tight text-white">New Compliance Check</h2>
+                    <p class="text-sm text-[#9AA7B6]">Upload a building plan or paste its description to verify against Kerala Building Rules</p>
+                </div>
+            </header>
+
+            <!-- Workspace -->
+            <div class="flex-1 overflow-y-auto p-8 flex flex-col items-center">
+                <div class="w-full max-w-4xl space-y-8">
+                    
+                    <!-- Upload Drop Zone -->
+                    <div class="group cursor-pointer">
+                        <div class="relative bg-[#10151C] border-2 border-dashed border-[#22D3EE]/30 rounded-lg p-12 flex flex-col items-center justify-center transition-all drop-zone-glow overflow-hidden">
+                            <!-- Blueprint Overlay Inside -->
+                            <div class="blueprint-grid absolute inset-0 opacity-20"></div>
+                            
+                            <div class="relative z-10 flex flex-col items-center text-center">
+                                <div class="w-16 h-16 bg-[#161D27] border border-[#222C3A] rounded flex items-center justify-center mb-6 shadow-xl">
+                                    <iconify-icon icon="lucide:drafting-compass" class="text-3xl text-[#22D3EE]"></iconify-icon>
+                                </div>
+                                <h3 class="text-xl font-medium text-white mb-2">Upload Building Plan</h3>
+                                <p class="text-[#9AA7B6] mb-8">Drop a PDF here or <span class="text-[#22D3EE] hover:underline">browse files</span></p>
+                                
+                                <div class="flex gap-6">
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-[10px] mono text-[#5B6879] uppercase">Supported Formats</span>
+                                        <span class="text-xs mono text-white">PDF, TXT</span>
+                                    </div>
+                                    <div class="w-px h-8 bg-[#222C3A]"></div>
+                                    <div class="flex flex-col items-center">
+                                        <span class="text-[10px] mono text-[#5B6879] uppercase">Maximum Size</span>
+                                        <span class="text-xs mono text-white">25 MB</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Divider -->
+                    <div class="flex items-center gap-4">
+                        <div class="flex-1 h-px bg-[#222C3A]"></div>
+                        <span class="text-[10px] mono text-[#5B6879] uppercase tracking-[0.3em]">OR</span>
+                        <div class="flex-1 h-px bg-[#222C3A]"></div>
+                    </div>
+
+                    <!-- Text Description Paste Area -->
+                    <div class="bg-[#10151C] border border-[#222C3A] rounded-lg overflow-hidden flex flex-col">
+                        <div class="px-5 py-3 border-b border-[#222C3A] flex items-center justify-between">
+                            <span class="text-xs font-semibold uppercase tracking-wider text-white flex items-center gap-2">
+                                <iconify-icon icon="lucide:file-text" class="text-[#22D3EE]"></iconify-icon>
+                                Paste Plan Description
+                            </span>
+                            <span class="text-[10px] mono text-[#5B6879]">UTF-8 Input</span>
+                        </div>
+                        <textarea 
+                            class="w-full h-48 bg-[#1C2531] p-6 text-sm mono text-[#E7ECF2] placeholder-[#5B6879] focus:outline-none focus:ring-1 focus:ring-[#22D3EE]/50 transition-all border-none"
+                            placeholder="3-floor residential building, total height 12m, front setback 1m, rear setback 2m, plot area 240 sq m, built-up area 410 sq m…"
+                        ></textarea>
+                    </div>
+
+                    <!-- Action Area -->
+                    <div class="flex flex-col items-center pt-4">
+                        <a href="https://p.superdesign.dev/draft/638a6dbd-4127-46d5-8fd4-914f3c3fdeb0" id="cta-analyze-plan" class="accent-gradient px-8 py-4 rounded-md text-base font-bold text-black flex items-center gap-3 hover:brightness-110 transition-all shadow-[0_0_25px_rgba(34,211,238,0.2)] mb-6">
+                            Analyze Building Plan
+                            <iconify-icon icon="lucide:arrow-right"></iconify-icon>
+                        </a>
+                        <div class="flex items-center gap-2 px-4 py-2 bg-[#161D27]/50 rounded border border-[#222C3A]">
+                            <iconify-icon icon="lucide:info" class="text-amber-500/60"></iconify-icon>
+                            <span class="text-[11px] mono text-[#9AA7B6]">AI-assisted assessment — findings require engineer review.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer Metadata -->
+            <footer class="mt-auto p-8 pt-0 flex justify-between items-center">
+                <div class="text-[10px] mono text-[#5B6879] uppercase tracking-widest">
+                    v0.8.4-beta • FAISS Index Size: 2,481 chunks
+                </div>
+                <div class="text-[10px] mono text-[#5B6879] flex items-center gap-4">
+                    <a href="#docs" id="footer-docs" class="hover:text-[#22D3EE] transition-colors">KBR Documentation</a>
+                    <a href="#logs" id="footer-support" class="hover:text-[#22D3EE] transition-colors">System Logs</a>
+                    <span class="text-[#22C3A]/30">|</span>
+                    <span>READY FOR INGESTION</span>
+                </div>
+            </footer>
+        </main>
+    </div>
+</body></html>

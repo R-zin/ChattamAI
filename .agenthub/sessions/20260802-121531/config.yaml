@@ -1,0 +1,5 @@
+session_id: 20260802-121531
+task: "ChattamAI: optimized RAG core, OCR, auth/DB, KBR downloader, tests"
+agent_count: 5
+base_branch: feature/optimized-rag
+created: 2026-08-02T06:45:31.610242+00:00

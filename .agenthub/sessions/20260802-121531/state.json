@@ -1,0 +1,17 @@
+{
+  "session_id": "20260802-121531",
+  "state": "merged",
+  "created": "2026-08-02T06:45:31.610739+00:00",
+  "updated": "2026-08-02T07:48:40.412832+00:00",
+  "agents": {
+    "agent-1": "merged (retrieval quality/correctness)",
+    "agent-2": "merged (latency/cost/graph)",
+    "agent-3": "merged (KBR downloader+sample)",
+    "agent-4": "merged (auth/DB finish+mount)",
+    "agent-5": "merged (test suite, attempt-2 reconciled -> green)",
+    "agent-7": "merged (OCR pipeline Phase 3)",
+    "agent-8": "merged (bench+docs Phase 6)"
+  },
+  "integration_branch": "feature/optimized-rag",
+  "note": "Ensemble (job-shop) session: 7 agents on disjoint file sets, coordinator merges + resolves. Suite 69 green offline. All attempts tagged hub/archive/20260802-121531/*."
+}

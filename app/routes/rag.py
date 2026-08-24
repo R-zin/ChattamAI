@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+
+if TYPE_CHECKING:
+    from app.services.dbmodel import User
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -23,10 +27,49 @@ from app.schemas import (
 
 router = APIRouter(prefix="/api", tags=["rag"])
 
+logger = logging.getLogger(__name__)
+
 # Image suffixes accepted by the opt-in OCR endpoint (mirrors app.rag.ocr.IMAGE_EXTS;
 # kept literal here so this route module needs no OCR deps to import).
 _OCR_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"}
 _OCR_ACCEPT_EXTS = _OCR_IMAGE_EXTS | {".pdf"}
+
+
+# --- Reports (T1.1/best-effort persistence) --------------------------------
+def _persist_report(
+    plan_text: Optional[str],
+    source: str,
+    result: Dict[str, Any],
+    user_id: Optional[str] = None,
+) -> None:
+    """Best-effort write of one check result to the ``report`` table.
+
+    Opens its own short-lived session (the existing ``SessionLocal`` pattern),
+    derives status from the violations, and NEVER raises — a missing/unreachable
+    DB must not break the check response. Failures are logged, not propagated.
+    """
+    try:
+        from app.services.database import SessionLocal
+        from app.services.report_model import Report, derive_status
+
+        report = Report(
+            plan_text=plan_text,
+            source=source,
+            summary=result.get("summary"),
+            extracted_facts=result.get("extracted_facts"),
+            violations=result.get("violations"),
+            retrieved_rules=result.get("retrieved_rules"),
+            status=derive_status(result.get("violations")),
+            user_id=user_id,
+        )
+        db = SessionLocal()
+        try:
+            db.add(report)
+            db.commit()
+        finally:
+            db.close()
+    except Exception as exc:  # noqa: BLE001 - persistence must not break the check
+        logger.warning("report persistence skipped (database unavailable): %s", exc)
 
 
 def get_rag() -> RAGSystem:
@@ -74,18 +117,25 @@ def ingest(
     return IngestResponse(**result)
 
 
-@router.post(
-    "/check",
-    response_model=ComplianceResponse,
-    dependencies=[Depends(require_auth)],
-)
+@router.post("/check", response_model=ComplianceResponse)
 def check(
-    body: ComplianceRequest, rag: RAGSystem = Depends(get_rag)
+    body: ComplianceRequest,
+    rag: RAGSystem = Depends(get_rag),
+    # require_auth is a no-op (returns None) unless AUTH_REQUIRED is set, so this
+    # both gates the endpoint when auth is on and hands us the user for the
+    # persisted report's (nullable) user_id.
+    actor: Optional["User"] = Depends(require_auth),
 ) -> ComplianceResponse:
     try:
         result = rag.check(body.plan_text, top_k=body.top_k)
     except RuntimeError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    _persist_report(
+        plan_text=body.plan_text,
+        source="check",
+        result=result,
+        user_id=actor.user_id if actor is not None else None,
+    )
     return ComplianceResponse(**result)
 
 

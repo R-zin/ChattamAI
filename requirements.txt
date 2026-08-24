@@ -51,3 +51,6 @@ bcrypt==4.0.1
 # already-pinned pillow for QR rendering of the otpauth:// provisioning URI.
 pyotp==2.9.0
 qrcode[pil]==8.2
+
+# Migrations (additive; best-effort at boot, falls back to create_all if absent).
+alembic==1.13.2

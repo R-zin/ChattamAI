@@ -17,7 +17,7 @@ import json
 
 import numpy as np
 
-from app.rag.vectorstore import RuleVectorStore
+from app.rag.vectorstore import _INDEX_VERSION, RuleVectorStore
 from tests.conftest import FakeEmbeddingProvider, make_populated_store
 
 RULE5 = "Rule 5: The minimum front setback for a building up to 10m is 1.8m."
@@ -139,7 +139,7 @@ def test_meta_file_carries_version_dim_and_hashes(fake_provider, index_dir):
     make_populated_store(fake_provider, index_dir)
     with open(index_dir / "rules_meta.json", encoding="utf-8") as fh:
         meta = json.load(fh)
-    assert meta["version"] == 2
+    assert meta["version"] == _INDEX_VERSION
     assert meta["dim"] == fake_provider.dim
     assert set(meta.keys()) >= {
         "version",

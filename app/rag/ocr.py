@@ -2,8 +2,18 @@
 
 This module turns a floor-plan image (or an image-only PDF) into plain text so it
 can flow through the *existing* ``extract_facts`` node unchanged — the pre-existing
-``Path -> str`` seam (:func:`app.rag.ingestion.load_plan_text`). It is v1 and
-deliberately "layout-free": we recover words, not geometry.
+``Path -> str`` seam (:func:`app.rag.ingestion.load_plan_text`).
+
+The default path stays deliberately "layout-free" (:func:`image_to_text` /
+:func:`pdf_images_to_text`): we recover words, not geometry, and that behaviour is
+unchanged. On top of it sits an OPTIONAL geometry-aware pass
+(:func:`image_to_layout_text`) that uses Tesseract TSV output to recover *where*
+each word sits (``left``/``top``/``width``/``height``/``conf``), group words back
+into lines and columns, and render simple aligned "label: value" table rows as
+``key: value`` hints so dimensional/tabular data (setbacks, heights, FSI tables)
+survives OCR in reading order. The layout pass degrades gracefully: a missing
+binary, an import failure, or malformed TSV all fall back to the words-only text
+rather than ever crashing OCR.
 
 Dependency / boot-safety contract (see the agent-7 dispatch): the heavy OCR
 libraries — Pillow, pytesseract, and PyMuPDF — plus the system *Tesseract binary*
@@ -20,6 +30,7 @@ from __future__ import annotations
 import re
 import shutil
 from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 # Image suffixes we can OCR directly with Pillow + Tesseract.
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"}
@@ -27,6 +38,24 @@ IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".tiff", ".tif", ".bmp", ".webp"}
 # Render image-PDF pages at ~260 DPI: high enough for small dimension text,
 # low enough to stay fast and memory-light.
 _PDF_RENDER_DPI = 260
+
+# One recognised word plus its bounding box, as captured from Tesseract TSV data.
+# Keys mirror the TSV columns: ``text`` (the word), ``left``/``top``/``width``/
+# ``height`` (pixel box) and ``conf`` (recognition confidence, 0-100 or -1).
+WordBox = Dict[str, object]
+
+# --- Geometry / layout tuning constants -------------------------------------------
+# Two words sit on the SAME line when their vertical centres differ by no more than
+# this fraction of the average word height. Generous enough to absorb OCR jitter on
+# a scanned rule line, tight enough to keep adjacent FSI/setback rows distinct.
+_LINE_Y_TOLERANCE = 0.6
+# A line is rendered as a ``label: value`` pair only when it splits into exactly two
+# horizontal clusters whose gap is at least this many times the average word width.
+# This is what keeps "front setback    1.8m" attached while leaving prose alone.
+_COLUMN_GAP_FACTOR = 1.8
+# Drop empty / whitespace-only TSV rows and sub-noise confidence words before any
+# geometry math; ``-1`` / ``conf < 0`` marks structural (non-word) TSV rows.
+_MIN_CONFIDENCE = 0.0
 
 # A digit run that may contain a single OCR mis-read of a vertical stroke: a ``|``,
 # ``l``, ``I``, or ``!`` sitting between digits. We only rewrite when BOTH neighbours
@@ -76,6 +105,30 @@ def ocr_available() -> bool:
     return shutil.which("tesseract") is not None
 
 
+def _load_gray_image(path: Path):
+    """Open ``path`` and normalise it for Tesseract (shared by text + layout paths).
+
+    Grayscale, upscale if small so tiny dimension labels resolve, then a light
+    autocontrast to even out illumination and harden glyphs. Returns the open
+    grayscale image; the caller owns closing it.
+    """
+    Image = _import("PIL.Image")
+    ImageOps = _import("PIL.ImageOps")
+
+    img = Image.open(str(path))
+    gray = img.convert("L")
+    # Upscale small scans so tiny dimension labels resolve for Tesseract.
+    if max(gray.size) < 1500:
+        ratio = 1500 / max(gray.size)
+        gray = gray.resize(
+            (int(gray.width * ratio), int(gray.height * ratio)),
+            Image.LANCZOS,
+        )
+    # Even out illumination and binarise lightly for cleaner glyphs.
+    gray = ImageOps.autocontrast(gray)
+    return gray
+
+
 def image_to_text(path: Path) -> str:
     """OCR a single image file to text.
 
@@ -84,21 +137,12 @@ def image_to_text(path: Path) -> str:
     ``path`` may be anything Pillow can open (see :data:`IMAGE_EXTS`).
     """
     pytesseract = _import("pytesseract")
-    Image = _import("PIL.Image")
-    ImageOps = _import("PIL.ImageOps")
 
-    with Image.open(str(path)) as img:
-        gray = img.convert("L")
-        # Upscale small scans so tiny dimension labels resolve for Tesseract.
-        if max(gray.size) < 1500:
-            ratio = 1500 / max(gray.size)
-            gray = gray.resize(
-                (int(gray.width * ratio), int(gray.height * ratio)),
-                Image.LANCZOS,
-            )
-        # Even out illumination and binarise lightly for cleaner glyphs.
-        gray = ImageOps.autocontrast(gray)
+    gray = _load_gray_image(path)
+    try:
         text = pytesseract.image_to_string(gray)
+    finally:
+        gray.close()
     return text
 
 
@@ -125,6 +169,193 @@ def pdf_images_to_text(path: Path) -> str:
             img = _import("PIL.ImageOps").autocontrast(img)
             pages.append(pytesseract.image_to_string(img))
     return "\n".join(pages)
+
+
+# ---------------------------------------------------------------------------
+# Geometry-aware extraction (optional, additive — image_to_text stays default)
+# ---------------------------------------------------------------------------
+def tsv_to_word_boxes(data: Dict[str, List[object]]) -> List[WordBox]:
+    """Turn a Tesseract TSV dict into flat word boxes, dropping junk rows.
+
+    ``data`` is the column-oriented dict that ``pytesseract.image_to_data``
+    returns (``Output.DICT``): parallel lists keyed ``text``, ``left``, ``top``,
+    ``width``, ``height``, ``conf``. Tesseract also emits structural rows
+    (page/block/paragraph/line headers) that carry an empty ``text`` and a
+    negative ``conf``; those, plus sub-noise words and non-string text, are
+    filtered out. Anything unreadable (missing keys, non-numeric geometry) makes
+    the whole call return ``[]`` so the caller degrades gracefully.
+    """
+    if not isinstance(data, dict):
+        return []
+    try:
+        texts = data["text"]
+        n = len(texts)
+        lefts, tops = data["left"], data["top"]
+        widths, heights = data["width"], data["height"]
+        confs = data["conf"]
+        if not all(len(col) == n for col in (lefts, tops, widths, heights, confs)):
+            return []
+    except (KeyError, TypeError):
+        return []
+
+    boxes: List[WordBox] = []
+    for i in range(n):
+        word = texts[i]
+        if not isinstance(word, str):
+            continue
+        word = word.strip()
+        if not word:
+            continue
+        try:
+            conf = float(confs[i])
+            left = int(lefts[i])
+            top = int(tops[i])
+            width = int(widths[i])
+            height = int(heights[i])
+        except (TypeError, ValueError):
+            # A malformed row poisons the geometry; skip it rather than guess.
+            continue
+        if conf < _MIN_CONFIDENCE:
+            # Structural TSV rows (conf == -1) and sub-noise words.
+            continue
+        boxes.append(
+            {
+                "text": word,
+                "left": left,
+                "top": top,
+                "width": width,
+                "height": height,
+                "conf": conf,
+            }
+        )
+    return boxes
+
+
+def _vertical_center(box: WordBox) -> float:
+    """Vertical centre of a word box (the robust line-membership signal)."""
+    return float(box["top"]) + float(box["height"]) / 2.0
+
+
+def group_words_into_lines(boxes: List[WordBox]) -> List[List[WordBox]]:
+    """Cluster word boxes into horizontal lines (reading-order, top to bottom).
+
+    Greedy sweep sorted by vertical centre: a word joins the open line while its
+    centre stays within ``_LINE_Y_TOLERANCE`` of the running line's average word
+    height apart from the line's average centre; otherwise it opens a new line.
+    Each returned line is itself ordered left-to-right (``left``). Deterministic
+    and tolerant of per-word OCR jitter.
+    """
+    if not boxes:
+        return []
+    ordered = sorted(boxes, key=lambda b: (_vertical_center(b), float(b["left"])))
+    lines: List[List[WordBox]] = []
+    for box in ordered:
+        center = _vertical_center(box)
+        height = float(box["height"])
+        if lines:
+            current = lines[-1]
+            mean_center = sum(_vertical_center(b) for b in current) / len(current)
+            mean_height = sum(float(b["height"]) for b in current) / len(current)
+            tol = _LINE_Y_TOLERANCE * max(mean_height, height, 1.0)
+            if abs(center - mean_center) <= tol:
+                current.append(box)
+                continue
+        lines.append([box])
+    # Order each line's words left-to-right so text reconstructs in reading order.
+    for line in lines:
+        line.sort(key=lambda b: float(b["left"]))
+    return lines
+
+
+def line_to_text(line: List[WordBox]) -> str:
+    """Render one line of word boxes as text, preserving column order.
+
+    Words are joined with a single space; a wide horizontal gap (>=
+    ``_COLUMN_GAP_FACTOR`` times the average word width) becomes a ``" : "``
+    separator, which is what keeps a tabular ``label    value`` row reading as a
+    clean ``label: value`` fact for downstream extraction.
+    """
+    if not line:
+        return ""
+    pieces = [str(line[0]["text"])]
+    widths = [float(b["width"]) for b in line if float(b["width"]) > 0]
+    mean_width = sum(widths) / len(widths) if widths else 0.0
+    for prev, cur in zip(line, line[1:]):
+        gap = float(cur["left"]) - (float(prev["left"]) + float(prev["width"]))
+        if mean_width > 0 and gap >= _COLUMN_GAP_FACTOR * mean_width:
+            pieces.append(":")  # rendered as "<label> : <value>" after join-tidy
+        pieces.append(str(cur["text"]))
+    text = " ".join(pieces)
+    # Tidy a " :" column separator we just introduced into ": ".
+    return text.replace(" : ", ": ")
+
+
+def word_boxes_to_text(boxes: List[WordBox]) -> str:
+    """Reconstruct reading-order text (with table->kv hints) from word boxes.
+
+    Groups into lines, renders each with column gaps preserved, and joins lines
+    with newlines. Empty input yields ``""`` so callers degrade cleanly.
+    """
+    lines = group_words_into_lines(boxes)
+    return "\n".join(line_to_text(line) for line in lines if line)
+
+
+def dataframe_to_word_boxes(df: object) -> List[WordBox]:
+    """Adapt a Tesseract ``Output.DATAFRAME`` to word boxes (best-effort).
+
+    Uses pandas' ``to_dict('list')`` and feeds the result through
+    :func:`tsv_to_word_boxes` so a single parsing path serves both TSV shapes.
+    Assumes ``df`` quacks like a pandas DataFrame; anything else returns ``[]``.
+    """
+    try:
+        data = df.to_dict("list")  # type: ignore[attr-defined]
+    except (AttributeError, TypeError):
+        return []
+    return tsv_to_word_boxes(data)
+
+
+def image_to_layout_text(
+    path: Path, fallback_to_plain: bool = True
+) -> Tuple[str, Optional[str]]:
+    """OCR an image to *layout-aware* text, or fall back to words-only text.
+
+    Returns ``(text, note)``. On the happy path ``note`` is ``None`` and ``text``
+    is reading-order text with ``label: value`` table hints. If Tesseract TSV
+    output is unavailable (import error, missing binary, empty/degenerate data,
+    any exception mid-extraction) and ``fallback_to_plain`` is True, we run the
+    plain :func:`image_to_text` path instead and set ``note`` to a short reason —
+    OCR NEVER crashes because geometry failed. If ``fallback_to_plain`` is False,
+    a hard failure re-raises the original exception.
+    """
+    try:
+        pytesseract = _import("pytesseract")
+        Output = _import("pytesseract.Output")
+        gray = _load_gray_image(path)
+        try:
+            try:
+                data = pytesseract.image_to_data(gray, output_type=Output.DICT)
+            except Exception as exc:  # bad frame, engine hiccup, no binary
+                if not fallback_to_plain:
+                    raise
+                return image_to_text(path), f"layout_ocr_failed: {exc}"
+        finally:
+            gray.close()
+        boxes = tsv_to_word_boxes(data)
+        if not boxes:
+            # Degenerate TSV (nothing recognised) — plain string is more useful.
+            if not fallback_to_plain:
+                raise RuntimeError("no usable word boxes from Tesseract TSV")
+            return image_to_text(path), "layout_ocr_failed: no word boxes"
+        return word_boxes_to_text(boxes), None
+    except Exception as exc:
+        if not fallback_to_plain:
+            raise
+        try:
+            return image_to_text(path), f"layout_ocr_failed: {exc}"
+        except Exception:
+            # Even the plain path failed (e.g. Pillow cannot open the file):
+            # surface a clear empty result rather than crash the pipeline.
+            return "", f"ocr_unavailable: {exc}"
 
 
 def normalize_ocr_text(text: str) -> str:
@@ -160,8 +391,15 @@ def normalize_ocr_text(text: str) -> str:
 
 __all__ = [
     "IMAGE_EXTS",
+    "WordBox",
     "ocr_available",
     "image_to_text",
+    "image_to_layout_text",
     "pdf_images_to_text",
     "normalize_ocr_text",
+    "tsv_to_word_boxes",
+    "dataframe_to_word_boxes",
+    "group_words_into_lines",
+    "line_to_text",
+    "word_boxes_to_text",
 ]

@@ -12,6 +12,7 @@ langchain-core==0.3.86
 openai==2.46.0
 faiss-cpu==1.13.0
 numpy==2.0.2
+rank-bm25==0.2.2
 
 # LLM (Anthropic Claude, incl. local proxy support)
 anthropic==0.117.0
@@ -46,3 +47,11 @@ passlib[bcrypt]==1.7.4
 # hard-errors on passlib's internal >72-byte wrap-bug probe. Pin bcrypt<4.1 so the
 # pair works cleanly; passlib[bcrypt] alone would otherwise pull an incompatible bcrypt.
 bcrypt==4.0.1
+
+# 2FA (TOTP). pyotp is pure-Python (works on 3.9 & 3.12); qrcode[pil] reuses the
+# already-pinned pillow for QR rendering of the otpauth:// provisioning URI.
+pyotp==2.9.0
+qrcode[pil]==8.2
+
+# Migrations (additive; best-effort at boot, falls back to create_all if absent).
+alembic==1.13.2

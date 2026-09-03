@@ -2,25 +2,36 @@ name: FastAPI CI
 
 on:
   push:
-    branches: [main]
+     branches: [main, finish_up]
   pull_request:
-    branches: [main]
+    branches: [main, finish_up]
+
+# Cancel superseded runs on the same ref so a rapid push sequence doesn't queue
+# stale jobs (saves runner minutes; the latest commit always wins).
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # Unit + API suite, fully offline (fakes drive OpenAI/Anthropic seams). Runs the
-  # same checks `pytest -q` runs locally on the 3.12 CI interpreter, before the
-  # credential-less boot smoke. Creds are emptied explicitly so nothing in the
-  # runner environment can leak real keys into a test.
+  # same checks `pytest -q` runs locally, across the supported interpreter window
+  # (the dev box is 3.9, CI historically linted on 3.12), before the credential-less
+  # boot smoke. Creds are emptied explicitly so nothing in the runner environment
+  # can leak real keys into a test.
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # run every interpreter even if one fails
+      matrix:
+        python-version: ['3.9', '3.12']
     steps:
       - name: Check out code
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python-version }}
           cache: 'pip'
 
       - name: Install dependencies
@@ -28,12 +39,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Run offline test suite
+      - name: Ruff lint
+        run: ruff check --output-format=github .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: Run offline test suite (with coverage)
         env:
           OPENAI_API_KEY: ""
           ANTHROPIC_AUTH_TOKEN: ""
           ANTHROPIC_API_KEY: ""
-        run: pytest -q
+        run: |
+          coverage run --source=app -m pytest -q
+          coverage report --show-missing --fail-under=60
 
   smoke:
     runs-on: ubuntu-latest

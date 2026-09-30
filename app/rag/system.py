@@ -17,6 +17,7 @@ Two in-process caches cut latency/cost (no external store, TTL via env):
 from __future__ import annotations
 
 import asyncio
+from collections import OrderedDict
 import logging
 import threading
 import time
@@ -60,23 +61,19 @@ class AnalysisMemo:
         self.ttl = ttl
         self.maxsize = max(1, maxsize)
         self._lock = threading.Lock()
-        self._entries: dict = {}
-        self._order: list = []
+        self._entries: OrderedDict = OrderedDict()
         self._hits = 0
         self._misses = 0
 
-    def _prune_locked(self, now: float) -> None:
-        expired = [k for k in self._order if self._entries[k][1] <= now]
+    def _prune_expired_locked(self, now: float) -> None:
+        expired = [k for k, (_, exp) in self._entries.items() if exp <= now]
         for k in expired:
-            self._entries.pop(k, None)
-        while len(self._entries) >= self.maxsize and self._order:
-            oldest = self._order.pop(0)
-            self._entries.pop(oldest, None)
+            del self._entries[k]
 
     def get(self, key):
         now = time.time()
         with self._lock:
-            self._prune_locked(now)
+            self._prune_expired_locked(now)
             entry = self._entries.get(key)
             if entry is not None and entry[1] > now:
                 self._hits += 1
@@ -87,10 +84,12 @@ class AnalysisMemo:
     def put(self, key, value) -> None:
         now = time.time()
         with self._lock:
-            self._prune_locked(now)
+            self._prune_expired_locked(now)
+            if key in self._entries:
+                del self._entries[key]
             self._entries[key] = (value, now + self.ttl)
-            if key not in self._order:
-                self._order.append(key)
+            while len(self._entries) > self.maxsize:
+                self._entries.popitem(last=False)
 
     def stats(self) -> dict:
         with self._lock:
@@ -105,7 +104,6 @@ class AnalysisMemo:
     def clear(self) -> None:
         with self._lock:
             self._entries.clear()
-            self._order.clear()
 
 
 def _default_score_threshold() -> float:

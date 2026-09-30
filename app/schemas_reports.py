@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 class ReportOut(BaseModel):
@@ -31,8 +31,7 @@ class ReportOut(BaseModel):
     status: Optional[str] = None
     user_id: Optional[str] = None
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 __all__ = ["ReportOut"]

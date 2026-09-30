@@ -7,16 +7,22 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from pathlib import Path
 
-from routes import auth as auth_routes
-from routes import rag as rag_routes
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from app.routes import auth as auth_routes
+from app.routes import rag as rag_routes
+
+_DIST_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    from rag.system import RAGSystem
+    from app.rag.system import RAGSystem
 
     # Build the system eagerly so readiness is known at startup.
     app.state.rag = RAGSystem()
@@ -50,9 +56,19 @@ app.add_middleware(
 app.include_router(rag_routes.router)
 app.include_router(auth_routes.auth_router)
 
+# Mount frontend assets if the built frontend distribution exists
+if (_DIST_DIR / "assets").exists():
+    app.mount(
+        "/assets", StaticFiles(directory=str(_DIST_DIR / "assets")), name="assets"
+    )
+
 
 @app.get("/")
-def root():
+def root(request: Request):
+    accept = request.headers.get("accept", "")
+    index_file = _DIST_DIR / "index.html"
+    if "text/html" in accept and index_file.exists():
+        return FileResponse(str(index_file))
     return {
         "service": "ChattamAI RAG",
         "docs": "/docs",
@@ -62,3 +78,16 @@ def root():
             "check": "/api/check",
         },
     }
+
+
+@app.get("/{full_path:path}")
+def spa_fallback(request: Request, full_path: str):
+    # Serve static root files if present (e.g. vite.svg, favicon.ico)
+    target = _DIST_DIR / full_path
+    if target.is_file():
+        return FileResponse(str(target))
+    # Otherwise fallback to index.html for SPA client-side routing
+    index_file = _DIST_DIR / "index.html"
+    if index_file.exists():
+        return FileResponse(str(index_file))
+    raise HTTPException(status_code=404, detail="Not found")

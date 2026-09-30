@@ -1,8 +1,7 @@
 import os
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 # Default to a local SQLite file so this module imports cleanly without any
 # configuration. Set DATABASE_URL to point at a real database.

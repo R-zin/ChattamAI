@@ -236,6 +236,37 @@ export async function fetchHealth() {
   return request('/api/health')
 }
 
+export async function fetchReports() {
+  if (!apiAvailable()) return reports
+  try {
+    const data = await request('/api/reports')
+    if (!Array.isArray(data) || data.length === 0) return reports
+    return data.map((r) => {
+      let status = 'compliant'
+      if (r.status === 'fail') status = 'violation'
+      else if (r.status === 'warning') status = 'review'
+      else if (r.status === 'insufficient') status = 'insufficient'
+
+      const dateStr = r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : 'Recent'
+      const projectName = r.plan_text
+        ? (r.plan_text.length > 35 ? r.plan_text.slice(0, 32) + '…' : r.plan_text)
+        : `Assessment #${r.report_id}`
+
+      return {
+        id: r.report_id,
+        project: projectName,
+        date: dateStr,
+        status: status,
+        violations: Array.isArray(r.violations) ? r.violations.length : 0,
+        reviewer: r.user_id ? `User ${r.user_id.slice(0, 8)}` : 'Engine Check',
+      }
+    })
+  } catch (err) {
+    console.error('fetchReports failed, falling back to local demo reports:', err)
+    return reports
+  }
+}
+
 // ---- auth / 2FA API (all live-only; mock-simulated when the API is unset) -------
 export async function login({ email, password }) {
   if (!apiAvailable()) {

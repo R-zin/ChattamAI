@@ -34,7 +34,7 @@ def test_new_totp_secret_is_unique():
 def test_provisioning_uri_contains_email_and_issuer():
     uri = provisioning_uri("JBSWY3DPEHPK3PXP", "user@example.com", "ChattamAI")
     assert uri.startswith("otpauth://totp/")
-    assert "user@example.com" in uri
+    assert "user@example.com" in uri or "user%40example.com" in uri
     assert "ChattamAI" in uri
     assert "secret=JBSWY3DPEHPK3PXP" in uri
 

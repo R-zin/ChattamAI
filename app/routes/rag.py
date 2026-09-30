@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
@@ -24,6 +24,7 @@ from app.schemas import (
     SetModelRequest,
     SetModelResponse,
 )
+from app.schemas_reports import ReportOut
 
 router = APIRouter(prefix="/api", tags=["rag"])
 
@@ -70,6 +71,57 @@ def _persist_report(
             db.close()
     except Exception as exc:  # noqa: BLE001 - persistence must not break the check
         logger.warning("report persistence skipped (database unavailable): %s", exc)
+
+
+@router.get("/reports", response_model=List[ReportOut])
+def list_reports(
+    limit: int = 50,
+    offset: int = 0,
+    status: Optional[str] = None,
+    actor: Optional["User"] = Depends(require_auth),
+) -> List[ReportOut]:
+    """Retrieve persisted compliance reports."""
+    from app.services.database import SessionLocal
+    from app.services.report_model import Report
+
+    limit = max(1, min(100, limit))
+    offset = max(0, offset)
+    db = SessionLocal()
+    try:
+        q = db.query(Report)
+        if actor is not None and get_settings().auth_required:
+            q = q.filter(Report.user_id == actor.user_id)
+        if status:
+            q = q.filter(Report.status == status.lower())
+        rows = q.order_by(Report.report_id.desc()).offset(offset).limit(limit).all()
+        return [ReportOut.model_validate(r) for r in rows]
+    except Exception as exc:
+        logger.warning("failed to fetch reports: %s", exc)
+        return []
+    finally:
+        db.close()
+
+
+@router.get("/reports/{report_id}", response_model=ReportOut)
+def get_report(
+    report_id: int,
+    actor: Optional["User"] = Depends(require_auth),
+) -> ReportOut:
+    """Retrieve a single persisted compliance report by ID."""
+    from app.services.database import SessionLocal
+    from app.services.report_model import Report
+
+    db = SessionLocal()
+    try:
+        q = db.query(Report).filter(Report.report_id == report_id)
+        if actor is not None and get_settings().auth_required:
+            q = q.filter(Report.user_id == actor.user_id)
+        row = q.first()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Report not found")
+        return ReportOut.model_validate(row)
+    finally:
+        db.close()
 
 
 def get_rag() -> RAGSystem:
@@ -144,6 +196,7 @@ def check_upload(
     file: UploadFile = File(...),
     top_k: Optional[int] = None,
     rag: RAGSystem = Depends(get_rag),
+    actor: Optional["User"] = Depends(require_auth),
 ) -> ComplianceResponse:
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in {".txt", ".md", ".text", ".pdf"}:
@@ -160,6 +213,12 @@ def check_upload(
         raise HTTPException(status_code=400, detail=str(exc))
     finally:
         tmp_path.unlink(missing_ok=True)
+    _persist_report(
+        plan_text=f"Uploaded file: {file.filename or 'plan'}",
+        source="upload",
+        result=result,
+        user_id=actor.user_id if actor is not None else None,
+    )
     return ComplianceResponse(**result)
 
 
@@ -171,7 +230,9 @@ def check_upload(
 def check_plan_ocr(
     file: UploadFile = File(...),
     top_k: Optional[int] = None,
+    layout: bool = True,
     rag: RAGSystem = Depends(get_rag),
+    actor: Optional["User"] = Depends(require_auth),
 ) -> ComplianceResponse:
     """Opt-in OCR compliance check for image / image-only-PDF floor plans.
 
@@ -203,6 +264,7 @@ def check_plan_ocr(
         )
 
     from app.rag.ocr import (  # lazy: keeps this module importable without OCR deps
+        image_to_layout_text,
         image_to_text,
         normalize_ocr_text,
         ocr_available,
@@ -225,11 +287,16 @@ def check_plan_ocr(
             tmp.write(file.file.read())
             raw_path = Path(tmp.name)
         try:
-            ocr_text = (
-                pdf_images_to_text(raw_path)
-                if suffix == ".pdf"
-                else image_to_text(raw_path)
-            )
+            if suffix == ".pdf":
+                ocr_text = pdf_images_to_text(raw_path)
+            elif layout:
+                ocr_text, layout_note = image_to_layout_text(
+                    raw_path, fallback_to_plain=True
+                )
+                if layout_note:
+                    logger.info("OCR layout fallback: %s", layout_note)
+            else:
+                ocr_text = image_to_text(raw_path)
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc))
         except Exception as exc:  # noqa: BLE001 - surface unreadable uploads
@@ -254,6 +321,13 @@ def check_plan_ocr(
             result = rag.check_plan_file(txt_path, top_k=top_k)
         except (RuntimeError, ValueError) as exc:
             raise HTTPException(status_code=400, detail=str(exc))
+
+        _persist_report(
+            plan_text=normalised,
+            source="ocr",
+            result=result,
+            user_id=actor.user_id if actor is not None else None,
+        )
         return ComplianceResponse(**result)
     finally:
         if raw_path is not None:

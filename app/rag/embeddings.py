@@ -7,6 +7,7 @@ rest of the pipeline. The default implementation uses OpenAI's embedding API.
 
 from __future__ import annotations
 
+from collections import OrderedDict
 import hashlib
 import os
 import threading
@@ -144,8 +145,7 @@ class EmbeddingCache(EmbeddingProvider):
         self.maxsize = max(1, maxsize)
         self._lock = threading.Lock()
         # key -> (vector, expiry_epoch)
-        self._entries: dict = {}
-        self._order: List[str] = []  # insertion order for eviction
+        self._entries: OrderedDict = OrderedDict()
         self._hits = 0
         self._misses = 0
 
@@ -160,15 +160,10 @@ class EmbeddingCache(EmbeddingProvider):
                 "ttl": self.ttl,
             }
 
-    def _prune_locked(self, now: float) -> None:
-        # Drop expired entries first.
-        expired = [k for k in self._order if self._entries[k][1] <= now]
+    def _prune_expired_locked(self, now: float) -> None:
+        expired = [k for k, (_, exp) in self._entries.items() if exp <= now]
         for k in expired:
-            self._entries.pop(k, None)
-        # Then evict oldest until within capacity.
-        while len(self._entries) >= self.maxsize and self._order:
-            oldest = self._order.pop(0)
-            self._entries.pop(oldest, None)
+            del self._entries[k]
 
     def embed(self, texts: List[str]) -> np.ndarray:
         if not texts:
@@ -180,7 +175,7 @@ class EmbeddingCache(EmbeddingProvider):
         to_fetch_txt: List[str] = []
 
         with self._lock:
-            self._prune_locked(now)
+            self._prune_expired_locked(now)
             for i, key in enumerate(keys):
                 entry = self._entries.get(key)
                 if entry is not None and entry[1] > now:
@@ -196,12 +191,15 @@ class EmbeddingCache(EmbeddingProvider):
         if to_fetch_txt:
             fresh = self.provider.embed(to_fetch_txt)
             with self._lock:
-                self._prune_locked(time.time())
+                insert_time = time.time()
+                self._prune_expired_locked(insert_time)
                 for i, vec in zip(to_fetch_idx, fresh):
                     key = keys[i]
-                    self._entries[key] = (vec, time.time() + self.ttl)
-                    if key not in self._order:
-                        self._order.append(key)
+                    if key in self._entries:
+                        del self._entries[key]
+                    self._entries[key] = (vec, insert_time + self.ttl)
+                    while len(self._entries) > self.maxsize:
+                        self._entries.popitem(last=False)
                     out[i] = vec
 
         matrix = np.array([v for v in out], dtype="float32")

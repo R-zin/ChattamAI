@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  chattamai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chattamai
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - PORT=8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
+      - OCR_ENABLED=${OCR_ENABLED:-true}
+      - MIN_SCORE=${MIN_SCORE:-0.0}
+      - TOP_K=${TOP_K:-6}
+      - SECRET_KEY=${SECRET_KEY:-chattamai-docker-secret-change-me}
+      - AUTH_REQUIRED=${AUTH_REQUIRED:-false}
+      - TOTP_REQUIRED=${TOTP_REQUIRED:-false}
+      - KBR_DATA_DIR=/app/data/kbr
+      - INDEX_DIR=/app/data/index
+      - DATABASE_URL=sqlite:////app/data/chattamai.db
+    volumes:
+      - ./data/kbr:/app/data/kbr
+      - ./data/index:/app/data/index
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

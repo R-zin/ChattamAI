@@ -1,12 +1,27 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { toast } from '../components/Toast.jsx'
 import { Header } from '../components/AppShell.jsx'
 import { AppFooter } from '../components/Shared.jsx'
 import Pill from '../components/Pill.jsx'
 import Icon from '../components/Icon.jsx'
-import { reports, STATUS_META } from '../data.js'
+import { fetchReports, STATUS_META } from '../data.js'
 
 export default function Reports() {
+  const [reportList, setReportList] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    let active = true
+    fetchReports().then((data) => {
+      if (active) {
+        setReportList(data)
+        setLoading(false)
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [])
   return (
     <>
       <Header
@@ -34,10 +49,17 @@ export default function Reports() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#222C3A]">
-                {reports.map((r) => {
-                  const s = STATUS_META[r.status]
-                  return (
-                    <tr key={r.project} className="hover:bg-[#161D27] transition-colors group">
+                {loading && reportList.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-8 text-center text-sm mono text-[#5B6879]">
+                      Loading assessments…
+                    </td>
+                  </tr>
+                ) : (
+                  reportList.map((r, idx) => {
+                    const s = STATUS_META[r.status] || STATUS_META.review
+                    return (
+                      <tr key={r.id || r.project || idx} className="hover:bg-[#161D27] transition-colors group">
                       <td className="px-6 py-4 text-sm text-white">{r.project}</td>
                       <td className="px-6 py-4 text-xs mono text-[#5B6879]">{r.date}</td>
                       <td className="px-6 py-4"><Pill kind={s.pill}>{s.label}</Pill></td>
@@ -49,8 +71,9 @@ export default function Reports() {
                         </button>
                       </td>
                     </tr>
-                  )
-                })}
+                    )
+                  })
+                )}
               </tbody>
             </table>
           </div>

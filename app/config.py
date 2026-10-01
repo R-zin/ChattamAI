@@ -110,6 +110,10 @@ class Settings(BaseModel):
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./chattamai.db")
     session_timeout_seconds: int = int(os.getenv("TIME_OUT", "3600"))
 
+    # --- Security & Rate Limiting ---
+    cors_origins: str = os.getenv("CORS_ORIGINS", "*")
+    rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
+
     model_config = {"arbitrary_types_allowed": True}
 
     def ensure_dirs(self) -> None:

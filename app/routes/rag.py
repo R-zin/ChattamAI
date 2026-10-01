@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
 
 if TYPE_CHECKING:
     from app.services.dbmodel import User
@@ -67,6 +67,8 @@ def _persist_report(
         try:
             db.add(report)
             db.commit()
+            db.refresh(report)
+            result["report_id"] = report.report_id
         finally:
             db.close()
     except Exception as exc:  # noqa: BLE001 - persistence must not break the check
@@ -124,6 +126,92 @@ def get_report(
         db.close()
 
 
+@router.get("/reports/{report_id}/export")
+def export_report(
+    report_id: int,
+    format: str = "pdf",
+    actor: Optional["User"] = Depends(require_auth),
+):
+    """Export a compliance assessment as an official PDF or print-ready HTML."""
+    from app.services.database import SessionLocal
+    from app.services.pdf_report import (
+        generate_compliance_html,
+        generate_compliance_pdf,
+    )
+    from app.services.report_model import Report
+
+    db = SessionLocal()
+    try:
+        q = db.query(Report).filter(Report.report_id == report_id)
+        if actor is not None and get_settings().auth_required:
+            q = q.filter(Report.user_id == actor.user_id)
+        row = q.first()
+        if row is None:
+            raise HTTPException(status_code=404, detail="Report not found")
+
+        fmt = format.lower().strip()
+        if fmt == "html":
+            html_content = generate_compliance_html(row)
+            return Response(content=html_content, media_type="text/html")
+
+        pdf_bytes = generate_compliance_pdf(row)
+        filename = f"kbr_compliance_report_{report_id:06d}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    finally:
+        db.close()
+
+
+@router.get("/kbr/documents")
+def list_kbr_documents() -> List[Dict[str, Any]]:
+    """List statutory rules documents currently present in KBR_DATA_DIR."""
+    from datetime import datetime
+
+    data_dir = get_settings().kbr_data_dir
+    if not data_dir.exists():
+        return []
+    docs = []
+    for p in sorted(data_dir.iterdir()):
+        if p.is_file() and not p.name.startswith("."):
+            docs.append(
+                {
+                    "filename": p.name,
+                    "size_bytes": p.stat().st_size,
+                    "modified_at": datetime.fromtimestamp(
+                        p.stat().st_mtime
+                    ).isoformat(),
+                    "ext": p.suffix.lower(),
+                }
+            )
+    return docs
+
+
+@router.post("/kbr/upload", dependencies=[Depends(require_auth)])
+def upload_kbr_document(file: UploadFile = File(...)) -> Dict[str, Any]:
+    """Upload a new KBR statutory rule document (PDF or TXT) into KBR_DATA_DIR."""
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in {".pdf", ".txt", ".md", ".text"}:
+        raise HTTPException(
+            status_code=415,
+            detail="Unsupported file type. Upload a .pdf, .txt, or .md rule document.",
+        )
+    data_dir = get_settings().kbr_data_dir
+    data_dir.mkdir(parents=True, exist_ok=True)
+    target = data_dir / Path(file.filename or "uploaded_rule.txt").name
+    content = file.file.read()
+    with open(target, "wb") as f:
+        f.write(content)
+    return {
+        "filename": target.name,
+        "size_bytes": len(content),
+        "status": "uploaded",
+        "message": "File uploaded to KBR corpus. Run /api/ingest to index it.",
+    }
+
+
 def get_rag() -> RAGSystem:
     from app.main import app
 
@@ -131,6 +219,32 @@ def get_rag() -> RAGSystem:
     if rag is None:
         raise HTTPException(status_code=503, detail="RAG system not initialised.")
     return rag
+
+
+@router.get("/rules/search")
+def search_rules(
+    q: str,
+    limit: int = 10,
+    rag: RAGSystem = Depends(get_rag),
+) -> List[Dict[str, Any]]:
+    """Direct lexical/semantic search over the indexed Kerala Building Rules chunks."""
+    limit = max(1, min(50, limit))
+    store = getattr(rag, "_store", None)
+    if not store or store.size == 0:
+        return []
+    results = store.similarity_search(q, k=limit)
+    out = []
+    for text, meta, score in results:
+        out.append(
+            {
+                "rule_id": meta.get("rule_id") if isinstance(meta, dict) else None,
+                "source": meta.get("source") if isinstance(meta, dict) else None,
+                "chunk": meta.get("chunk") if isinstance(meta, dict) else None,
+                "excerpt": text or (meta.get("text") if isinstance(meta, dict) else ""),
+                "score": round(float(score), 4),
+            }
+        )
+    return out
 
 
 @router.get("/health", response_model=HealthResponse)
@@ -150,8 +264,11 @@ class IngestRequest(BaseModel):
 
 @router.post("/setmodel", response_model=SetModelResponse)
 async def set_model(data: SetModelRequest) -> SetModelResponse:
-    # Provider/model switching is not implemented yet; acknowledge the request.
-    return SetModelResponse(status="ok")
+    from app.main import app
+
+    app.state.active_model = data.model_provider
+    logger.info("Active model updated to %s", data.model_provider)
+    return SetModelResponse(status=f"Active model set to {data.model_provider}")
 
 
 @router.post(

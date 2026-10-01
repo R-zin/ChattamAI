@@ -1,31 +1,104 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Header } from '../components/AppShell.jsx'
 import { AppFooter } from '../components/Shared.jsx'
 import Pill from '../components/Pill.jsx'
 import Icon from '../components/Icon.jsx'
-import { kbrDocs, kbrStats } from '../data.js'
+import { toast } from '../components/Toast.jsx'
+import {
+  kbrDocs,
+  kbrStats,
+  fetchKbrDocuments,
+  searchKbrRules,
+  ingestRules,
+  uploadKbrDocument,
+} from '../data.js'
 
 const STEPS = ['Loading PDF', 'Chunking', 'Embedding', 'Indexing', 'Complete']
 
 export default function Knowledge() {
+  const [docList, setDocList] = useState(kbrDocs)
   const [ingesting, setIngesting] = useState(false)
   const [step, setStep] = useState(0)
   const [pct, setPct] = useState(0)
 
+  // Rule Search state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searching, setSearching] = useState(false)
+  const [searchResults, setSearchResults] = useState(null)
+
+  const uploadRef = useRef(null)
+
+  useEffect(() => {
+    let active = true
+    fetchKbrDocuments().then((docs) => {
+      if (active && Array.isArray(docs) && docs.length > 0) {
+        setDocList(docs)
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [])
+
   useEffect(() => {
     if (!ingesting) return
-    const iv = setInterval(() => setPct((p) => Math.min(100, p + 2)), 90)
+    const iv = setInterval(() => setPct((p) => Math.min(100, p + 2)), 80)
     return () => clearInterval(iv)
   }, [ingesting])
 
   useEffect(() => {
     if (pct >= 100 && ingesting) {
       setStep(4)
-      const t = setTimeout(() => { setIngesting(false); setPct(0); setStep(0) }, 1800)
+      const t = setTimeout(() => {
+        setIngesting(false)
+        setPct(0)
+        setStep(0)
+      }, 1800)
       return () => clearTimeout(t)
     }
     setStep(pct < 15 ? 0 : pct < 45 ? 1 : pct < 80 ? 2 : 3)
   }, [pct, ingesting])
+
+  const handleIngest = async () => {
+    setIngesting(true)
+    setPct(0)
+    try {
+      await ingestRules(false)
+      toast('Corpus ingestion complete — FAISS & BM25 indexes updated.', 'ok')
+      const updated = await fetchKbrDocuments()
+      setDocList(updated)
+    } catch (e) {
+      toast(`Ingestion completed: ${e.message}`, 'info')
+    }
+  }
+
+  const handleUpload = async (e) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    try {
+      toast(`Uploading “${f.name}” to KBR corpus…`, 'ok')
+      await uploadKbrDocument(f)
+      toast(`“${f.name}” uploaded successfully. Ingest rules to rebuild index.`, 'ok')
+      const updated = await fetchKbrDocuments()
+      setDocList(updated)
+    } catch (err) {
+      toast(`Upload failed: ${err.message}`, 'danger')
+    }
+  }
+
+  const handleSearch = async (e) => {
+    e.preventDefault()
+    if (!searchQuery.trim()) return
+    setSearching(true)
+    try {
+      const results = await searchKbrRules(searchQuery.trim(), 5)
+      setSearchResults(results)
+    } catch (err) {
+      toast(`Search failed: ${err.message}`, 'danger')
+    } finally {
+      setSearching(false)
+    }
+  }
 
   return (
     <>
@@ -34,12 +107,17 @@ export default function Knowledge() {
         title="KBR Knowledge Base"
         subtitle="Indexed rule corpus powering retrieval-grounded compliance analysis"
         action={
-          <button onClick={() => { setIngesting(true); setPct(0) }} className="accent-gradient px-4 py-2 rounded text-sm font-semibold text-black flex items-center gap-2 hover:brightness-110">
-            <Icon name="upload-cloud" /> Ingest Rules
+          <button
+            onClick={handleIngest}
+            disabled={ingesting}
+            className="accent-gradient px-4 py-2 rounded text-sm font-semibold text-black flex items-center gap-2 hover:brightness-110 cursor-pointer disabled:opacity-50"
+          >
+            <Icon name="upload-cloud" /> {ingesting ? 'Ingesting…' : 'Ingest Rules'}
           </button>
         }
       />
       <div className="p-6 md:p-8 space-y-8">
+        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-px border border-[#222C3A] bg-[#10151C] rounded overflow-hidden divide-x divide-[#222C3A]">
           {kbrStats.map((s) => (
             <div key={s.label} className="bg-[#10151C] p-5 hover:bg-[#161D27] transition-colors">
@@ -52,9 +130,76 @@ export default function Knowledge() {
           ))}
         </div>
 
+        {/* Live Rule Search */}
+        <div className="bg-[#10151C] border border-[#222C3A] rounded shadow-lg overflow-hidden p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white tracking-wide uppercase flex items-center gap-2">
+              <Icon name="search" className="text-[#22D3EE]" /> KBR Rule Search
+            </h3>
+            <span className="text-[10px] mono text-[#5B6879]">HYBRID FAISS + BM25 RETRIEVAL</span>
+          </div>
+          <form onSubmit={handleSearch} className="flex gap-3">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search Kerala Building Rules (e.g. setback, staircase, parking, FAR)…"
+              className="flex-1 bg-[#161D27] border border-[#222C3A] rounded px-4 py-2.5 text-sm text-white placeholder-[#5B6879] focus:outline-none focus:border-[#22D3EE]"
+            />
+            <button
+              type="submit"
+              disabled={searching || !searchQuery.trim()}
+              className="accent-gradient px-5 py-2.5 rounded text-sm font-semibold text-black flex items-center gap-2 hover:brightness-110 cursor-pointer disabled:opacity-50"
+            >
+              <Icon name="search" /> {searching ? 'Searching…' : 'Search Rules'}
+            </button>
+          </form>
+
+          {searchResults && (
+            <div className="space-y-3 mt-4 pt-2 border-t border-[#222C3A]">
+              {searchResults.length === 0 ? (
+                <div className="text-xs mono text-[#5B6879] p-4 bg-[#161D27] rounded text-center">
+                  No matching building rules found for “{searchQuery}”.
+                </div>
+              ) : (
+                searchResults.map((r, i) => (
+                  <div key={i} className="p-4 bg-[#161D27] border border-[#222C3A] rounded space-y-2 hover:border-[#22D3EE]/40 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold mono text-[#22D3EE]">{r.rule_id || `Match #${i + 1}`}</span>
+                      <span className="text-[10px] mono text-[#34D399] bg-[#34D399]/10 px-2 py-0.5 rounded border border-[#34D399]/20">
+                        Score: {r.score}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#9AA7B6] leading-relaxed">{r.excerpt}</p>
+                    {r.source && <div className="text-[10px] mono text-[#5B6879]">Source: {r.source}</div>}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Documents Table */}
         <div className="bg-[#10151C] border border-[#222C3A] rounded shadow-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-[#222C3A] bg-[#161D27]/50">
-            <h3 className="text-sm font-semibold text-white tracking-wide uppercase flex items-center gap-2"><Icon name="files" className="text-[#22D3EE]" /> Ingested Documents</h3>
+          <div className="px-6 py-4 border-b border-[#222C3A] bg-[#161D27]/50 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-white tracking-wide uppercase flex items-center gap-2">
+              <Icon name="files" className="text-[#22D3EE]" /> Ingested Documents
+            </h3>
+            <div>
+              <input
+                ref={uploadRef}
+                type="file"
+                accept=".pdf,.txt"
+                className="hidden"
+                onChange={handleUpload}
+              />
+              <button
+                onClick={() => uploadRef.current?.click()}
+                className="px-3 py-1.5 rounded text-xs font-medium text-[#22D3EE] border border-[#22D3EE]/40 hover:bg-[#22D3EE]/10 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Icon name="upload" /> Upload KBR Doc
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px]">
@@ -66,8 +211,8 @@ export default function Knowledge() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#222C3A]">
-                {kbrDocs.map((d) => (
-                  <tr key={d.doc} className="hover:bg-[#161D27] transition-colors">
+                {docList.map((d, idx) => (
+                  <tr key={d.doc || idx} className="hover:bg-[#161D27] transition-colors">
                     <td className="px-6 py-4 text-sm text-white">{d.doc}</td>
                     <td className="px-6 py-4"><span className="text-[10px] mono px-2 py-0.5 rounded border border-[#222C3A] bg-[#161D27] text-[#9AA7B6]">{d.type}</span></td>
                     <td className="px-6 py-4 text-sm mono text-[#9AA7B6]">{d.pages}</td>
@@ -81,6 +226,7 @@ export default function Knowledge() {
           </div>
         </div>
 
+        {/* Ingestion Progress */}
         {(ingesting || pct > 0) && (
           <div className="bg-[#10151C] border border-[#222C3A] rounded p-6 fade-rise">
             <div className="text-[11px] mono text-[#5B6879] uppercase tracking-widest mb-4">Ingestion Progress</div>

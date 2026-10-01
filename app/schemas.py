@@ -63,6 +63,9 @@ class ComplianceResponse(BaseModel):
     summary: str
     violations: List[Violation]
     retrieved_rules: List[RuleReference]
+    report_id: Optional[int] = Field(
+        default=None, description="Persisted assessment report ID"
+    )
 
 
 class HealthResponse(BaseModel):

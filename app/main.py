@@ -5,14 +5,17 @@ Boots the RAG system on startup and exposes the compliance API.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from contextlib import asynccontextmanager
-
 from pathlib import Path
+import time
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+
+from app.config import get_settings
 
 from app.routes import auth as auth_routes
 from app.routes import rag as rag_routes
@@ -46,12 +49,44 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+cors_setting = get_settings().cors_origins
+origins = [o.strip() for o in cors_setting.split(",") if o.strip()]
+if not origins:
+    origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_RATE_LIMIT_BUCKETS: dict = defaultdict(list)
+_SENSITIVE_PREFIXES = ("/auth/login", "/api/check", "/api/ingest")
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    path = request.url.path
+    if any(path.startswith(p) for p in _SENSITIVE_PREFIXES):
+        client_ip = request.client.host if request.client else "127.0.0.1"
+        now = time.time()
+        window = 60.0
+        max_requests = get_settings().rate_limit_per_minute
+
+        history = _RATE_LIMIT_BUCKETS[client_ip]
+        # Keep only timestamps within window
+        history = [t for t in history if now - t < window]
+        if len(history) >= max_requests:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many requests. Please slow down."},
+            )
+        history.append(now)
+        _RATE_LIMIT_BUCKETS[client_ip] = history
+
+    return await call_next(request)
+
 
 app.include_router(rag_routes.router)
 app.include_router(auth_routes.auth_router)

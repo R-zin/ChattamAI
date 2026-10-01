@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Header } from '../components/AppShell.jsx'
 import { AppFooter } from '../components/Shared.jsx'
@@ -13,15 +13,25 @@ export default function NewCheck() {
   const fileRef = useRef(null)
   const [planText, setPlanText] = useState('')
   const [file, setFile] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
   const [drag, setDrag] = useState(false)
   const [busy, setBusy] = useState(false)
   const ready = planText.trim().length > 0 || file
+
+  useEffect(() => {
+    if (file && /\.(png|jpe?g|webp|tiff?)$/i.test(file.name)) {
+      const url = URL.createObjectURL(file)
+      setPreviewUrl(url)
+      return () => URL.revokeObjectURL(url)
+    }
+    setPreviewUrl(null)
+  }, [file])
 
   const onDrop = (e) => {
     e.preventDefault()
     setDrag(false)
     const f = e.dataTransfer.files?.[0]
-    if (f && /\.(pdf|txt|md|text)$/i.test(f.name)) setFile(f)
+    if (f && /\.(pdf|txt|md|text|png|jpe?g|webp|tiff?)$/i.test(f.name)) setFile(f)
   }
 
   const run = async () => {
@@ -62,12 +72,22 @@ export default function NewCheck() {
                 <Icon name="drafting-compass" className="text-2xl text-[#22D3EE]" />
               </div>
               <div className="text-lg font-semibold text-white mb-1">{file ? file.name : 'Upload Building Plan'}</div>
-              <div className="text-sm text-[#9AA7B6] mb-6">{file ? `${(file.size / 1024).toFixed(0)} KB selected — ready to analyze` : 'Drop a PDF here or browse files'}</div>
-              <input ref={fileRef} type="file" accept=".pdf,.txt,.md,.text" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              <div className="text-sm text-[#9AA7B6] mb-4">{file ? `${(file.size / 1024).toFixed(0)} KB selected — ready to analyze` : 'Drop a PDF or Plan Image here, or browse files'}</div>
+              {previewUrl && (
+                <div className="mb-4 flex flex-col items-center">
+                  <div className="text-[10px] mono text-[#22D3EE] mb-1.5 uppercase tracking-wider">Plan Image Preview (Layout OCR)</div>
+                  <img
+                    src={previewUrl}
+                    alt="Plan Preview"
+                    className="max-h-40 max-w-full rounded border border-[#222C3A] object-contain shadow-lg bg-[#0A0E13]"
+                  />
+                </div>
+              )}
+              <input ref={fileRef} type="file" accept=".pdf,.txt,.md,.text,.png,.jpg,.jpeg,.webp,.tiff" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
               <div className="flex items-center justify-center gap-6">
                 <div>
                   <div className="text-[9px] mono text-[#5B6879] uppercase tracking-wider mb-1">Supported Formats</div>
-                  <div className="text-xs mono text-white">PDF, TXT</div>
+                  <div className="text-xs mono text-white">PDF, TXT, PNG, JPG (OCR)</div>
                 </div>
                 <div className="w-px h-8 bg-[#222C3A]" />
                 <div>

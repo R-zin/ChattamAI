@@ -219,8 +219,13 @@ export async function analyzePlan({ planText, file, top_k }) {
     return demoResponse
   }
   if (file) {
+    const isImage = /\.(png|jpe?g|webp|tiff?)$/i.test(file.name || '') || file.type?.startsWith('image/')
     const fd = new FormData()
     fd.append('file', file)
+    if (isImage) {
+      const qs = top_k ? `&top_k=${top_k}` : ''
+      return request(`/api/check/plan-ocr?layout=true${qs}`, { method: 'POST', body: fd })
+    }
     const qs = top_k ? `?top_k=${top_k}` : ''
     return request(`/api/check/upload${qs}`, { method: 'POST', body: fd })
   }
@@ -265,6 +270,95 @@ export async function fetchReports() {
     console.error('fetchReports failed, falling back to local demo reports:', err)
     return reports
   }
+}
+
+export async function downloadReport(id, format = 'pdf') {
+  if (!apiAvailable()) {
+    const blob = new Blob(
+      [`Kerala Building Rules Compliance Report (Demo #${id})\nStatus: Review Required\nEngine: ChattamAI AI-Assisted Assessment`],
+      { type: format === 'html' ? 'text/html' : 'text/plain' }
+    )
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `compliance_report_${id}.${format === 'html' ? 'html' : 'pdf'}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    return
+  }
+  const token = getToken()
+  const headers = token ? { Authorization: `Bearer ${token}` } : {}
+  const res = await fetch(`${API_URL}/api/reports/${id}/export?format=${format}`, { headers })
+  if (!res.ok) throw new Error(`Export failed (${res.status})`)
+  const blob = await res.blob()
+  const ext = format === 'html' ? 'html' : 'pdf'
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `compliance_report_${id}.${ext}`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export async function fetchKbrDocuments() {
+  if (!apiAvailable()) return kbrDocs
+  try {
+    const data = await request('/api/kbr/documents')
+    if (!Array.isArray(data) || data.length === 0) return kbrDocs
+    return data.map((d) => ({
+      doc: d.filename,
+      type: d.filename.endsWith('.pdf') ? 'KBR (PDF)' : 'KBR (TXT)',
+      pages: Math.max(1, Math.round(d.size / 3000)),
+      chunks: `${Math.max(1, Math.round(d.size / 500))}`,
+      indexed: d.modified ? new Date(d.modified).toISOString().slice(0, 10) : 'Recent',
+      status: 'INDEXED',
+    }))
+  } catch (err) {
+    console.error('fetchKbrDocuments failed, falling back to mock:', err)
+    return kbrDocs
+  }
+}
+
+export async function searchKbrRules(query, limit = 5) {
+  if (!apiAvailable()) {
+    await new Promise((r) => setTimeout(r, 300))
+    return [
+      {
+        rule_id: 'Rule 23(4)',
+        source: 'Kerala_Building_Rules_2019.pdf',
+        chunk: 47,
+        excerpt: `Every building shall have a front setback not less than prescribed for its occupancy group. (Query: "${query}")`,
+        score: 0.91,
+      },
+    ]
+  }
+  return request(`/api/rules/search?q=${encodeURIComponent(query)}&limit=${limit}`)
+}
+
+export async function ingestRules(rebuild = false) {
+  if (!apiAvailable()) {
+    await new Promise((r) => setTimeout(r, 1200))
+    return { status: 'rebuilt', chunks: 2481, documents: 3 }
+  }
+  return request('/api/ingest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rebuild }),
+  })
+}
+
+export async function uploadKbrDocument(file) {
+  if (!apiAvailable()) {
+    await new Promise((r) => setTimeout(r, 800))
+    return { filename: file.name, status: 'uploaded', size: file.size }
+  }
+  const fd = new FormData()
+  fd.append('file', file)
+  return request('/api/kbr/upload', { method: 'POST', body: fd })
 }
 
 // ---- auth / 2FA API (all live-only; mock-simulated when the API is unset) -------

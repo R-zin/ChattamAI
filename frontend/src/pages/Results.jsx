@@ -4,7 +4,8 @@ import { Header } from '../components/AppShell.jsx'
 import { AppFooter, ScoreRing, AnalysisTrace } from '../components/Shared.jsx'
 import Pill from '../components/Pill.jsx'
 import Icon from '../components/Icon.jsx'
-import { demoResponse, demoFactGrid, SEVERITY_META, STATUS_META, deriveStatus } from '../data.js'
+import { toast } from '../components/Toast.jsx'
+import { demoResponse, demoFactGrid, SEVERITY_META, STATUS_META, deriveStatus, downloadReport } from '../data.js'
 
 function useResult() {
   const [resp, setResp] = useState(demoResponse)
@@ -91,9 +92,25 @@ export default function Results() {
         eyebrow={<>Compliance Assessment <span className="text-[#22D3EE]/60">— AI-ASSISTED ASSESSMENT • ENGINEER REVIEW REQUIRED</span></>}
         title="Residential Building — Kakkanad"
         action={
-          <Link to="/reports" className="accent-gradient px-4 py-2 rounded text-sm font-semibold text-black hover:brightness-110 flex items-center gap-2">
-            <Icon name="download" /> Download Report
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                const id = resp.report_id || 1
+                try {
+                  toast('Generating official PDF assessment report…', 'ok')
+                  await downloadReport(id, 'pdf')
+                } catch (e) {
+                  toast(`Export failed: ${e.message}`, 'danger')
+                }
+              }}
+              className="accent-gradient px-4 py-2 rounded text-sm font-semibold text-black hover:brightness-110 flex items-center gap-2 cursor-pointer"
+            >
+              <Icon name="download" /> Export PDF
+            </button>
+            <Link to="/reports" className="px-3 py-2 rounded text-sm font-medium text-[#9AA7B6] hover:text-white bg-[#161D27] border border-[#222C3A] hover:bg-[#1E2734] transition-colors flex items-center gap-1.5">
+              <Icon name="archive" /> All Reports
+            </Link>
+          </div>
         }
       />
 

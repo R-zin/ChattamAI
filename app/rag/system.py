@@ -135,6 +135,8 @@ class RAGSystem:
         self.settings = get_settings()
         self.embeddings_ready = False
         self.llm_ready = False
+        self.llm_provider: str = self.settings.llm_provider
+        self.llm_model: str = self.settings.llm_model
         self._provider = None
         self._store: Optional[RuleVectorStore] = None
         self._llm = None
@@ -181,13 +183,19 @@ class RAGSystem:
         if llm is not None:
             self._llm = llm
             self.llm_ready = True
+            self.llm_provider = getattr(llm, "provider", "custom")
+            self.llm_model = getattr(llm, "model", "custom")
         else:
             try:
-                from app.rag.llm import ClaudeClient
+                from app.rag.llm import get_llm_client
 
-                self._llm = ClaudeClient()
+                self._llm = get_llm_client()
                 self.llm_ready = True
-            except RuntimeError as exc:
+                self.llm_provider = getattr(
+                    self._llm, "provider", self.settings.llm_provider
+                )
+                self.llm_model = getattr(self._llm, "model", self.settings.llm_model)
+            except Exception as exc:
                 self._llm_error = str(exc)
 
         if self._provider is not None:

@@ -13,12 +13,33 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Load a local .env file if present (no-op in production where real env is set).
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _default_llm_provider() -> str:
+    explicit = os.getenv("LLM_PROVIDER")
+    if explicit:
+        return explicit.strip().lower()
+    if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+        return "gemini"
+    if os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"):
+        return "anthropic"
+    return "gemini"
+
+
+def _default_llm_model() -> str:
+    explicit = os.getenv("LLM_MODEL")
+    if explicit:
+        return explicit.strip()
+    provider = _default_llm_provider()
+    if provider in ("anthropic", "claude"):
+        return "claude-3-5-sonnet-20241022"
+    return "gemini-2.5-flash"
 
 
 class Settings(BaseModel):
@@ -67,12 +88,20 @@ class Settings(BaseModel):
     embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
     embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "1536"))
 
-    # --- LLM (Anthropic Claude, works with the local proxy) ---
-    anthropic_api_key: Optional[str] = os.getenv(
-        "ANTHROPIC_API_KEY", os.getenv("ANTHROPIC_AUTH_TOKEN")
+    # --- LLM (Google Gemini & Anthropic Claude) ---
+    llm_provider: str = Field(default_factory=_default_llm_provider)
+    gemini_api_key: Optional[str] = Field(
+        default_factory=lambda: os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY"))
     )
-    anthropic_base_url: Optional[str] = os.getenv("ANTHROPIC_BASE_URL")
-    llm_model: str = os.getenv("LLM_MODEL", "claude-3-5-sonnet-20241022")
+    anthropic_api_key: Optional[str] = Field(
+        default_factory=lambda: os.getenv(
+            "ANTHROPIC_API_KEY", os.getenv("ANTHROPIC_AUTH_TOKEN")
+        )
+    )
+    anthropic_base_url: Optional[str] = Field(
+        default_factory=lambda: os.getenv("ANTHROPIC_BASE_URL")
+    )
+    llm_model: str = Field(default_factory=_default_llm_model)
     llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "2048"))
     llm_timeout: float = float(os.getenv("LLM_TIMEOUT", "60"))
     llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "2"))

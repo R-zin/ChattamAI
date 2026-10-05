@@ -254,6 +254,8 @@ def health(rag: RAGSystem = Depends(get_rag)) -> HealthResponse:
         index_size=rag.index_size,
         embeddings_ready=rag.embeddings_ready,
         llm_ready=rag.llm_ready,
+        llm_provider=getattr(rag, "llm_provider", None),
+        llm_model=getattr(rag, "llm_model", None),
     )
 
 

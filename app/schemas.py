@@ -73,6 +73,8 @@ class HealthResponse(BaseModel):
     index_size: int
     embeddings_ready: bool
     llm_ready: bool
+    llm_provider: Optional[str] = None
+    llm_model: Optional[str] = None
 
 
 # --- Auth models (additive; existing RAG models above are unchanged) ---------

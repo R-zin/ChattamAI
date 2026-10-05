@@ -4,7 +4,7 @@ A Retrieval-Augmented Generation system that helps LSGD engineers compare an
 uploaded building plan against the **Kerala Building Rules (KBR)** and surface
 potential violations. Built with **FastAPI** (API), **LangGraph** (compliance
 workflow orchestration), **FAISS** (vector store), **OpenAI embeddings**, and
-**Anthropic Claude** (analysis LLM, via the local proxy).
+**Google Gemini** (primary analysis LLM via `google-genai`, with Anthropic Claude support).
 
 ## How it works
 
@@ -15,7 +15,7 @@ building plan (text/PDF)
 ┌──────────────── LangGraph workflow ────────────────┐
 │ 1. extract_facts  → pull regulated parameters        │
 │ 2. retrieve       → cosine search KBR chunks (FAISS) │
-│ 3. analyze        → Claude compares facts vs rules    │
+│ 3. analyze        → Gemini compares facts vs rules   │
 │ 4. summarize      → engineer-friendly report          │
 └──────────────────────────────────────────────────────┘
 ```
@@ -52,12 +52,13 @@ branch rather than guessing.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # then set OPENAI_API_KEY
+cp .env.example .env        # set OPENAI_API_KEY and GEMINI_API_KEY
 ```
 
 Required env vars (see `.env.example`):
 - `OPENAI_API_KEY` — embeddings (`text-embedding-3-small`)
-- `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` — Claude (already set for the local proxy)
+- `GEMINI_API_KEY` — Gemini LLM analysis (`gemini-2.5-flash`, from Google AI Studio)
+- *(Alternative)* `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` — if using `LLM_PROVIDER=anthropic`
 - `KBR_DATA_DIR` — folder of KBR PDFs/text (default `./data/kbr`)
 
 Tunables with sane defaults (see `.env.example` for the full list): `MIN_SCORE`,

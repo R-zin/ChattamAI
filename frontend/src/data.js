@@ -32,7 +32,7 @@ export const clearToken = () => {
 export const isAuthed = () => !!getToken()
 
 export const embeddingModel = 'text-embedding-3-small (1536-dim)'
-export const analysisModel = 'claude-3-5-sonnet-20241022'
+export const analysisModel = 'gemini-2.5-flash'
 
 // ---- status derivation (design-system rule) -------------------------------
 export function deriveStatus(response) {

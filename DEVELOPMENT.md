@@ -18,8 +18,8 @@ against the KBR and flags potential violations.
 - **LangGraph** — orchestrates the multi-step compliance workflow (`app/rag/graph.py`)
 - **FAISS** (CPU) — vector store for KBR chunks (`app/rag/vectorstore.py`)
 - **OpenAI embeddings** (`text-embedding-3-small`) — for semantic retrieval
-- **Anthropic Claude** — the analysis LLM, reached through a **local proxy**
-  (`ANTHROPIC_BASE_URL=http://127.0.0.1:8082`), not direct Anthropic API
+- **Google Gemini** (`gemini-2.5-flash`) — the primary analysis LLM, using the
+  official `google-genai` SDK (`GEMINI_API_KEY`), with Anthropic Claude & OpenRouter support
 - **pypdf** — text extraction from PDFs
 - **SQLAlchemy + passlib[bcrypt] + python-jose** — the auth/user store
   (`app/services/`), used by the `/auth/*` routes (see §7)
@@ -116,9 +116,11 @@ every credential exists. The cached `get_settings()` is the single source of tru
 | `OPENAI_BASE_URL` | — | Optional proxy for embeddings |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI embedding model |
 | `EMBEDDING_DIM` | `1536` | Must match the model (index is built to this dim) |
-| `ANTHROPIC_BASE_URL` | `http://127.0.0.1:8082` | Local Claude proxy |
-| `ANTHROPIC_AUTH_TOKEN` | `freecc` | Proxy auth token |
-| `LLM_MODEL` | `claude-3-5-sonnet-20241022` | Model the proxy serves |
+| `GEMINI_API_KEY` | — | Google AI Studio API key for Gemini LLM |
+| `LLM_PROVIDER` | `gemini` | Primary LLM provider (`gemini`, `anthropic`, `openrouter`) |
+| `LLM_MODEL` | `gemini-2.5-flash` | Model identifier (e.g. `gemini-2.5-flash`, `claude-3-5-sonnet-20241022`) |
+| `ANTHROPIC_BASE_URL` | `http://127.0.0.1:8082` | Local Claude proxy (optional alternative) |
+| `ANTHROPIC_AUTH_TOKEN` | `freecc` | Proxy auth token (optional alternative) |
 | `LLM_MAX_TOKENS` | `2048` | Max completion tokens |
 | `KBR_DATA_DIR` | `./data/kbr` | Folder of KBR PDFs/txt to ingest |
 | `INDEX_DIR` | `./data/index` | Where the FAISS index is written |

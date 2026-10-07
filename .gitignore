@@ -43,3 +43,9 @@ chattamai.db
 
 # Claude Code harness (subagent worktrees)
 .claude/
+
+# Security Audit Artifacts
+SECURITY-AUDIT-REPORT.md
+scratch/
+.agents/
+skills-lock.json

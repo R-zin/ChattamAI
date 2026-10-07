@@ -63,6 +63,7 @@ app.add_middleware(
 
 _RATE_LIMIT_BUCKETS: dict = defaultdict(list)
 _SENSITIVE_PREFIXES = ("/auth/login", "/api/check", "/api/ingest")
+_RATE_LIMIT_MAX_KEYS = 5000
 
 
 @app.middleware("http")
@@ -73,6 +74,16 @@ async def rate_limit_middleware(request: Request, call_next):
         now = time.time()
         window = 60.0
         max_requests = get_settings().rate_limit_per_minute
+
+        # Prevent unbounded memory growth if accessed from many distinct IPs
+        if len(_RATE_LIMIT_BUCKETS) > _RATE_LIMIT_MAX_KEYS:
+            stale_ips = [
+                ip
+                for ip, timestamps in _RATE_LIMIT_BUCKETS.items()
+                if not timestamps or now - timestamps[-1] >= window
+            ]
+            for ip in stale_ips:
+                _RATE_LIMIT_BUCKETS.pop(ip, None)
 
         history = _RATE_LIMIT_BUCKETS[client_ip]
         # Keep only timestamps within window
@@ -117,10 +128,14 @@ def root(request: Request):
 
 @app.get("/{full_path:path}")
 def spa_fallback(request: Request, full_path: str):
-    # Serve static root files if present (e.g. vite.svg, favicon.ico)
-    target = _DIST_DIR / full_path
-    if target.is_file():
-        return FileResponse(str(target))
+    # Serve static root files if present and strictly contained within _DIST_DIR
+    try:
+        resolved_dist = _DIST_DIR.resolve()
+        target = (_DIST_DIR / full_path).resolve()
+        if target.is_relative_to(resolved_dist) and target.is_file():
+            return FileResponse(str(target))
+    except (ValueError, RuntimeError):
+        pass
     # Otherwise fallback to index.html for SPA client-side routing
     index_file = _DIST_DIR / "index.html"
     if index_file.exists():

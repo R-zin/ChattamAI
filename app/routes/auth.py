@@ -17,6 +17,7 @@ Environment (via ``app.config.Settings``):
 
 from __future__ import annotations
 
+import hmac
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, status
@@ -70,11 +71,18 @@ def _token_ttl() -> int:
 
 
 def _auth_required() -> bool:
+    import os
+
+    env_val = os.getenv("AUTH_REQUIRED")
+    if env_val is not None:
+        return env_val.strip().lower() in ("1", "true", "yes", "on")
     return bool(get_settings().auth_required)
 
 
 def _admin_key() -> Optional[str]:
-    return get_settings().admin_key
+    import os
+
+    return os.getenv("ADMIN_KEY") if "ADMIN_KEY" in os.environ else get_settings().admin_key
 
 
 def _totp_required() -> bool:
@@ -127,7 +135,7 @@ def register(
     admin-key-if-configured, else open.
     """
     admin_key = _admin_key()
-    if admin_key is not None and x_admin_key != admin_key:
+    if admin_key is not None and not hmac.compare_digest(x_admin_key or "", admin_key):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Registration requires a valid X-Admin-Key header",
@@ -166,6 +174,11 @@ def login(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
+        )
+    if user.totp_enabled or _totp_required():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Two-factor authentication required. Use /auth/login/json to complete 2FA.",
         )
     token = create_access_token(user_id=user.user_id, email=user.email)
     return TokenResponse(access_token=token, expires_in=_token_ttl())
@@ -319,6 +332,11 @@ def totp_setup(
     user: User = Depends(_totp_actor), db: Session = Depends(get_db)
 ) -> TotpSetupResponse:
     """Generate a fresh TOTP secret (NOT yet enabled) and return a scannable QR."""
+    if user.totp_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="2FA is already enabled. Disable existing 2FA before setting up a new secret.",
+        )
     secret = new_totp_secret()
     user.totp_secret = secret
     db.commit()
@@ -337,6 +355,10 @@ def totp_enable(
     db: Session = Depends(get_db),
 ) -> TotpEnableResponse:
     """Confirm the secret with a first valid code, enrol, and issue recovery codes."""
+    if not verify_password(payload.password, user.password):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Incorrect password"
+        )
     if not user.totp_secret:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

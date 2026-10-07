@@ -390,12 +390,12 @@ export async function totpSetup() {
   return request('/auth/totp/setup', { method: 'POST' })
 }
 
-export async function totpEnable({ code }) {
+export async function totpEnable({ password, code }) {
   if (!apiAvailable()) return { enabled: true, recovery_codes: ['demo-recovery-code'] }
   return request('/auth/totp/enable', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({ password, code }),
   })
 }
 

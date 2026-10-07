@@ -8,6 +8,7 @@ raise a clear error at request time rather than crashing at import.
 from __future__ import annotations
 
 import os
+import secrets
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
@@ -42,11 +43,28 @@ def _default_llm_model() -> str:
     return "gemini-2.5-flash"
 
 
+def _default_secret_key() -> str:
+    key = os.getenv("SECRET_KEY", "").strip()
+    if key and key != "chattamai-insecure-dev-secret-change-me":
+        return key
+    auth_req = os.getenv("AUTH_REQUIRED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    if auth_req:
+        raise RuntimeError("FATAL: SECRET_KEY must be set when AUTH_REQUIRED is enabled.")
+    return secrets.token_urlsafe(32)
+
+
 class Settings(BaseModel):
     """Runtime configuration for the RAG system."""
 
     # --- Data / storage locations ---
-    kbr_data_dir: Path = Path(os.getenv("KBR_DATA_DIR", str(BASE_DIR / "data" / "kbr")))
+    kbr_data_dir: Path = Field(
+        default_factory=lambda: Path(os.getenv("KBR_DATA_DIR", str(BASE_DIR / "data" / "kbr")))
+    )
     index_dir: Path = Path(os.getenv("INDEX_DIR", str(BASE_DIR / "data" / "index")))
 
     # --- Chunking ---
@@ -107,17 +125,15 @@ class Settings(BaseModel):
     llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "2"))
 
     # --- Auth (see app/services/dbmodel.py + app/routes/auth.py) ---
-    # SECRET_KEY must be overridden in production (the default is insecure).
-    secret_key: str = os.getenv("SECRET_KEY", "chattamai-insecure-dev-secret-change-me")
-    auth_algorithm: str = os.getenv("AUTH_ALGORITHM", "HS256")
-    admin_key: Optional[str] = os.getenv("ADMIN_KEY")
+    # SECRET_KEY must be overridden in production (ephemeral random secret is generated in dev).
+    secret_key: str = Field(default_factory=_default_secret_key)
+    auth_algorithm: str = Field(default_factory=lambda: os.getenv("AUTH_ALGORITHM", "HS256"))
+    admin_key: Optional[str] = Field(default_factory=lambda: os.getenv("ADMIN_KEY"))
     # Opt-in protection of mutating/paid routes; OFF by default so the
     # credential-less CI smoke test on /api/health keeps passing.
-    auth_required: bool = os.getenv("AUTH_REQUIRED", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
+    auth_required: bool = Field(
+        default_factory=lambda: os.getenv("AUTH_REQUIRED", "").strip().lower()
+        in ("1", "true", "yes", "on")
     )
 
     # --- Auth / DB scaffolding (unused by the RAG app today; see DEVELOPMENT.md §7) ---

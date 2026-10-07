@@ -84,12 +84,19 @@ def _read_pdf(path: Path) -> str:
 def load_kbr_documents(data_dir: Path | None = None) -> List[Tuple[str, str]]:
     """Return list of (text, source_name) for every readable file in data_dir."""
     settings = get_settings()
-    data_dir = Path(data_dir or settings.kbr_data_dir)
-    if not data_dir.exists():
+    canonical_dir = settings.kbr_data_dir.resolve()
+    target_dir = Path(data_dir or canonical_dir).resolve()
+    try:
+        is_safe = target_dir == canonical_dir or target_dir.is_relative_to(canonical_dir)
+    except (ValueError, AttributeError):
+        is_safe = target_dir == canonical_dir or canonical_dir in target_dir.parents
+    if not is_safe:
+        raise ValueError(f"data_dir must be within {canonical_dir}")
+    if not target_dir.exists():
         return []
 
     docs: List[Tuple[str, str]] = []
-    for path in sorted(data_dir.iterdir()):
+    for path in sorted(target_dir.iterdir()):
         if not path.is_file():
             continue
         suffix = path.suffix.lower()

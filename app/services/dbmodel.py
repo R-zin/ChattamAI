@@ -30,7 +30,6 @@ from app.services.database import Base
 #   Settings.session_timeout_seconds (TIME_OUT)      — token TTL (3600).
 #   Settings.auth_required         (AUTH_REQUIRED)   — enforce auth on protected routes.
 #   Settings.admin_key             (ADMIN_KEY)       — admin header to gate /auth/register.
-_INSECURE_DEFAULT_SECRET = "chattamai-insecure-dev-secret-change-me"
 
 
 def _auth_secret() -> str:
@@ -39,7 +38,9 @@ def _auth_secret() -> str:
 
         return get_settings().secret_key
     except Exception:
-        return _INSECURE_DEFAULT_SECRET
+        import secrets
+
+        return secrets.token_urlsafe(32)
 
 
 def _auth_algorithm() -> str:

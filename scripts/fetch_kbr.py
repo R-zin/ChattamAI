@@ -29,8 +29,10 @@ from __future__ import annotations
 
 import argparse
 import datetime as _dt
+import ipaddress
 import json
 import os
+import socket
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
@@ -252,12 +254,51 @@ def _write_provenance(
     return prov_path
 
 
+def _validate_safe_url(url: str) -> None:
+    """Validate that the target URL is safe and not resolving to private/internal IPs (SSRF protection)."""
+    parsed = urlparse(url)
+    scheme = (parsed.scheme or "").lower()
+    if scheme not in ("http", "https"):
+        raise ValueError(
+            f"Blocked invalid URL scheme: '{parsed.scheme}'. Only http and https are allowed."
+        )
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError(f"Blocked invalid URL with missing hostname: {url}")
+
+    # Check for direct or resolved private/loopback/metadata IP addresses
+    try:
+        addrinfo = socket.getaddrinfo(hostname, None)
+    except socket.gaierror as exc:
+        raise RuntimeError(f"Could not resolve host {hostname}: {exc}") from exc
+
+    for item in addrinfo:
+        sockaddr = item[4]
+        ip_str = sockaddr[0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            continue
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            raise ValueError(
+                f"Blocked URL resolving to non-public/private IP ({ip_str}): {url}"
+            )
+
+
 def fetch_one(url: str, data_dir: Path, timeout: float, max_bytes: int) -> Path:
     """Download a single source into ``data_dir`` and write its provenance.
 
     Returns the path of the saved document. Raises a clear ``RuntimeError``
     when the source is unreachable or yields no usable content.
     """
+    _validate_safe_url(url)
     request = Request(url, headers={"User-Agent": _USER_AGENT})
     try:
         with urlopen(request, timeout=timeout) as resp:  # noqa: S310

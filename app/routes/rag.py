@@ -60,7 +60,7 @@ def _persist_report(
             extracted_facts=result.get("extracted_facts"),
             violations=result.get("violations"),
             retrieved_rules=result.get("retrieved_rules"),
-            status=derive_status(result.get("violations")),
+            status=derive_status(result.get("violations"), error=result.get("error")),
             user_id=user_id,
         )
         db = SessionLocal()
@@ -165,7 +165,11 @@ def export_report(
         db.close()
 
 
-@router.get("/kbr/documents")
+_KBR_ALLOWED_EXTS = {".pdf", ".txt", ".md", ".text"}
+MAX_UPLOAD_SIZE = 25 * 1024 * 1024  # 25 MiB safety cap
+
+
+@router.get("/kbr/documents", dependencies=[Depends(require_auth)])
 def list_kbr_documents() -> List[Dict[str, Any]]:
     """List statutory rules documents currently present in KBR_DATA_DIR."""
     from datetime import datetime
@@ -175,7 +179,11 @@ def list_kbr_documents() -> List[Dict[str, Any]]:
         return []
     docs = []
     for p in sorted(data_dir.iterdir()):
-        if p.is_file() and not p.name.startswith("."):
+        if (
+            p.is_file()
+            and not p.name.startswith(".")
+            and p.suffix.lower() in _KBR_ALLOWED_EXTS
+        ):
             docs.append(
                 {
                     "filename": p.name,
@@ -193,15 +201,20 @@ def list_kbr_documents() -> List[Dict[str, Any]]:
 def upload_kbr_document(file: UploadFile = File(...)) -> Dict[str, Any]:
     """Upload a new KBR statutory rule document (PDF or TXT) into KBR_DATA_DIR."""
     suffix = Path(file.filename or "").suffix.lower()
-    if suffix not in {".pdf", ".txt", ".md", ".text"}:
+    if suffix not in _KBR_ALLOWED_EXTS:
         raise HTTPException(
             status_code=415,
             detail="Unsupported file type. Upload a .pdf, .txt, or .md rule document.",
         )
+    content = file.file.read(MAX_UPLOAD_SIZE + 1)
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large. Maximum upload size is 25 MB.",
+        )
     data_dir = get_settings().kbr_data_dir
     data_dir.mkdir(parents=True, exist_ok=True)
     target = data_dir / Path(file.filename or "uploaded_rule.txt").name
-    content = file.file.read()
     with open(target, "wb") as f:
         f.write(content)
     return {
@@ -264,7 +277,11 @@ class IngestRequest(BaseModel):
     rebuild: bool = False
 
 
-@router.post("/setmodel", response_model=SetModelResponse)
+@router.post(
+    "/setmodel",
+    response_model=SetModelResponse,
+    dependencies=[Depends(require_auth)],
+)
 async def set_model(data: SetModelRequest) -> SetModelResponse:
     from app.main import app
 
@@ -283,7 +300,7 @@ def ingest(
 ) -> IngestResponse:
     try:
         result = rag.ingest(body.data_dir, rebuild=body.rebuild)
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return IngestResponse(**result)
 
@@ -323,8 +340,14 @@ def check_upload(
             status_code=415,
             detail="Unsupported file type. Upload a .txt, .md, or .pdf plan.",
         )
+    content = file.file.read(MAX_UPLOAD_SIZE + 1)
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large. Maximum upload size is 25 MB.",
+        )
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-        tmp.write(file.file.read())
+        tmp.write(content)
         tmp_path = Path(tmp.name)
     try:
         result = rag.check_plan_file(tmp_path, top_k=top_k)
@@ -399,11 +422,17 @@ def check_plan_ocr(
             ),
         )
 
+    content = file.file.read(MAX_UPLOAD_SIZE + 1)
+    if len(content) > MAX_UPLOAD_SIZE:
+        raise HTTPException(
+            status_code=413,
+            detail="File too large. Maximum upload size is 25 MB.",
+        )
     raw_path: Optional[Path] = None
     txt_path: Optional[Path] = None
     try:
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp.write(file.file.read())
+            tmp.write(content)
             raw_path = Path(tmp.name)
         try:
             if suffix == ".pdf":

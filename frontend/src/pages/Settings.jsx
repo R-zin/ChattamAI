@@ -30,6 +30,7 @@ export default function Settings() {
   const [enroll, setEnroll] = useState(null)       // TotpSetupResponse | null
   const [codesShown, setCodesShown] = useState(null) // recovery codes (shown once)
   const [code, setCode] = useState('')
+  const [enrollPw, setEnrollPw] = useState('')
   const [disarm, setDisarm] = useState(false)
   const [disarmPw, setDisarmPw] = useState('')
   const [disarmCode, setDisarmCode] = useState('')
@@ -47,19 +48,21 @@ export default function Settings() {
       setEnroll(await totpSetup())
       setCodesShown(null)
       setCode('')
+      setEnrollPw('')
     } catch (e) { toast(e.message || 'Setup failed', 'info') }
     finally { setSecBusy(false) }
   }
   const confirmEnroll = async () => {
     setSecBusy(true)
     try {
-      const res = await totpEnable({ code })
+      const res = await totpEnable({ password: enrollPw, code })
       setCodesShown(res.recovery_codes || [])
       setEnroll(null)
       setCode('')
+      setEnrollPw('')
       toast('Two-factor authentication enabled.', 'ok')
       if (apiAvailable()) setTotp(await totpStatus())
-    } catch (e) { toast(e.message || 'Invalid code', 'info') }
+    } catch (e) { toast(e.message || 'Invalid code or password', 'info') }
     finally { setSecBusy(false) }
   }
   const confirmDisable = async () => {
@@ -167,13 +170,14 @@ export default function Settings() {
                     ) : (
                       <div className="w-40 h-40 bg-[#0C1117] border border-[#222C3A] rounded flex items-center justify-center text-[#5B6879] text-3xl"><Icon name="qrcode" /></div>
                     )}
-                    <div className="flex-1 w-full">
+                    <div className="flex-1 w-full space-y-4">
                       <Field label="Manual entry key" value={enroll.secret} onChange={() => {}} helper="base32" />
-                      <div className="mt-4"><Field label="Enter the 6-digit code to confirm" value={code} onChange={setCode} /></div>
+                      <Field label="Account password" type="password" value={enrollPw} onChange={setEnrollPw} />
+                      <Field label="Enter the 6-digit code to confirm" value={code} onChange={setCode} />
                     </div>
                   </div>
                   <div className="flex gap-3">
-                    <button onClick={confirmEnroll} disabled={secBusy || code.length < 6} className={`px-4 py-2.5 rounded text-sm font-semibold text-black accent-gradient hover:brightness-110 ${(secBusy || code.length < 6) ? 'opacity-40 cursor-not-allowed' : ''}`}>Confirm &amp; enable</button>
+                    <button onClick={confirmEnroll} disabled={secBusy || code.length < 6 || !enrollPw} className={`px-4 py-2.5 rounded text-sm font-semibold text-black accent-gradient hover:brightness-110 ${(secBusy || code.length < 6 || !enrollPw) ? 'opacity-40 cursor-not-allowed' : ''}`}>Confirm &amp; enable</button>
                     <button onClick={() => setEnroll(null)} disabled={secBusy} className="px-4 py-2 rounded text-xs font-medium text-[#9AA7B6] bg-[#161D27] border border-[#222C3A] hover:text-white">Cancel</button>
                   </div>
                 </div>

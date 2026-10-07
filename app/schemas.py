@@ -124,6 +124,7 @@ class TotpSetupResponse(BaseModel):
 
 
 class TotpEnableRequest(BaseModel):
+    password: str
     code: str = Field(..., min_length=6, max_length=8)
 
 

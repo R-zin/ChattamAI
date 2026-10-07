@@ -278,7 +278,7 @@ class RAGSystem:
         error = result.get("error")
         if error:
             summary = f"{summary}\n\n[warning] {error}".strip()
-        return {
+        shaped = {
             "extracted_facts": [
                 line.strip("- ").strip()
                 for line in (result.get("facts") or "").splitlines()
@@ -296,6 +296,9 @@ class RAGSystem:
                 for text, meta, score in result.get("retrieved", [])
             ],
         }
+        if error:
+            shaped["error"] = error
+        return shaped
 
     def _log_check(self, result: dict, elapsed_ms: float) -> None:
         """Emit one telemetry line per check: counts + timing per node."""

@@ -24,14 +24,22 @@ from app.services.database import Base
 _SEVERITY_RANK = {"info": 0, "low": 1, "medium": 2, "high": 3}
 
 
-def derive_status(violations: Optional[List[Dict[str, Any]]]) -> str:
+def derive_status(
+    violations: Optional[List[Dict[str, Any]]],
+    error: Optional[str] = None,
+) -> str:
     """Collapse the violation list into a single status string.
 
-    Rules: empty/None -> ``"pass"``; any ``high`` -> ``"fail"``; otherwise at
-    least one lower-severity violation -> ``"warning"``. Unknown severities are
-    treated as ``warning`` so an unrecognised value never silently reports a
-    pass.
+    Rules:
+    - If error is present and truthy -> ``"warning"``.
+    - If empty/None violations and no error -> ``"pass"``.
+    - Any ``high`` -> ``"fail"``.
+    - Otherwise at least one lower-severity violation -> ``"warning"``.
+    - Unknown severities are treated as ``warning`` so an unrecognised value
+      never silently reports a pass.
     """
+    if error:
+        return "warning"
     if not violations:
         return "pass"
     worst = 0

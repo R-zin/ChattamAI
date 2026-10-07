@@ -87,7 +87,9 @@ def load_kbr_documents(data_dir: Path | None = None) -> List[Tuple[str, str]]:
     canonical_dir = settings.kbr_data_dir.resolve()
     target_dir = Path(data_dir or canonical_dir).resolve()
     try:
-        is_safe = target_dir == canonical_dir or target_dir.is_relative_to(canonical_dir)
+        is_safe = target_dir == canonical_dir or target_dir.is_relative_to(
+            canonical_dir
+        )
     except (ValueError, AttributeError):
         is_safe = target_dir == canonical_dir or canonical_dir in target_dir.parents
     if not is_safe:

@@ -17,7 +17,6 @@ Covers:
 from __future__ import annotations
 
 import io
-import os
 from pathlib import Path
 import uuid
 import pyotp
@@ -253,7 +252,9 @@ def test_sec_09_setmodel_requires_auth(monkeypatch, app_client):
 # ==============================================================================
 # SEC-10: Unauthenticated Corpus Directory Metadata Exposure
 # ==============================================================================
-def test_sec_10_list_kbr_documents_requires_auth_and_filters_ext(monkeypatch, app_client, tmp_path):
+def test_sec_10_list_kbr_documents_requires_auth_and_filters_ext(
+    monkeypatch, app_client, tmp_path
+):
     """Ensure /api/kbr/documents requires auth when enabled and filters disallowed files."""
     monkeypatch.setenv("AUTH_REQUIRED", "1")
     monkeypatch.setenv("SECRET_KEY", "test-secret-key-that-is-long-enough-32bytes")

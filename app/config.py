@@ -54,8 +54,19 @@ def _default_secret_key() -> str:
         "on",
     )
     if auth_req:
-        raise RuntimeError("FATAL: SECRET_KEY must be set when AUTH_REQUIRED is enabled.")
+        raise RuntimeError(
+            "FATAL: SECRET_KEY must be set when AUTH_REQUIRED is enabled."
+        )
     return secrets.token_urlsafe(32)
+
+
+def _default_auth_required() -> bool:
+    return os.getenv("AUTH_REQUIRED", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
 
 
 class Settings(BaseModel):
@@ -63,7 +74,9 @@ class Settings(BaseModel):
 
     # --- Data / storage locations ---
     kbr_data_dir: Path = Field(
-        default_factory=lambda: Path(os.getenv("KBR_DATA_DIR", str(BASE_DIR / "data" / "kbr")))
+        default_factory=lambda: Path(
+            os.getenv("KBR_DATA_DIR", str(BASE_DIR / "data" / "kbr"))
+        )
     )
     index_dir: Path = Path(os.getenv("INDEX_DIR", str(BASE_DIR / "data" / "index")))
 
@@ -127,14 +140,13 @@ class Settings(BaseModel):
     # --- Auth (see app/services/dbmodel.py + app/routes/auth.py) ---
     # SECRET_KEY must be overridden in production (ephemeral random secret is generated in dev).
     secret_key: str = Field(default_factory=_default_secret_key)
-    auth_algorithm: str = Field(default_factory=lambda: os.getenv("AUTH_ALGORITHM", "HS256"))
+    auth_algorithm: str = Field(
+        default_factory=lambda: os.getenv("AUTH_ALGORITHM", "HS256")
+    )
     admin_key: Optional[str] = Field(default_factory=lambda: os.getenv("ADMIN_KEY"))
     # Opt-in protection of mutating/paid routes; OFF by default so the
     # credential-less CI smoke test on /api/health keeps passing.
-    auth_required: bool = Field(
-        default_factory=lambda: os.getenv("AUTH_REQUIRED", "").strip().lower()
-        in ("1", "true", "yes", "on")
-    )
+    auth_required: bool = Field(default_factory=_default_auth_required)
 
     # --- Auth / DB scaffolding (unused by the RAG app today; see DEVELOPMENT.md §7) ---
     # --- TOTP / 2FA (opt-in per user; TOTP_REQUIRED forces enrolment server-wide) ---

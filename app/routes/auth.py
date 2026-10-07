@@ -82,7 +82,11 @@ def _auth_required() -> bool:
 def _admin_key() -> Optional[str]:
     import os
 
-    return os.getenv("ADMIN_KEY") if "ADMIN_KEY" in os.environ else get_settings().admin_key
+    return (
+        os.getenv("ADMIN_KEY")
+        if "ADMIN_KEY" in os.environ
+        else get_settings().admin_key
+    )
 
 
 def _totp_required() -> bool:

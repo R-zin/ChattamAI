@@ -61,7 +61,9 @@ def _enroll(client, email, password="supersecret1"):
     setup = client.post("/auth/totp/setup", headers=hdr).json()
     secret = setup["secret"]
     enable = client.post(
-        "/auth/totp/enable", headers=hdr, json={"code": pyotp.TOTP(secret).now()}
+        "/auth/totp/enable",
+        headers=hdr,
+        json={"code": pyotp.TOTP(secret).now(), "password": password},
     )
     assert enable.status_code == 200, enable.text
     return email, secret, enable.json()["recovery_codes"]
@@ -119,7 +121,11 @@ def test_enable_rejects_wrong_code(app_client):
     tok = _login(app_client, email).json()["access_token"]
     hdr = {"Authorization": f"Bearer {tok}"}
     app_client.post("/auth/totp/setup", headers=hdr)
-    res = app_client.post("/auth/totp/enable", headers=hdr, json={"code": "000000"})
+    res = app_client.post(
+        "/auth/totp/enable",
+        headers=hdr,
+        json={"code": "000000", "password": "supersecret1"},
+    )
     assert res.status_code == 400
 
 
@@ -208,7 +214,9 @@ def test_totp_required_forces_enrollment(totp_required):
     hdr = {"Authorization": f"Bearer {otp_token}"}
     secret = app_client.post("/auth/totp/setup", headers=hdr).json()["secret"]
     enable = app_client.post(
-        "/auth/totp/enable", headers=hdr, json={"code": pyotp.TOTP(secret).now()}
+        "/auth/totp/enable",
+        headers=hdr,
+        json={"code": pyotp.TOTP(secret).now(), "password": "supersecret1"},
     )
     assert enable.status_code == 200, enable.text
 

@@ -9,6 +9,7 @@ line-length = 88
 target-version = "py39"
 
 [tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
 # E731 (lambda assignment) is relaxed: tests use small throwaway lambdas.
 ignore = ["E731"]
 

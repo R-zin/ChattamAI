@@ -1,0 +1,8 @@
+name = "chattamai-edge-gateway"
+main = "src/index.js"
+compatibility_date = "2024-09-01"
+
+# Environment variables configured on Cloudflare Worker
+[vars]
+BACKEND_ORIGIN = "https://your-backend-app.fly.dev"
+ALLOWED_ORIGINS = "https://chattamai.vercel.app,http://localhost:5173"

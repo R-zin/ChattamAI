@@ -59,6 +59,13 @@ RUN chmod +x entrypoint.sh
 # Copy built frontend assets from Stage 1
 COPY --from=frontend-builder /build/dist ./frontend/dist
 
+# Create non-root appuser and configure ownership for data directories
+RUN useradd -u 1000 -m -s /bin/bash appuser && \
+    mkdir -p /app/data && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
 # Expose API and frontend port
 EXPOSE 8000
 

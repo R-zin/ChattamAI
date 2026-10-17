@@ -26,7 +26,7 @@ export default function Reports() {
   return (
     <>
       <Header
-        eyebrow="ARCHIVE // OFFICIAL STATUTORY AUDITS"
+        eyebrow="AUDIT ARCHIVE"
         title="Compliance Reports"
         subtitle="Historical architectural compliance assessments generated under KBR 2019 provisions"
         action={
@@ -57,7 +57,6 @@ export default function Reports() {
             <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 mono">
               <span className="w-1.5 h-1.5 bg-white inline-block" /> Assessment Archive & Review Records
             </h3>
-            <span className="text-[10px] mono text-[#737373]">FORMAT // FORMAL AUDIT CERTIFICATE</span>
           </div>
 
           <div className="overflow-x-auto">
@@ -130,7 +129,7 @@ export default function Reports() {
         </div>
       </div>
 
-      <AppFooter extra="PDF GENERATION ENGINE ACTIVE" />
+      <AppFooter />
     </>
   )
 }

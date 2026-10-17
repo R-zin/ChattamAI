@@ -16,7 +16,7 @@ export default function Insufficient() {
   return (
     <>
       <Header
-        eyebrow="AUDIT NOTICE // RETRIEVAL DEFICIT"
+        eyebrow="Audit Notice"
         title="Compliance Assessment"
         subtitle="Villa Extension — Kozhikode"
       />
@@ -33,11 +33,11 @@ export default function Insufficient() {
             Insufficient Evidence for Statutory Assessment
           </h3>
           <p className="text-xs mono text-[#a3a3a3] leading-relaxed mb-6 max-w-lg mx-auto">
-            The vector retrieval pipeline returned zero confident KBR rule nodes for the submitted plan. This occurs when building dimensions, setbacks, or occupancy categories are too sparse for extraction.
+            The retrieval pipeline could not locate verified statutory rule matches for the submitted plan. This occurs when building dimensions, setbacks, or occupancy categories are too sparse for extraction.
           </p>
 
           <div className="inline-block bg-[#0e0e0e] border border-[#262626] px-4 py-2 mb-8">
-            <span className="mono text-xs text-[#a3a3a3]">KBR Rules Retrieved: <span className="text-white font-bold">0 CHUNKS</span></span>
+            <span className="mono text-xs text-[#a3a3a3]">KBR Rules Retrieved: <span className="text-white font-bold">0 Rules</span></span>
           </div>
 
           {/* Minimalist pipeline */}
@@ -75,17 +75,17 @@ export default function Insufficient() {
 
           <div className="border border-[#262626] bg-[#0e0e0e] p-3 text-left mb-6">
             <div className="text-[10px] mono text-[#a3a3a3] leading-relaxed">
-              [NOTE] Insufficient evidence does NOT constitute statutory approval. Re-submit with verified setbacks, plot area, and access street measurements.
+              Insufficient evidence does not constitute statutory approval. Re-submit with verified setbacks, plot area, and access street measurements.
             </div>
           </div>
 
           <div className="max-w-sm mx-auto">
-            <AnalysisTrace trace={[{ node: 'retrieve', status: 'done', detail: '0 chunks · empty retrieval', ts: '2026-08-05 11:30:12' }]} />
+            <AnalysisTrace trace={[{ node: 'retrieve', status: 'done', detail: '0 rules matched', ts: '2026-08-05 11:30:12' }]} />
           </div>
         </div>
       </div>
 
-      <AppFooter extra="STATUS: INSUFFICIENT DATA" />
+      <AppFooter />
     </>
   )
 }

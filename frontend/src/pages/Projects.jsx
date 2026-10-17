@@ -19,7 +19,7 @@ export default function Projects() {
   return (
     <>
       <Header
-        eyebrow="PROJECT REGISTRY // ARCHITECTURAL DOSSIERS"
+        eyebrow="PROJECT ARCHIVE"
         title="Projects"
         subtitle="Organized architectural developments audited against Kerala Building Rules 2019"
         action={
@@ -86,7 +86,7 @@ export default function Projects() {
         </div>
       </div>
 
-      <AppFooter extra="6 ACTIVE ARCHITECTURAL PROJECTS" />
+      <AppFooter />
     </>
   )
 }

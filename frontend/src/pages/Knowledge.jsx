@@ -103,7 +103,7 @@ export default function Knowledge() {
   return (
     <>
       <Header
-        eyebrow="REGULATORY CORPUS // KBR 2019 DATABASE"
+        eyebrow="STATUTORY CORPUS"
         title="KBR Knowledge Base"
         subtitle="Indexed statutory rulebook powering dense vector retrieval and compliance reasoning"
         action={
@@ -112,7 +112,7 @@ export default function Knowledge() {
             disabled={ingesting}
             className="bg-white text-black font-mono text-xs font-bold px-4 py-2 border border-white hover:bg-[#e5e5e5] flex items-center gap-2 cursor-pointer transition-colors disabled:opacity-40"
           >
-            <Icon name="upload-cloud" /> {ingesting ? 'INGESTING CHUNKS…' : 'RE-INDEX RULES'}
+            <Icon name="upload-cloud" /> {ingesting ? 'INGESTING…' : 'RE-INDEX RULES'}
           </button>
         }
       />
@@ -137,7 +137,6 @@ export default function Knowledge() {
             <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 mono">
               <span className="w-1.5 h-1.5 bg-white inline-block" /> Semantic Rule Search
             </h3>
-            <span className="text-[10px] mono text-[#737373]">NVIDIA NEMOTRON-3-EMBED-1B (2048-DIM)</span>
           </div>
 
           <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
@@ -260,7 +259,7 @@ export default function Knowledge() {
         )}
       </div>
 
-      <AppFooter extra="FAISS HYBRID RETRIEVAL OPERATIONAL" />
+      <AppFooter />
     </>
   )
 }

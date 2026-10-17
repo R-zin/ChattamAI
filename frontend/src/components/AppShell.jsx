@@ -81,18 +81,16 @@ export default function AppShell({ children }) {
           </nav>
         </div>
 
-        {/* Minimalist Telemetry Footer */}
+        {/* Sidebar Footer */}
         <div className="mt-auto p-4 border-t border-[#262626] bg-[#0a0a0a]">
-          <div className="flex items-center gap-2 mb-2.5">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            <span className="text-[10px] mono font-semibold tracking-wider uppercase text-white">
-              OPERATIONAL // v2.4.1
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] mono text-[#a3a3a3] border border-[#262626] p-2.5 bg-[#121212]">
-            <span>LATENCY: 42ms</span>
-            <span className="text-right">CHUNKS: 595</span>
-            <span className="col-span-2 text-white pt-0.5 border-t border-[#262626]/60">EMBED: NEMOTRON 1B</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              <span className="text-[10px] mono font-semibold tracking-wider uppercase text-white">
+                KBR 2019 Engine
+              </span>
+            </div>
+            <span className="text-[9px] mono text-[#737373]">ONLINE</span>
           </div>
         </div>
       </aside>
@@ -105,7 +103,7 @@ export default function AppShell({ children }) {
 
 export function Header({ eyebrow, title, subtitle, action, backLink }) {
   return (
-    <header className="min-h-[76px] flex items-center justify-between gap-4 px-6 md:px-8 border-b border-[#262626] bg-[#0a0a0a]/90 backdrop-blur-md sticky top-14 md:top-0 z-20">
+    <header className="min-h-[70px] flex items-center justify-between gap-4 px-6 md:px-8 border-b border-[#262626] bg-[#0a0a0a]/90 backdrop-blur-md sticky top-14 md:top-0 z-20">
       <div className="flex items-center gap-4 min-w-0">
         {backLink && (
           <Link to={backLink} className="text-[#737373] hover:text-white transition-colors flex-shrink-0 p-1">
@@ -114,8 +112,8 @@ export function Header({ eyebrow, title, subtitle, action, backLink }) {
         )}
         <div className="min-w-0">
           {eyebrow && (
-            <div className="text-[10px] mono text-[#737373] uppercase tracking-[0.2em] mb-0.5 truncate flex items-center gap-2">
-              <span>{eyebrow}</span>
+            <div className="text-[9px] mono text-[#737373] uppercase tracking-[0.15em] mb-0.5 truncate">
+              {eyebrow}
             </div>
           )}
           <h2 className="text-lg md:text-xl font-bold tracking-tight text-white uppercase font-sans truncate">{title}</h2>
@@ -123,15 +121,7 @@ export function Header({ eyebrow, title, subtitle, action, backLink }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 shrink-0">
-        {/* Active Model Indicator Tag */}
-        <div className="hidden lg:flex items-center gap-2 border border-[#262626] px-3 py-1.5 bg-[#121212] text-[10px] mono text-[#a3a3a3]">
-          <span className="w-1.5 h-1.5 rounded-full bg-white" />
-          <span>NVIDIA Nemotron 120B // Nemotron Embed 1B</span>
-        </div>
-
-        {action && <div>{action}</div>}
-      </div>
+      {action && <div className="shrink-0">{action}</div>}
     </header>
   )
 }

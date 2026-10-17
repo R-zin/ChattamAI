@@ -64,24 +64,16 @@ export function AnalysisTrace({ trace = [] }) {
   )
 }
 
-export function AppFooter({ extra }) {
-  const [indexSize, setIndexSize] = useState(595)
-  useEffect(() => {
-    let live = true
-    fetchHealth()
-      .then((h) => { if (live && Number.isFinite(h?.index_size)) setIndexSize(h.index_size) })
-      .catch(() => {})
-    return () => { live = false }
-  }, [])
+export function AppFooter() {
   return (
-    <footer className="mt-auto px-6 md:px-8 py-5 border-t border-[#262626] bg-[#0a0a0a] flex flex-col sm:flex-row justify-between items-center gap-3">
-      <div className="text-[10px] mono text-[#737373] uppercase tracking-widest">
-        CHATTAM.AI v2.4.1 • FAISS VECTOR STORE: {indexSize.toLocaleString()} CHUNKS {extra ? `• ${extra}` : ''}
+    <footer className="mt-auto px-6 md:px-8 py-4 border-t border-[#262626] bg-[#0a0a0a] flex flex-col sm:flex-row justify-between items-center gap-3 text-[10px] mono text-[#737373]">
+      <div>
+        Kerala Building Rules (KBR 2019) Automated Compliance Engine
       </div>
-      <div className="text-[10px] mono text-[#737373] flex items-center gap-4">
-        <span className="hover:text-white transition-colors cursor-pointer">KBR 2019 GAZETTE SPEC</span>
-        <span className="text-[#262626]">/</span>
-        <span className="hover:text-white transition-colors cursor-pointer">SYSTEM AUDIT LOG</span>
+      <div className="flex items-center gap-3">
+        <span>LSGD Statutory Guidance</span>
+        <span className="text-[#333333]">•</span>
+        <span>Advisory Clearance</span>
       </div>
     </footer>
   )

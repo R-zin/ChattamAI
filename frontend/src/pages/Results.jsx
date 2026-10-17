@@ -89,7 +89,7 @@ export default function Results() {
     <>
       <Header
         backLink="/"
-        eyebrow={<>COMPLIANCE ASSESSMENT // LSGD ENGINEER REVIEW REQUIRED</>}
+        eyebrow="COMPLIANCE ASSESSMENT"
         title="Residential Building — Kakkanad"
         action={
           <div className="flex items-center gap-3">
@@ -123,9 +123,6 @@ export default function Results() {
           <div className="space-y-3">
             <div className="flex items-center gap-3 flex-wrap">
               <Pill kind={status.pill}>{status.label}</Pill>
-              <span className="text-[10px] text-[#737373] mono tracking-widest uppercase border border-[#262626] px-2 py-0.5">
-                ASSESSMENT REF // KBR-2026-0812-14
-              </span>
             </div>
             <h3 className="text-2xl md:text-3xl font-bold text-white uppercase tracking-tight font-sans">
               Structural & Zoning Compliance Results
@@ -207,7 +204,6 @@ export default function Results() {
                       <span className="text-[#a3a3a3]">{f.label}</span>
                       <div className="text-right">
                         <span className="text-white font-semibold">{f.value}</span>
-                        <div className="text-[8px] mono text-[#737373]">{f.conf}% CONFIDENCE</div>
                       </div>
                     </div>
                   ))}
@@ -221,7 +217,7 @@ export default function Results() {
       </div>
 
       {drawer && <EvidenceDrawer rule={drawer} onClose={() => setDrawer(null)} />}
-      <AppFooter extra="INFERENCE VERIFICATION LATENCY: 42ms" />
+      <AppFooter />
     </>
   )
 }

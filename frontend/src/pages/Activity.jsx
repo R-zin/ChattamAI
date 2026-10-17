@@ -19,9 +19,9 @@ export default function Activity() {
   return (
     <>
       <Header
-        eyebrow="AUDIT TRAIL // SYSTEM EVENT LOG"
+        eyebrow="SYSTEM EVENT LOG"
         title="Activity Log"
-        subtitle="Chronological log of compliance assessments, vector ingestions, and system telemetry"
+        subtitle="Chronological log of compliance assessments, vector ingestions, and system events"
       />
 
       <div className="p-6 md:p-8 space-y-6 bg-[#0a0a0a]">
@@ -60,11 +60,9 @@ export default function Activity() {
             ))}
           </div>
         </div>
-
-        <div className="text-[10px] mono text-[#737373]">[NOTE] Derived from session audit events.</div>
       </div>
 
-      <AppFooter extra="AUDIT TRAIL LOGGED" />
+      <AppFooter />
     </>
   )
 }

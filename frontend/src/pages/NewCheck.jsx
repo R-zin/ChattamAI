@@ -81,9 +81,9 @@ export default function NewCheck() {
   return (
     <>
       <Header
-        eyebrow="SCHEMATIC AUDIT // REGULATORY VERIFICATION PIPELINE"
+        eyebrow="KBR 2019 AUDIT"
         title="New Compliance Check"
-        subtitle="Submit architectural plan specifications to execute automated KBR 2019 compliance analysis"
+        subtitle="Submit architectural plan specifications to execute automated compliance analysis"
       />
 
       <div className="p-6 md:p-8 flex-1 bg-[#0a0a0a]">
@@ -91,7 +91,7 @@ export default function NewCheck() {
           {/* Action Ribbon & Quick Samples */}
           <div className="border border-[#262626] bg-[#121212] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="text-[10px] mono text-[#737373] uppercase tracking-wider font-semibold">
-              QUICK SAMPLE PRESETS:
+              SAMPLE PRESETS:
             </div>
             <div className="flex flex-wrap gap-2">
               {SAMPLES.map((s, i) => (
@@ -127,10 +127,10 @@ export default function NewCheck() {
                 <Icon name="drafting-compass" className="text-xl text-white" />
               </div>
               <div className="text-sm font-bold mono text-white uppercase tracking-wider mb-1">
-                {file ? file.name : 'UPLOAD ARCHITECTURAL BLUEPRINT (PDF, DXF, OR IMAGE)'}
+                {file ? file.name : 'UPLOAD ARCHITECTURAL BLUEPRINT (PDF OR IMAGE)'}
               </div>
               <div className="text-xs text-[#a3a3a3] mb-4 mono">
-                {file ? `${(file.size / 1024).toFixed(0)} KB LOADED — READY TO AUDIT` : 'Drag and drop file here, or click to browse local storage'}
+                {file ? `${(file.size / 1024).toFixed(0)} KB LOADED — READY TO AUDIT` : 'Drag and drop file here, or click to browse'}
               </div>
 
               {previewUrl && (
@@ -190,7 +190,7 @@ export default function NewCheck() {
           {/* Section Divider */}
           <div className="flex items-center gap-4">
             <div className="flex-1 h-px bg-[#262626]" />
-            <span className="text-[10px] mono text-[#737373] uppercase tracking-widest font-semibold">OR ENTER PLAN SPECIFICATION TEXT</span>
+            <span className="text-[10px] mono text-[#737373] uppercase tracking-widest font-semibold">OR ENTER SPECIFICATION TEXT</span>
             <div className="flex-1 h-px bg-[#262626]" />
           </div>
 
@@ -201,7 +201,6 @@ export default function NewCheck() {
                 <span className="w-1.5 h-1.5 bg-white inline-block" />
                 Plan Specification Description
               </div>
-              <div className="text-[10px] mono text-[#737373]">FORMAT: UTF-8 // MONOSPACED SPEC</div>
             </div>
             <textarea
               value={planText}
@@ -250,7 +249,7 @@ export default function NewCheck() {
         </div>
       </div>
 
-      <AppFooter extra="READY FOR ARCHITECTURAL INGESTION" />
+      <AppFooter />
     </>
   )
 }

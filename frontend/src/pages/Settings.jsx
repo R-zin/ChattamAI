@@ -87,18 +87,12 @@ export default function Settings() {
   return (
     <>
       <Header
-        eyebrow="SYSTEM CONFIGURATION // MODEL & VECTOR RETRIEVAL"
+        eyebrow="SYSTEM CONFIGURATION"
         title="Settings"
         subtitle="Manage NVIDIA NIM inference endpoints, vector retrieval parameters, and account security"
       />
 
       <div className="p-6 md:p-8 space-y-6 max-w-4xl bg-[#0a0a0a]">
-        <div className="border border-[#262626] bg-[#121212] px-4 py-3 flex items-start gap-2.5">
-          <span className="text-white font-bold mono text-xs">[NOTE]</span>
-          <span className="text-xs mono text-[#a3a3a3]">
-            Parameter modifications take effect immediately across all newly initiated architectural plan audits.
-          </span>
-        </div>
 
         {/* Retrieval Settings */}
         <section className="bg-[#121212] border border-[#262626] p-6 space-y-4">

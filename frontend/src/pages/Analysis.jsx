@@ -83,17 +83,17 @@ export default function Analysis() {
       <div className="blueprint-grid absolute inset-0 z-0 pointer-events-none" />
 
       {/* Header */}
-      <header className="relative z-10 min-h-[76px] flex items-center justify-between gap-4 px-6 md:px-8 border-b border-[#262626] bg-[#0a0a0a]/90 backdrop-blur-md sticky top-14 md:top-0">
+      <header className="relative z-10 min-h-[70px] flex items-center justify-between gap-4 px-6 md:px-8 border-b border-[#262626] bg-[#0a0a0a]/90 backdrop-blur-md sticky top-14 md:top-0">
         <div className="min-w-0">
-          <div className="text-[10px] mono text-[#a3a3a3] uppercase tracking-[0.2em] mb-0.5 flex items-center gap-2 font-semibold">
+          <div className="text-[9px] mono text-[#a3a3a3] uppercase tracking-[0.15em] mb-0.5 flex items-center gap-2 font-semibold">
             <span className={`w-1.5 h-1.5 rounded-full ${error ? 'bg-white' : 'bg-white animate-pulse'}`} />
-            {error ? 'PROCESSING PIPELINE // VALIDATION ABORTED' : 'PROCESSING PIPELINE // REAL-TIME INFERENCE'}
+            {error ? 'VALIDATION FAILED' : 'REAL-TIME VERIFICATION'}
           </div>
           <h2 className="text-lg md:text-xl font-bold tracking-tight text-white uppercase font-sans truncate">
             {error ? 'Document Verification Failed' : 'Auditing Building Plan'}
           </h2>
           <p className="text-xs text-[#a3a3a3] truncate font-mono">
-            FILE TARGET: <span className="text-white">{state?.meta?.fileName || 'plan_014.pdf'}</span>
+            TARGET: <span className="text-white">{state?.meta?.fileName || 'plan_014.pdf'}</span>
           </p>
         </div>
         <div className="flex items-center gap-4 flex-shrink-0">
@@ -257,13 +257,13 @@ export default function Analysis() {
         </div>
       )}
 
-      <footer className="relative z-10 px-8 py-4 border-t border-[#262626] flex justify-between items-center bg-[#0a0a0a]">
-        <div className="text-[10px] mono text-[#737373] uppercase tracking-widest">
-          CHATTAM.AI // LANGGRAPH VERIFICATION RUNTIME
+      <footer className="relative z-10 px-6 md:px-8 py-4 border-t border-[#262626] flex justify-between items-center bg-[#0a0a0a] text-[10px] mono text-[#737373]">
+        <div>
+          Kerala Building Rules (KBR 2019)
         </div>
-        <div className="text-[10px] mono text-[#a3a3a3] flex items-center gap-2">
+        <div className="flex items-center gap-2 text-[#a3a3a3]">
           <span className={`w-1.5 h-1.5 rounded-full ${error ? 'bg-white' : 'bg-white animate-pulse'}`} />
-          <span>{error ? 'PIPELINE ABORTED // NON-ARCHITECTURAL DOCUMENT' : 'extract_facts → retrieve_kbr_rules → analyze → summarize'}</span>
+          <span>{error ? 'Validation Failed' : 'Facts Extraction → Rule Retrieval → Compliance Reasoning'}</span>
         </div>
       </footer>
     </div>

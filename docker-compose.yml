@@ -17,6 +17,8 @@ services:
       - LLM_MODEL=${LLM_MODEL:-gemini-2.5-flash}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - NVIDIA_BASE_URL=${NVIDIA_BASE_URL}
       - OCR_ENABLED=${OCR_ENABLED:-true}
       - MIN_SCORE=${MIN_SCORE:-0.0}
       - TOP_K=${TOP_K:-6}

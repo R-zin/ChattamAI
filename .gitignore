@@ -49,3 +49,10 @@ SECURITY-AUDIT-REPORT.md
 scratch/
 .agents/
 skills-lock.json
+
+# OS files
+.DS_Store
+
+# Root duplicate document
+/kerala-panchayat-building-rules-2019.pdf
+

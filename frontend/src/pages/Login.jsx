@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { toast } from '../components/Toast.jsx'
 import Icon from '../components/Icon.jsx'
 import {
@@ -13,26 +13,22 @@ import {
 function Field({ label, ...props }) {
   return (
     <div>
-      <label className="block text-xs text-[#9AA7B6] mb-2">{label}</label>
+      <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">{label}</label>
       <input
-        className="w-full mono text-sm bg-[#1C2531] border border-[#222C3A] rounded px-3 py-2.5 text-white outline-none focus:border-[#22D3EE]/50 transition-colors"
+        className="w-full mono text-xs bg-[#0e0e0e] border border-[#333333] px-3 py-2.5 text-white outline-none focus:border-white transition-colors"
         {...props}
       />
     </div>
   )
 }
 
-// 2FA login: a two-stage machine (credentials -> code). Rendered OUTSIDE AppShell
-// (no sidebar/Header) per plan A.2.2. When the API isn't configured the demo runs
-// straight through on mock data with no fake gating.
 export default function Login() {
   const nav = useNavigate()
-  const [stage, setStage] = useState('credentials') // 'credentials' | 'totp'
+  const [stage, setStage] = useState('credentials')
   const [busy, setBusy] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
-  // challenge state (stage 'totp')
   const [otpToken, setOtpToken] = useState(null)
   const [setupRequired, setSetupRequired] = useState(false)
   const [code, setCode] = useState('')
@@ -40,21 +36,22 @@ export default function Login() {
 
   if (!apiAvailable()) {
     return (
-      <div className="min-h-screen blueprint-grid flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-[#10151C] border border-[#222C3A] rounded p-8">
-          <div className="text-[11px] mono uppercase tracking-widest text-[#5B6879]">ChattamAI · KBR Compliance Engine</div>
-          <h1 className="text-xl font-semibold text-white mt-2 mb-3">Sign in</h1>
-          <div className="border-l-2 border-[#22D3EE] bg-[#22D3EE]/5 px-4 py-3 mb-6">
-            <div className="text-[11px] mono text-[#9AA7B6] flex items-start gap-2">
-              <Icon name="info" className="text-[#22D3EE] flex-shrink-0 mt-0.5" />
-              API not configured — this build runs on demo data. Set VITE_API_URL to sign in for real.
-            </div>
+      <div className="min-h-screen blueprint-grid flex items-center justify-center p-6 bg-[#0a0a0a]">
+        <div className="w-full max-w-md bg-[#121212] border border-[#262626] p-8 space-y-6">
+          <div>
+            <div className="text-[10px] mono uppercase tracking-widest text-[#737373]">CHATTAM.AI // KBR COMPLIANCE ENGINE</div>
+            <h1 className="text-xl font-bold text-white mt-1 uppercase font-sans">Auditor Sign In</h1>
           </div>
+
+          <div className="border border-[#262626] bg-[#0e0e0e] p-3 text-xs mono text-[#a3a3a3]">
+            [DEMO MODE] Running with client-side verification. Set VITE_API_URL to connect to the live FastAPI backend.
+          </div>
+
           <button
             onClick={() => nav('/')}
-            className="w-full accent-gradient px-6 py-3 rounded text-sm font-semibold text-black hover:brightness-110"
+            className="w-full bg-white text-black font-mono font-bold text-xs py-3 border border-white hover:bg-[#e5e5e5] transition-colors cursor-pointer"
           >
-            Continue to app
+            ENTER COMPLIANCE WORKSPACE →
           </button>
         </div>
       </div>
@@ -79,7 +76,7 @@ export default function Login() {
         setSetupRequired(!!res.otp_setup_required)
         setStage('totp')
         if (res.otp_setup_required) {
-          toast('This server requires two-factor authentication — enrol under Settings → Security after you sign in.', 'info')
+          toast('Two-factor authentication is required. Enroll after sign in.', 'info')
         }
       }
     } catch (err) {
@@ -106,54 +103,52 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen blueprint-grid flex items-center justify-center p-6">
-      <div className="w-full max-w-md bg-[#10151C] border border-[#222C3A] rounded p-8">
-        <div className="text-[11px] mono uppercase tracking-widest text-[#5B6879]">ChattamAI · KBR Compliance Engine</div>
-        <h1 className="text-xl font-semibold text-white mt-2 mb-6 flex items-center gap-2">
-          <Icon name={stage === 'totp' ? 'shield' : 'key'} className="text-[#22D3EE]" />
-          {stage === 'totp' ? 'Two-factor authentication' : 'Sign in'}
-        </h1>
+    <div className="min-h-screen blueprint-grid flex items-center justify-center p-6 bg-[#0a0a0a]">
+      <div className="w-full max-w-md bg-[#121212] border border-[#262626] p-8 space-y-6">
+        <div>
+          <div className="text-[10px] mono uppercase tracking-widest text-[#737373]">CHATTAM.AI // KBR ENGINE</div>
+          <h1 className="text-xl font-bold text-white mt-1 uppercase font-sans">
+            {stage === 'totp' ? 'Two-Factor Authentication' : 'Auditor Sign In'}
+          </h1>
+        </div>
 
         {stage === 'credentials' ? (
-          <form onSubmit={submitCredentials} className="space-y-5">
-            <Field label="Email" type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
-            <Field label="Password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            <label className="flex items-center gap-2 text-xs mono text-[#9AA7B6] cursor-pointer select-none">
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="accent-[#22D3EE]" />
-              Remember me on this device
+          <form onSubmit={submitCredentials} className="space-y-4">
+            <Field label="EMAIL" type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
+            <Field label="PASSWORD" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+            <label className="flex items-center gap-2 text-xs mono text-[#a3a3a3] cursor-pointer select-none">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="accent-white" />
+              Remember device session
             </label>
             <button
               type="submit"
               disabled={busy}
-              className={`w-full accent-gradient px-6 py-3 rounded text-sm font-semibold text-black hover:brightness-110 flex items-center justify-center gap-2 ${busy ? 'opacity-40 cursor-not-allowed' : ''}`}
+              className="w-full bg-white text-black font-mono font-bold text-xs py-3 border border-white hover:bg-[#e5e5e5] transition-colors cursor-pointer disabled:opacity-40"
             >
-              {busy && <Icon name="loader" className="spin-1" />} Sign in
+              {busy ? 'AUTHENTICATING…' : 'SIGN IN →'}
             </button>
           </form>
         ) : (
-          <form onSubmit={submitCode} className="space-y-5">
+          <form onSubmit={submitCode} className="space-y-4">
             {setupRequired && (
-              <div className="border-l-2 border-[#fbbf24] bg-[#fbbf24]/5 px-4 py-3">
-                <div className="text-[11px] mono text-[#9AA7B6] flex items-start gap-2">
-                  <Icon name="alert-triangle" className="text-[#fbbf24] flex-shrink-0 mt-0.5" />
-                  This server requires two-factor authentication. Sign in, then complete enrolment under Settings → Security.
-                </div>
+              <div className="border border-white bg-[#0e0e0e] p-3 text-xs mono text-white">
+                [!] 2FA required on this auditor server. Verify code to continue.
               </div>
             )}
             {useRecovery ? (
               <Field
-                label="Recovery code"
+                label="RECOVERY CODE"
                 type="text"
                 required
                 autoFocus
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="10-character code"
-                helper="Each recovery code works exactly once."
+                helper="Each recovery code functions exactly once."
               />
             ) : (
               <div>
-                <label className="block text-xs text-[#9AA7B6] mb-2">Authenticator code</label>
+                <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">AUTHENTICATOR CODE</label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -163,25 +158,24 @@ export default function Login() {
                   autoFocus
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  className="w-full mono text-center text-2xl tracking-[0.5em] bg-[#1C2531] border border-[#222C3A] rounded px-3 py-2.5 text-white outline-none focus:border-[#22D3EE]/50 transition-colors"
+                  className="w-full mono text-center text-2xl tracking-[0.4em] bg-[#0e0e0e] border border-[#333333] px-3 py-2.5 text-white outline-none focus:border-white transition-colors"
                   placeholder="000000"
                 />
-                <div className="text-[10px] mono text-[#5B6879] mt-1.5">6-digit code from your authenticator app.</div>
               </div>
             )}
             <button
               type="submit"
               disabled={busy}
-              className={`w-full accent-gradient px-6 py-3 rounded text-sm font-semibold text-black hover:brightness-110 flex items-center justify-center gap-2 ${busy ? 'opacity-40 cursor-not-allowed' : ''}`}
+              className="w-full bg-white text-black font-mono font-bold text-xs py-3 border border-white hover:bg-[#e5e5e5] transition-colors cursor-pointer disabled:opacity-40"
             >
-              {busy && <Icon name="loader" className="spin-1" />} {useRecovery ? 'Use recovery code' : 'Verify'}
+              {busy ? 'VERIFYING…' : useRecovery ? 'USE RECOVERY CODE →' : 'VERIFY CODE →'}
             </button>
             <button
               type="button"
               onClick={() => { setUseRecovery(!useRecovery); setCode('') }}
-              className="w-full text-xs mono text-[#9AA7B6] hover:text-white transition-colors"
+              className="w-full text-xs mono text-[#737373] hover:text-white transition-colors"
             >
-              {useRecovery ? '← Use authenticator code instead' : 'Lost your device? Use a recovery code'}
+              {useRecovery ? '← Use standard authenticator' : 'Lost device? Use emergency recovery code'}
             </button>
           </form>
         )}

@@ -26,6 +26,8 @@ def _default_llm_provider() -> str:
     explicit = os.getenv("LLM_PROVIDER")
     if explicit:
         return explicit.strip().lower()
+    if os.getenv("NVIDIA_API_KEY") or os.getenv("NIM_API_KEY"):
+        return "nim"
     if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
         return "gemini"
     if os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"):
@@ -40,7 +42,44 @@ def _default_llm_model() -> str:
     provider = _default_llm_provider()
     if provider in ("anthropic", "claude"):
         return "claude-3-5-sonnet-20241022"
+    if provider in ("nim", "nvidia", "nemotron"):
+        return "nvidia/nemotron-3.5-super-vl-120b-a12b"
     return "gemini-2.5-flash"
+
+
+def _default_embedding_provider() -> str:
+    explicit = os.getenv("EMBEDDING_PROVIDER")
+    if explicit:
+        return explicit.strip().lower()
+    if os.getenv("NVIDIA_API_KEY") or os.getenv("NIM_API_KEY"):
+        return "nim"
+    if os.getenv("OPENAI_API_KEY") and not os.getenv("OPENAI_API_KEY", "").startswith(
+        "sk-test"
+    ):
+        return "openai"
+    return (
+        "nim" if (os.getenv("NVIDIA_API_KEY") or os.getenv("NIM_API_KEY")) else "openai"
+    )
+
+
+def _default_embedding_model() -> str:
+    explicit = os.getenv("EMBEDDING_MODEL")
+    if explicit:
+        return explicit.strip()
+    provider = _default_embedding_provider()
+    if provider in ("nim", "nvidia", "nemotron"):
+        return "nvidia/nemotron-3-embed-1b"
+    return "text-embedding-3-small"
+
+
+def _default_embedding_dim() -> int:
+    explicit = os.getenv("EMBEDDING_DIM")
+    if explicit:
+        return int(explicit.strip())
+    provider = _default_embedding_provider()
+    if provider in ("nim", "nvidia", "nemotron"):
+        return 2048
+    return 1536
 
 
 def _default_secret_key() -> str:
@@ -113,13 +152,14 @@ class Settings(BaseModel):
         "on",
     )
 
-    # --- Embeddings (OpenAI) ---
+    # --- Embeddings (OpenAI / NVIDIA NIM) ---
+    embedding_provider: str = Field(default_factory=_default_embedding_provider)
     openai_api_key: Optional[str] = os.getenv("OPENAI_API_KEY")
     openai_base_url: Optional[str] = os.getenv("OPENAI_BASE_URL")  # optional proxy
-    embedding_model: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
-    embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "1536"))
+    embedding_model: str = Field(default_factory=_default_embedding_model)
+    embedding_dim: int = Field(default_factory=_default_embedding_dim)
 
-    # --- LLM (Google Gemini & Anthropic Claude) ---
+    # --- LLM (Google Gemini, Anthropic Claude, NVIDIA NIM Nemotron) ---
     llm_provider: str = Field(default_factory=_default_llm_provider)
     gemini_api_key: Optional[str] = Field(
         default_factory=lambda: os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY"))
@@ -131,6 +171,15 @@ class Settings(BaseModel):
     )
     anthropic_base_url: Optional[str] = Field(
         default_factory=lambda: os.getenv("ANTHROPIC_BASE_URL")
+    )
+    nvidia_api_key: Optional[str] = Field(
+        default_factory=lambda: os.getenv("NVIDIA_API_KEY", os.getenv("NIM_API_KEY"))
+    )
+    nvidia_base_url: Optional[str] = Field(
+        default_factory=lambda: os.getenv(
+            "NVIDIA_BASE_URL",
+            os.getenv("NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"),
+        )
     )
     llm_model: str = Field(default_factory=_default_llm_model)
     llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "2048"))

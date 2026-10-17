@@ -36,6 +36,7 @@ from app.rag.ingestion import (
     load_plan_text,
 )
 from app.rag.vectorstore import RuleVectorStore
+from app.rag.validation import validate_building_plan_text
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +138,12 @@ class RAGSystem:
         self.llm_ready = False
         self.llm_provider: str = self.settings.llm_provider
         self.llm_model: str = self.settings.llm_model
+        self.embedding_provider: str = getattr(
+            self.settings, "embedding_provider", "nim"
+        )
+        self.embedding_model: str = getattr(
+            self.settings, "embedding_model", "nvidia/nemotron-3-embed-1b"
+        )
         self._provider = None
         self._store: Optional[RuleVectorStore] = None
         self._llm = None
@@ -157,14 +164,9 @@ class RAGSystem:
             self.embeddings_ready = True
         else:
             try:
-                from app.rag.embeddings import EmbeddingCache, OpenAIEmbeddingProvider
+                from app.rag.embeddings import EmbeddingCache, get_embedding_provider
 
-                base = OpenAIEmbeddingProvider(
-                    model=self.settings.embedding_model,
-                    dim=self.settings.embedding_dim,
-                    api_key=self.settings.openai_api_key,
-                    base_url=self.settings.openai_base_url,
-                )
+                base = get_embedding_provider()
                 # Wrap with the query-embedding cache (transparent: same embed() API).
                 self._provider = (
                     EmbeddingCache(
@@ -176,6 +178,12 @@ class RAGSystem:
                     else base
                 )
                 self.embeddings_ready = True
+                self.embedding_provider = getattr(
+                    base, "provider", self.settings.embedding_provider
+                )
+                self.embedding_model = getattr(
+                    base, "model", self.settings.embedding_model
+                )
             except RuntimeError as exc:
                 self._embed_error = str(exc)
 
@@ -335,6 +343,7 @@ class RAGSystem:
         :meth:`check`.
         """
         self._require_ready()
+        validate_building_plan_text(plan_text)
         started = time.perf_counter()
         result = await self._agraph.ainvoke(
             {"plan_text": plan_text, "top_k": top_k or self.settings.top_k}
@@ -354,6 +363,7 @@ class RAGSystem:
         that case and drive the coroutine on a private loop in a helper thread.
         """
         self._require_ready()
+        validate_building_plan_text(plan_text)
         try:
             asyncio.get_running_loop()
             in_loop = True
@@ -385,11 +395,13 @@ class RAGSystem:
     # ------------------------------------------------------------------
     async def acheck_plan_file(self, path, top_k: Optional[int] = None) -> dict:
         plan_text = await asyncio.to_thread(load_plan_text, path)
+        validate_building_plan_text(plan_text)
         return await self.acheck(plan_text, top_k=top_k)
 
     # ------------------------------------------------------------------
     def check_plan_file(self, path, top_k: Optional[int] = None) -> dict:
         plan_text = load_plan_text(path)
+        validate_building_plan_text(plan_text)
         return self.check(plan_text, top_k=top_k)
 
     @property

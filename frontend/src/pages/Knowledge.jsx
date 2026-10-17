@@ -64,7 +64,7 @@ export default function Knowledge() {
     setPct(0)
     try {
       await ingestRules(false)
-      toast('Corpus ingestion complete — FAISS & BM25 indexes updated.', 'ok')
+      toast('Corpus ingestion complete — FAISS vector index updated.', 'ok')
       const updated = await fetchKbrDocuments()
       setDocList(updated)
     } catch (e) {
@@ -103,75 +103,77 @@ export default function Knowledge() {
   return (
     <>
       <Header
-        eyebrow="Kerala Building Rules"
+        eyebrow="REGULATORY CORPUS // KBR 2019 DATABASE"
         title="KBR Knowledge Base"
-        subtitle="Indexed rule corpus powering retrieval-grounded compliance analysis"
+        subtitle="Indexed statutory rulebook powering dense vector retrieval and compliance reasoning"
         action={
           <button
             onClick={handleIngest}
             disabled={ingesting}
-            className="accent-gradient px-4 py-2 rounded text-sm font-semibold text-black flex items-center gap-2 hover:brightness-110 cursor-pointer disabled:opacity-50"
+            className="bg-white text-black font-mono text-xs font-bold px-4 py-2 border border-white hover:bg-[#e5e5e5] flex items-center gap-2 cursor-pointer transition-colors disabled:opacity-40"
           >
-            <Icon name="upload-cloud" /> {ingesting ? 'Ingesting…' : 'Ingest Rules'}
+            <Icon name="upload-cloud" /> {ingesting ? 'INGESTING CHUNKS…' : 'RE-INDEX RULES'}
           </button>
         }
       />
-      <div className="p-6 md:p-8 space-y-8">
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-px border border-[#222C3A] bg-[#10151C] rounded overflow-hidden divide-x divide-[#222C3A]">
+
+      <div className="p-6 md:p-8 space-y-6 bg-[#0a0a0a]">
+        {/* Metric Strip */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-px border border-[#262626] bg-[#121212] divide-x divide-[#262626]">
           {kbrStats.map((s) => (
-            <div key={s.label} className="bg-[#10151C] p-5 hover:bg-[#161D27] transition-colors">
-              <div className="text-[10px] mono text-[#5B6879] uppercase tracking-wider mb-2">{s.label}</div>
-              <div className="text-base mono text-white tracking-tight flex items-center gap-2">
-                {s.ok && <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] shadow-[0_0_6px_#34D399]" />}
+            <div key={s.label} className="bg-[#121212] p-4 hover:bg-[#181818] transition-colors">
+              <div className="text-[10px] mono text-[#737373] uppercase tracking-wider mb-1 font-semibold">{s.label}</div>
+              <div className="text-sm mono text-white font-bold flex items-center gap-2">
+                {s.ok && <span className="w-1.5 h-1.5 bg-white inline-block" />}
                 {s.value}
               </div>
             </div>
           ))}
         </div>
 
-        {/* Live Rule Search */}
-        <div className="bg-[#10151C] border border-[#222C3A] rounded shadow-lg overflow-hidden p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white tracking-wide uppercase flex items-center gap-2">
-              <Icon name="search" className="text-[#22D3EE]" /> KBR Rule Search
+        {/* Live Vector Search */}
+        <div className="bg-[#121212] border border-[#262626] p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-[#262626] pb-3">
+            <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 mono">
+              <span className="w-1.5 h-1.5 bg-white inline-block" /> Semantic Rule Search
             </h3>
-            <span className="text-[10px] mono text-[#5B6879]">HYBRID FAISS + BM25 RETRIEVAL</span>
+            <span className="text-[10px] mono text-[#737373]">NVIDIA NEMOTRON-3-EMBED-1B (2048-DIM)</span>
           </div>
-          <form onSubmit={handleSearch} className="flex gap-3">
+
+          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search Kerala Building Rules (e.g. setback, staircase, parking, FAR)…"
-              className="flex-1 bg-[#161D27] border border-[#222C3A] rounded px-4 py-2.5 text-sm text-white placeholder-[#5B6879] focus:outline-none focus:border-[#22D3EE]"
+              placeholder="Search Kerala Building Rules (e.g. front setback, FAR, coverage, staircase, fire escape)…"
+              className="flex-1 bg-[#0e0e0e] border border-[#333333] px-4 py-2.5 text-xs mono text-white placeholder-[#525252] focus:outline-none focus:border-white transition-colors"
             />
             <button
               type="submit"
               disabled={searching || !searchQuery.trim()}
-              className="accent-gradient px-5 py-2.5 rounded text-sm font-semibold text-black flex items-center gap-2 hover:brightness-110 cursor-pointer disabled:opacity-50"
+              className="bg-white text-black font-mono text-xs font-bold px-5 py-2.5 border border-white hover:bg-[#e5e5e5] transition-colors cursor-pointer disabled:opacity-40"
             >
-              <Icon name="search" /> {searching ? 'Searching…' : 'Search Rules'}
+              <Icon name="search" /> {searching ? 'SEARCHING…' : 'SEARCH'}
             </button>
           </form>
 
           {searchResults && (
-            <div className="space-y-3 mt-4 pt-2 border-t border-[#222C3A]">
+            <div className="space-y-3 mt-4 pt-4 border-t border-[#262626]">
               {searchResults.length === 0 ? (
-                <div className="text-xs mono text-[#5B6879] p-4 bg-[#161D27] rounded text-center">
-                  No matching building rules found for “{searchQuery}”.
+                <div className="text-xs mono text-[#737373] p-4 bg-[#0e0e0e] border border-[#262626] text-center">
+                  NO MATCHING BUILDING RULES FOUND FOR “{searchQuery}”.
                 </div>
               ) : (
                 searchResults.map((r, i) => (
-                  <div key={i} className="p-4 bg-[#161D27] border border-[#222C3A] rounded space-y-2 hover:border-[#22D3EE]/40 transition-colors">
+                  <div key={i} className="p-4 bg-[#0e0e0e] border border-[#262626] space-y-2 hover:border-white transition-colors">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold mono text-[#22D3EE]">{r.rule_id || `Match #${i + 1}`}</span>
-                      <span className="text-[10px] mono text-[#34D399] bg-[#34D399]/10 px-2 py-0.5 rounded border border-[#34D399]/20">
-                        Score: {r.score}
+                      <span className="text-xs font-bold mono text-white">{r.rule_id || `CHUNK MATCH #${i + 1}`}</span>
+                      <span className="text-[10px] mono text-black bg-white px-2 py-0.5 font-bold">
+                        SIMILARITY: {r.score}
                       </span>
                     </div>
-                    <p className="text-xs text-[#9AA7B6] leading-relaxed">{r.excerpt}</p>
-                    {r.source && <div className="text-[10px] mono text-[#5B6879]">Source: {r.source}</div>}
+                    <p className="text-xs text-[#a3a3a3] leading-relaxed font-mono">{r.excerpt}</p>
+                    {r.source && <div className="text-[10px] mono text-[#737373]">SOURCE // {r.source}</div>}
                   </div>
                 ))
               )}
@@ -180,10 +182,10 @@ export default function Knowledge() {
         </div>
 
         {/* Documents Table */}
-        <div className="bg-[#10151C] border border-[#222C3A] rounded shadow-lg overflow-hidden">
-          <div className="px-6 py-4 border-b border-[#222C3A] bg-[#161D27]/50 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-white tracking-wide uppercase flex items-center gap-2">
-              <Icon name="files" className="text-[#22D3EE]" /> Ingested Documents
+        <div className="bg-[#121212] border border-[#262626] overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-[#262626] bg-[#181818] flex items-center justify-between">
+            <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 mono">
+              <span className="w-1.5 h-1.5 bg-white inline-block" /> Ingested Corpus Documents
             </h3>
             <div>
               <input
@@ -195,30 +197,30 @@ export default function Knowledge() {
               />
               <button
                 onClick={() => uploadRef.current?.click()}
-                className="px-3 py-1.5 rounded text-xs font-medium text-[#22D3EE] border border-[#22D3EE]/40 hover:bg-[#22D3EE]/10 flex items-center gap-1.5 cursor-pointer"
+                className="px-3 py-1.5 text-xs mono text-white border border-[#404040] hover:border-white bg-[#0e0e0e] flex items-center gap-1.5 cursor-pointer transition-colors"
               >
-                <Icon name="upload" /> Upload KBR Doc
+                <Icon name="upload" /> + UPLOAD DOCUMENT
               </button>
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px]">
+            <table className="w-full min-w-[700px] text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#222C3A] bg-[#0C1117]">
-                  {['Document', 'Type', 'Pages', 'Chunks', 'Indexed', 'Status'].map((h) => (
-                    <th key={h} className="px-6 py-3 text-left text-[11px] mono text-[#5B6879] uppercase tracking-wider font-medium">{h}</th>
+                <tr className="border-b border-[#262626] bg-[#0e0e0e]">
+                  {['Document File', 'Format', 'Pages', 'Chunks', 'Indexed On', 'Index Status'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-[10px] mono text-[#737373] uppercase tracking-wider font-semibold">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#222C3A]">
+              <tbody className="divide-y divide-[#262626]">
                 {docList.map((d, idx) => (
-                  <tr key={d.doc || idx} className="hover:bg-[#161D27] transition-colors">
-                    <td className="px-6 py-4 text-sm text-white">{d.doc}</td>
-                    <td className="px-6 py-4"><span className="text-[10px] mono px-2 py-0.5 rounded border border-[#222C3A] bg-[#161D27] text-[#9AA7B6]">{d.type}</span></td>
-                    <td className="px-6 py-4 text-sm mono text-[#9AA7B6]">{d.pages}</td>
-                    <td className="px-6 py-4 text-sm mono text-[#9AA7B6]">{d.chunks}</td>
-                    <td className="px-6 py-4 text-xs mono text-[#5B6879]">{d.indexed}</td>
-                    <td className="px-6 py-4"><Pill kind="pill-ok">{d.status}</Pill></td>
+                  <tr key={d.doc || idx} className="hover:bg-[#181818] transition-colors">
+                    <td className="px-4 py-3.5 text-xs font-semibold text-white">{d.doc}</td>
+                    <td className="px-4 py-3.5"><span className="text-[10px] mono px-2 py-0.5 border border-[#262626] bg-[#0a0a0a] text-[#a3a3a3]">{d.type}</span></td>
+                    <td className="px-4 py-3.5 text-xs mono text-[#a3a3a3]">{d.pages}</td>
+                    <td className="px-4 py-3.5 text-xs mono text-white font-medium">{d.chunks}</td>
+                    <td className="px-4 py-3.5 text-[10px] mono text-[#737373]">{d.indexed}</td>
+                    <td className="px-4 py-3.5"><Pill kind="pill-ok">{d.status}</Pill></td>
                   </tr>
                 ))}
               </tbody>
@@ -228,42 +230,37 @@ export default function Knowledge() {
 
         {/* Ingestion Progress */}
         {(ingesting || pct > 0) && (
-          <div className="bg-[#10151C] border border-[#222C3A] rounded p-6 fade-rise">
-            <div className="text-[11px] mono text-[#5B6879] uppercase tracking-widest mb-4">Ingestion Progress</div>
+          <div className="bg-[#121212] border border-[#262626] p-6 fade-rise space-y-4">
+            <div className="text-[10px] mono text-[#a3a3a3] uppercase tracking-widest font-semibold">Corpus Ingestion Progress</div>
             <div className="flex items-center gap-0 mb-4">
               {STEPS.map((s, i) => (
                 <React.Fragment key={s}>
-                  {i > 0 && <div className={`flex-1 h-px ${i <= step ? 'bg-[#22D3EE]' : 'bg-[#222C3A]'}`} />}
+                  {i > 0 && <div className={`flex-1 h-px ${i <= step ? 'bg-white' : 'bg-[#262626]'}`} />}
                   <div className="flex flex-col items-center px-1">
-                    <div className={`w-9 h-9 rounded-full flex items-center justify-center border-2 ${
-                      i < step ? 'border-[#22D3EE] text-[#22D3EE]' : i === step ? 'border-[#22D3EE] text-[#22D3EE] pulse-accent' : 'border-[#222C3A] text-[#5B6879]'
+                    <div className={`w-8 h-8 flex items-center justify-center border ${
+                      i <= step ? 'border-white bg-[#0e0e0e] text-white' : 'border-[#262626] text-[#737373]'
                     }`}>
-                      {i < step || (i === step && step === 4) ? <Icon name="check-circle" className="text-base" /> : i === step ? <Icon name="loader" className="text-base spin-1" /> : <Icon name="loader" className="text-base opacity-30" />}
+                      {i < step || (i === step && step === 4) ? <Icon name="check" className="text-sm" /> : <span className="mono text-[10px]">{i + 1}</span>}
                     </div>
-                    <div className={`text-[9px] mono uppercase tracking-wider mt-2 whitespace-nowrap ${i <= step ? 'text-[#22D3EE]' : 'text-[#5B6879]'}`}>{s}</div>
+                    <div className={`text-[9px] mono uppercase tracking-wider mt-2 whitespace-nowrap ${i <= step ? 'text-white' : 'text-[#737373]'}`}>{s}</div>
                   </div>
                 </React.Fragment>
               ))}
             </div>
-            <div className="flex items-center justify-between gap-4">
-              <div className="text-xs mono text-[#9AA7B6]">
-                {step === 4 ? 'Ingestion complete.' : `Embedding chunk ${Math.min(2481, Math.round((pct / 100) * 2481)).toLocaleString()} / 2,481…`}
-                <span className="text-[#5B6879]"> &nbsp;model: text-embedding-3-small</span>
-              </div>
-              <div className="text-xs mono text-[#22D3EE]">{pct}%</div>
+            <div className="flex items-center justify-between text-xs mono">
+              <span className="text-[#a3a3a3]">
+                {step === 4 ? 'Ingestion and indexing complete.' : `Embedding chunk batch… (${pct}%)`}
+              </span>
+              <span className="text-white font-bold">{pct}%</span>
             </div>
-            <div className="mt-3 h-1.5 bg-[#1C2531] rounded-full overflow-hidden">
-              <div className="h-full accent-gradient transition-all duration-150" style={{ width: `${pct}%` }} />
+            <div className="h-1 bg-[#262626] overflow-hidden">
+              <div className="h-full bg-white transition-all duration-150" style={{ width: `${pct}%` }} />
             </div>
           </div>
         )}
-
-        <div className="flex items-start gap-2 text-[11px] mono text-[#5B6879]">
-          <Icon name="info" className="text-[#22D3EE]/60 flex-shrink-0 mt-0.5" />
-          Retrieval quality depends on corpus coverage — re-ingest after KBR amendments.
-        </div>
       </div>
-      <AppFooter extra="LATENCY: 420ms" />
+
+      <AppFooter extra="FAISS HYBRID RETRIEVAL OPERATIONAL" />
     </>
   )
 }

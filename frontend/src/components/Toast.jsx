@@ -20,9 +20,12 @@ export function ToastHost() {
   return ReactDOM.createPortal(
     <div className="fixed bottom-6 right-6 z-[100] space-y-2">
       {items.map((t) => (
-        <div key={t.id} className="fade-rise bg-[#161D27] border border-[#222C3A] border-l-2 rounded px-4 py-3 shadow-2xl flex items-center gap-3 max-w-sm" style={{ borderLeftColor: t.tone === 'ok' ? 'var(--ok)' : 'var(--accent)' }}>
-          <Icon name={t.tone === 'ok' ? 'check-circle' : 'info'} className={t.tone === 'ok' ? 'text-[#34D399]' : 'text-[#22D3EE]'} />
-          <span className="text-xs text-[#E7ECF2] leading-snug">{t.msg}</span>
+        <div
+          key={t.id}
+          className="fade-rise bg-[#121212] border border-[#404040] border-l-2 border-l-white px-4 py-3 shadow-2xl flex items-center gap-3 max-w-sm"
+        >
+          <Icon name={t.tone === 'ok' ? 'check-circle' : 'info'} className="text-white shrink-0" />
+          <span className="text-xs mono text-[#f5f5f5] leading-snug">{t.msg}</span>
         </div>
       ))}
     </div>,

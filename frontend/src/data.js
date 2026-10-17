@@ -19,20 +19,31 @@ export const apiAvailable = () => API_URL.length > 0
 // 1-hr JWT); localStorage only when the user opts "remember me". Keyed 'chattam.*'
 // to match the existing sessionStorage convention.
 const TOKEN_KEY = 'chattam.token'
-export const getToken = () =>
-  sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY)
+export const getToken = () => {
+  try {
+    return (typeof sessionStorage !== 'undefined' && sessionStorage ? sessionStorage.getItem(TOKEN_KEY) : null) ||
+           (typeof localStorage !== 'undefined' && localStorage ? localStorage.getItem(TOKEN_KEY) : null) || null
+  } catch {
+    return null
+  }
+}
 export const setToken = (token, remember = false) => {
   clearToken()
-  ;(remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token)
+  try {
+    const storage = remember ? (typeof localStorage !== 'undefined' ? localStorage : null) : (typeof sessionStorage !== 'undefined' ? sessionStorage : null)
+    storage?.setItem(TOKEN_KEY, token)
+  } catch {}
 }
 export const clearToken = () => {
-  sessionStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(TOKEN_KEY)
+  try {
+    if (typeof sessionStorage !== 'undefined' && sessionStorage) sessionStorage.removeItem(TOKEN_KEY)
+    if (typeof localStorage !== 'undefined' && localStorage) localStorage.removeItem(TOKEN_KEY)
+  } catch {}
 }
 export const isAuthed = () => !!getToken()
 
-export const embeddingModel = 'text-embedding-3-small (1536-dim)'
-export const analysisModel = 'gemini-2.5-flash'
+export const embeddingModel = 'nvidia/nemotron-3-embed-1b (2048-dim)'
+export const analysisModel = 'nvidia/nemotron-3.5-super-vl-120b-a12b'
 
 // ---- status derivation (design-system rule) -------------------------------
 export function deriveStatus(response) {
@@ -195,6 +206,61 @@ export const pipelineScript = [
   { t: 14, log: 'Assessment complete — 3 potential issues detected.', stage: 4 },
 ]
 
+// Validation for architectural building plan specifications
+const BUILDING_ENTITIES = [
+  'building', 'buildings', 'structure', 'structures', 'house', 'houses',
+  'villa', 'villas', 'apartment', 'apartments', 'flat', 'flats',
+  'residence', 'residential', 'commercial', 'office', 'hospital',
+  'clinic', 'dispensary', 'school', 'college', 'institution',
+  'institutional', 'mall', 'complex', 'multiplex', 'warehouse',
+  'factory', 'industrial', 'educational', 'hazardous', 'mercantile',
+  'assembly', 'occupancy', 'dwelling', 'shed', 'godown', 'cottage',
+  'auditorium', 'lodge', 'hostel', 'hotel', 'kbr', 'kpmbr',
+  'kerala building', 'lsgd', 'panchayat', 'municipality', 'corporation',
+  'group a', 'group a1', 'group a2', 'group b', 'group c', 'group d',
+  'group e', 'group f', 'group g', 'group h', 'group i', 'group j',
+  'development', 'construction', 'blueprint', 'floor plan', 'site plan',
+  'layout plan', 'architectural', 'drawing',
+]
+
+const PLANNING_PARAMETERS = [
+  'floor', 'floors', 'storey', 'storeys', 'story', 'stories', 'level',
+  'levels', 'height', 'tall', 'depth', 'width', 'length', 'dimension',
+  'dimensions', 'meter', 'meters', 'metre', 'metres', 'centimeter',
+  'centimeters', 'centimetre', 'centimetres', 'sqm', 'sq.m', 'sq m',
+  'sq.metre', 'sq.metres', 'sq.meter', 'sq.meters', 'square metre',
+  'square metres', 'square meter', 'square meters', 'sq ft', 'sqft',
+  'square feet', 'cent', 'cents', 'plot', 'site', 'area', 'built-up',
+  'builtup', 'built up', 'plinth', 'carpet area', 'fsi', 'far',
+  'floor space index', 'floor area ratio', 'coverage', 'ground coverage',
+  'setback', 'setbacks', 'set-back', 'set-backs', 'front setback',
+  'rear setback', 'side setback', 'front distance', 'rear distance',
+  'side distance', 'front open space', 'rear open space', 'side open space',
+  'open space', 'open spaces', 'road width', 'street width', 'access width',
+  'road', 'street', 'boundary', 'boundaries', 'abutting', 'parking',
+  'car parking', 'staircase', 'stairs', 'fire escape', 'fire safety',
+  'exit', 'corridor', 'passage', 'balcony', 'verandah', 'veranda',
+  'terrace', 'mezzanine', 'basement', 'cantilever', 'projection',
+  'canopy', 'parapet', 'ground floor', 'first floor', 'second floor',
+  'living room', 'bedroom', 'kitchen',
+]
+
+export function isBuildingPlanText(text) {
+  if (!text || typeof text !== 'string') return false
+  const cleaned = text.trim()
+  if (cleaned.length < 15) return false
+  const lower = cleaned.toLowerCase()
+  let entityHits = 0
+  for (const term of BUILDING_ENTITIES) {
+    if (lower.includes(term)) entityHits++
+  }
+  let paramHits = 0
+  for (const term of PLANNING_PARAMETERS) {
+    if (lower.includes(term)) paramHits++
+  }
+  return (entityHits >= 1 && paramHits >= 1) || paramHits >= 2
+}
+
 // ---- live API (optional) ----------------------------------------------------
 async function request(path, opts = {}) {
   const headers = { ...(opts.headers || {}) }
@@ -208,14 +274,30 @@ async function request(path, opts = {}) {
     }
     throw new Error('API 401')
   }
-  if (!res.ok) throw new Error(`API ${res.status}`)
+  if (!res.ok) {
+    let detail = ''
+    try {
+      const errJson = await res.json()
+      detail = errJson?.detail || errJson?.message || ''
+    } catch (_) {}
+    throw new Error(detail || `API ${res.status}`)
+  }
   return res.json()
 }
 
 export async function analyzePlan({ planText, file, top_k }) {
   if (!apiAvailable()) {
     // graceful fallback: simulate latency + return the flagship demo payload
-    await new Promise((r) => setTimeout(r, 1600))
+    await new Promise((r) => setTimeout(r, 600))
+    if (file) {
+      const nonPlanKeywords = ['recipe', 'resume', 'invoice', 'code', 'script', 'dummy', 'invalid', 'random', 'test_non_plan']
+      const lowerName = (file.name || '').toLowerCase()
+      if (nonPlanKeywords.some((kw) => lowerName.includes(kw))) {
+        throw new Error('The content of the file is not a building plan.')
+      }
+    } else if (planText && !isBuildingPlanText(planText)) {
+      throw new Error('The content of the file is not a building plan.')
+    }
     return demoResponse
   }
   if (file) {

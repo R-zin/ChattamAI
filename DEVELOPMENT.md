@@ -19,7 +19,7 @@ against the KBR and flags potential violations.
 - **FAISS** (CPU) — vector store for KBR chunks (`app/rag/vectorstore.py`)
 - **OpenAI embeddings** (`text-embedding-3-small`) — for semantic retrieval
 - **Google Gemini** (`gemini-2.5-flash`) — the primary analysis LLM, using the
-  official `google-genai` SDK (`GEMINI_API_KEY`), with Anthropic Claude & OpenRouter support
+  official `google-genai` SDK (`GEMINI_API_KEY`), with NVIDIA NIM Nemotron (`nvidia/nemotron-3.5-super-vl-120b-a12b`), Anthropic Claude & OpenRouter support
 - **pypdf** — text extraction from PDFs
 - **SQLAlchemy + passlib[bcrypt] + python-jose** — the auth/user store
   (`app/services/`), used by the `/auth/*` routes (see §7)
@@ -117,8 +117,10 @@ every credential exists. The cached `get_settings()` is the single source of tru
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI embedding model |
 | `EMBEDDING_DIM` | `1536` | Must match the model (index is built to this dim) |
 | `GEMINI_API_KEY` | — | Google AI Studio API key for Gemini LLM |
-| `LLM_PROVIDER` | `gemini` | Primary LLM provider (`gemini`, `anthropic`, `openrouter`) |
-| `LLM_MODEL` | `gemini-2.5-flash` | Model identifier (e.g. `gemini-2.5-flash`, `claude-3-5-sonnet-20241022`) |
+| `LLM_PROVIDER` | `gemini` | Primary LLM provider (`gemini`, `anthropic`, `openrouter`, `nim`) |
+| `LLM_MODEL` | `gemini-2.5-flash` | Model identifier (e.g. `gemini-2.5-flash`, `nvidia/nemotron-3.5-super-vl-120b-a12b`, `claude-3-5-sonnet-20241022`) |
+| `NVIDIA_API_KEY` | — | NVIDIA API key for NIM / Nemotron (`nvapi-...`) |
+| `NVIDIA_BASE_URL` | `https://integrate.api.nvidia.com/v1` | NVIDIA NIM endpoint (hosted catalog or local container) |
 | `ANTHROPIC_BASE_URL` | `http://127.0.0.1:8082` | Local Claude proxy (optional alternative) |
 | `ANTHROPIC_AUTH_TOKEN` | `freecc` | Proxy auth token (optional alternative) |
 | `LLM_MAX_TOKENS` | `2048` | Max completion tokens |

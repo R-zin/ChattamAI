@@ -269,6 +269,8 @@ def health(rag: RAGSystem = Depends(get_rag)) -> HealthResponse:
         llm_ready=rag.llm_ready,
         llm_provider=getattr(rag, "llm_provider", None),
         llm_model=getattr(rag, "llm_model", None),
+        embedding_provider=getattr(rag, "embedding_provider", None),
+        embedding_model=getattr(rag, "embedding_model", None),
     )
 
 
@@ -316,7 +318,7 @@ def check(
 ) -> ComplianceResponse:
     try:
         result = rag.check(body.plan_text, top_k=body.top_k)
-    except RuntimeError as exc:
+    except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     _persist_report(
         plan_text=body.plan_text,

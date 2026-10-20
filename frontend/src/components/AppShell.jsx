@@ -4,6 +4,7 @@ import Icon from './Icon.jsx'
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: 'layout-dashboard', end: true },
+  { to: '/workbench', label: 'PDF Visual Workbench', icon: 'eye' },
   { to: '/new-check', label: 'New Compliance Check', icon: 'plus-square' },
   { to: '/projects', label: 'Projects', icon: 'folder' },
   { to: '/reports', label: 'Reports', icon: 'file-text' },

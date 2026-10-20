@@ -285,6 +285,118 @@ async function request(path, opts = {}) {
   return res.json()
 }
 
+export async function checkPdfV2(file) {
+  if (!apiAvailable()) {
+    await new Promise((r) => setTimeout(r, 800))
+    return {
+      is_compliant: false,
+      verdict: "Non-Compliant",
+      executive_summary: "Building plan has 1 statutory violation requiring design revision. Front Setback is 2.2m, falling short of the required 3.0m under Rule 25.",
+      plan_facts: {
+        jurisdiction: "panchayat",
+        occupancy: "A1",
+        plot_area_sqm: 240.0,
+        ground_coverage_sqm: 96.0,
+        built_up_area_sqm: 165.0,
+        building_height_m: 8.2,
+        number_of_floors: 2,
+        road_width_m: 4.5,
+        front_setback_m: 2.2,
+        rear_setback_m: 2.0,
+        side_setback_1_m: 1.5,
+        side_setback_2_m: 1.2,
+        parking_slots_provided: 1,
+      },
+      violations: [
+        {
+          rule_reference: "Rule 25(1) / Table 6",
+          parameter: "Front Setback",
+          severity: "high",
+          actual_value: 2.2,
+          required_value: 3.0,
+          unit: "m",
+          deficit: 0.8,
+          description: "Front Setback is 2.2m, but statutory minimum is 3.0m (deficit of 0.8m).",
+          statutory_clause: "Rule 25(1) Table 6: Minimum Open Spaces",
+        }
+      ],
+      exonerated_violations: [],
+      applied_concessions: ["KPBR Rule 27 rural coverage relaxation applied"],
+      eligible_concessions: ["KPBR Rule 27"],
+      remediations: [
+        {
+          parameter: "Front Setback",
+          deficit_summary: "Short by 0.8 m",
+          action: "Recede ground-floor car porch canopy and front boundary projection by 0.8m to satisfy Rule 25.",
+          target_value: "Minimum 3.0 m clear setback",
+        }
+      ],
+      telemetry: { intake_ms: 22.4, symbolic_eval_ms: 2.1, critic_ms: 1.8 },
+    }
+  }
+
+  const fd = new FormData()
+  fd.append('file', file)
+  return request('/api/v2/check/pdf', { method: 'POST', body: fd })
+}
+
+export async function exportPdfReportV2(file) {
+  if (!apiAvailable()) {
+    throw new Error('API server not connected. Connect backend to download compiled PDF certificate.')
+  }
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await fetch(`${API_URL}/api/v2/check/pdf/export-report`, {
+    method: 'POST',
+    body: fd,
+  })
+  if (!res.ok) throw new Error('Failed to export PDF report')
+  const blob = await res.blob()
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `LSGD_KBR_Audit_${file.name.replace(/\.pdf$/i, '')}.pdf`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+}
+
+export async function evaluatePlanFactsV2(facts) {
+  if (!apiAvailable()) {
+    return {
+      is_compliant: true,
+      summary_verdict: "Fully Compliant with KMBR/KPBR 2019",
+      violations: [],
+      coverage_percent: 40.0,
+      max_coverage_percent: 65.0,
+      fsi_actual: 0.75,
+      base_fsi: 2.75,
+      max_fsi_permitted: 4.0,
+      parking_required: 1,
+      parking_slots_provided: 1,
+      concessions_eligible: [],
+      applied_concessions: [],
+      rule_citations: ["KMBR/KPBR 2019 Rule 24 Table 4", "Rule 25 Table 6"],
+    }
+  }
+  return request('/api/v2/evaluate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(facts),
+  })
+}
+
+export async function exportKSmartV2(payload) {
+  if (!apiAvailable()) {
+    return { status: "MOCK_EXPORTED", payload }
+  }
+  return request('/api/v2/reports/ksmart', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function analyzePlan({ planText, file, top_k }) {
   if (!apiAvailable()) {
     // graceful fallback: simulate latency + return the flagship demo payload

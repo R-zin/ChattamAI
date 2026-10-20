@@ -15,6 +15,7 @@ import Projects from './pages/Projects.jsx'
 import Activity from './pages/Activity.jsx'
 import Settings from './pages/Settings.jsx'
 import Login from './pages/Login.jsx'
+import VisualWorkbench from './pages/VisualWorkbench.jsx'
 import { apiAvailable, isAuthed } from './data.js'
 
 // Mock-mode exempt: when the API isn't configured the demo renders on static
@@ -39,6 +40,7 @@ export default function App() {
                 <Routes>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/new-check" element={<NewCheck />} />
+                  <Route path="/workbench" element={<VisualWorkbench />} />
                   <Route path="/analysis" element={<Analysis />} />
                   <Route path="/results/demo" element={<Results />} />
                   <Route path="/results/insufficient" element={<Insufficient />} />

@@ -147,7 +147,9 @@ async def check_architectural_pdf(
         critic = result["critic_result"]
         evaluation_dict = dict(result.get("symbolic_result", {}))
         evaluation_dict["is_compliant"] = critic["is_compliant"]
-        evaluation_dict["summary_verdict"] = "Compliant" if critic["is_compliant"] else "Non-Compliant"
+        evaluation_dict["summary_verdict"] = (
+            "Compliant" if critic["is_compliant"] else "Non-Compliant"
+        )
         evaluation_dict["violations"] = critic["active_violations"]
         evaluation_dict["applied_concessions"] = critic["applied_concessions"]
         evaluation_dict["concessions_eligible"] = critic["eligible_concessions"]
@@ -272,7 +274,9 @@ def export_ksmart_payload(
     return {
         "ksmart_metadata": {
             "version": "1.0",
-            "statutory_rules": "KPBR_2019" if f.jurisdiction == Jurisdiction.PANCHAYAT else "KMBR_2019",
+            "statutory_rules": "KPBR_2019"
+            if f.jurisdiction == Jurisdiction.PANCHAYAT
+            else "KMBR_2019",
             "jurisdiction_type": f.jurisdiction.value.upper(),
             "occupancy_classification": f"GROUP_{f.occupancy.value}",
         },
@@ -305,5 +309,3 @@ def export_ksmart_payload(
         },
         "remediation_actions": req.remediations or [],
     }
-
-

@@ -94,7 +94,7 @@ async def test_multi_agent_graph_compliant_flow(compliant_pdf: Path):
     """Test full multi-agent flow on a compliant PDF."""
     graph = build_multi_agent_graph()
     result = await graph.ainvoke({"pdf_path": str(compliant_pdf)})
-    
+
     assert result["critic_result"]["is_compliant"] is True
     assert len(result["critic_result"]["active_violations"]) == 0
     assert "FULLY COMPLIANT" in result["executive_summary"]
@@ -108,7 +108,7 @@ async def test_statutory_critic_concession_application(small_plot_concession_pdf
     """Test that Statutory Critic suppresses false positive violations under Rule 27."""
     graph = build_multi_agent_graph()
     result = await graph.ainvoke({"pdf_path": str(small_plot_concession_pdf)})
-    
+
     critic = result["critic_result"]
     assert critic["is_compliant"] is True
     assert len(critic["active_violations"]) == 0
@@ -120,11 +120,11 @@ async def test_remediation_generation_on_violations(non_compliant_pdf: Path):
     """Test that Remediation Agent generates specific architectural fixes."""
     graph = build_multi_agent_graph()
     result = await graph.ainvoke({"pdf_path": str(non_compliant_pdf)})
-    
+
     assert result["critic_result"]["is_compliant"] is False
     remediations = result["remediations"]
     assert len(remediations) > 0
-    
+
     # Check that remediation contains concrete actions
     params_remediated = [r["parameter"] for r in remediations]
     assert "Ground Coverage" in params_remediated

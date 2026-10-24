@@ -177,7 +177,9 @@ def test_commercial_parking_rules():
     )
     result = evaluate_plan_facts(facts)
     assert result.is_compliant is False
-    parking_violation = [v for v in result.violations if v.parameter == "Car Parking Slots"]
+    parking_violation = [
+        v for v in result.violations if v.parameter == "Car Parking Slots"
+    ]
     assert len(parking_violation) == 1
     assert parking_violation[0].actual_value == 2.0
     assert parking_violation[0].required_value == 4.0
@@ -365,7 +367,7 @@ def test_statutory_critic_side_setback_concession_distinction():
     critic = critique_violations(facts, [v1, v2])
     # Side Setback 2 (0.7m >= 0.6m) is exonerated under Rule 27(3)
     # Side Setback 1 (0.7m < 0.9m) must remain active
-    assert any(x["parameter"] == "Side Setback 2" for x in critic["exonerated_violations"])
+    assert any(
+        x["parameter"] == "Side Setback 2" for x in critic["exonerated_violations"]
+    )
     assert any(v.parameter == "Side Setback 1" for v in critic["active_violations"])
-
-

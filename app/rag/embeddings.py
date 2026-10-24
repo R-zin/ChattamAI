@@ -266,7 +266,12 @@ class NvidiaEmbeddingProvider(EmbeddingProvider):
             chosen_model = self.DEFAULT_MODEL
 
         self.model = chosen_model
-        self.dim = dim or getattr(settings, "embedding_dim", None) or self.DEFAULT_DIM
+        if dim is not None:
+            self.dim = dim
+        elif self.model == self.DEFAULT_MODEL:
+            self.dim = self.DEFAULT_DIM
+        else:
+            self.dim = getattr(settings, "embedding_dim", None) or self.DEFAULT_DIM
         self.batch_size = (
             batch_size or getattr(settings, "embedding_batch_size", None) or 64
         )

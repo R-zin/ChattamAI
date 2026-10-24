@@ -35,7 +35,9 @@ def evaluate_plan_facts(facts: PlanFacts) -> ComplianceEvaluation:
     is_small_plot = any("Small Plot" in c for c in eligible_concessions)
 
     # 2. Ground Coverage Check
-    actual_coverage_pct = round((facts.ground_coverage_sqm / facts.plot_area_sqm) * 100, 2)
+    actual_coverage_pct = round(
+        (facts.ground_coverage_sqm / facts.plot_area_sqm) * 100, 2
+    )
     max_cov_pct, base_far, max_far, cov_citation = get_coverage_and_far(
         facts.occupancy,
         facts.road_width_m,
@@ -48,9 +50,13 @@ def evaluate_plan_facts(facts: PlanFacts) -> ComplianceEvaluation:
     if is_small_plot and facts.occupancy == OccupancyGroup.A1_RESIDENTIAL:
         if max_cov_pct < 75.0:
             max_cov_pct = 75.0
-            citations.append("KMBR/KPBR Chapter VI Rule 27: Small plot coverage allowance up to 75%")
+            citations.append(
+                "KMBR/KPBR Chapter VI Rule 27: Small plot coverage allowance up to 75%"
+            )
             if actual_coverage_pct > 65.0:
-                applied_concessions.append("Chapter VI: Coverage extended up to 75% for small plot")
+                applied_concessions.append(
+                    "Chapter VI: Coverage extended up to 75% for small plot"
+                )
 
     if actual_coverage_pct > max_cov_pct:
         deficit = round(actual_coverage_pct - max_cov_pct, 2)
@@ -105,16 +111,38 @@ def evaluate_plan_facts(facts: PlanFacts) -> ComplianceEvaluation:
     citations.append("KMBR/KPBR 2019 Rule 25 & Table 6: Open Spaces / Setbacks")
 
     setback_checks = [
-        ("Front Setback", facts.front_setback_m, req_setbacks["front"], "Rule 25(1) / Table 6"),
-        ("Rear Setback", facts.rear_setback_m, req_setbacks["rear"], "Rule 25(2) / Table 6"),
-        ("Side Setback 1", facts.side_setback_1_m, req_setbacks["side_1"], "Rule 25(3) / Table 6"),
-        ("Side Setback 2", facts.side_setback_2_m, req_setbacks["side_2"], "Rule 25(3) / Table 6"),
+        (
+            "Front Setback",
+            facts.front_setback_m,
+            req_setbacks["front"],
+            "Rule 25(1) / Table 6",
+        ),
+        (
+            "Rear Setback",
+            facts.rear_setback_m,
+            req_setbacks["rear"],
+            "Rule 25(2) / Table 6",
+        ),
+        (
+            "Side Setback 1",
+            facts.side_setback_1_m,
+            req_setbacks["side_1"],
+            "Rule 25(3) / Table 6",
+        ),
+        (
+            "Side Setback 2",
+            facts.side_setback_2_m,
+            req_setbacks["side_2"],
+            "Rule 25(3) / Table 6",
+        ),
     ]
 
     for param, actual, required, ref in setback_checks:
         if actual < required:
             deficit = round(required - actual, 2)
-            concession_note = " (evaluated with Chapter VI Concessions)" if is_small_plot else ""
+            concession_note = (
+                " (evaluated with Chapter VI Concessions)" if is_small_plot else ""
+            )
             violations.append(
                 RuleViolation(
                     rule_reference=ref,
@@ -129,7 +157,9 @@ def evaluate_plan_facts(facts: PlanFacts) -> ComplianceEvaluation:
                         f"(deficit of {deficit}m){concession_note}."
                     ),
                     statutory_clause=f"{ref}: Minimum open space requirement",
-                    concession_applied="Chapter VI Small Plot" if is_small_plot else None,
+                    concession_applied="Chapter VI Small Plot"
+                    if is_small_plot
+                    else None,
                     page_number=facts.source_pdf_page,
                 )
             )
@@ -163,7 +193,9 @@ def evaluate_plan_facts(facts: PlanFacts) -> ComplianceEvaluation:
     if is_compliant:
         summary_verdict = "Fully Compliant with KMBR/KPBR 2019"
         if applied_concessions:
-            summary_verdict += f" (with {len(applied_concessions)} statutory concession(s) applied)"
+            summary_verdict += (
+                f" (with {len(applied_concessions)} statutory concession(s) applied)"
+            )
     else:
         summary_verdict = (
             f"Non-Compliant: {len(violations)} statutory violation"

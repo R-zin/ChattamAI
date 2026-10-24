@@ -221,7 +221,7 @@ def test_nim_client_complete_vision():
 def test_live_nim_client_complete():
     """Verify live connectivity and completion against NVIDIA NIM API."""
     client = NimClient()
-    out = client.complete(system="Answer concisely.", user="Reply with the single word PONG")
+    out = client.complete(
+        system="Answer concisely.", user="Reply with the single word PONG"
+    )
     assert "PONG" in out.upper()
-
-

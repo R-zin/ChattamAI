@@ -131,7 +131,9 @@ def test_normalizer_build_plan_facts(sample_drawing_pdf: Path):
     assert facts.front_setback_m == 3.40
 
 
-def test_normalizer_raises_error_on_missing_mandatory_params(tmp_path: Path, monkeypatch):
+def test_normalizer_raises_error_on_missing_mandatory_params(
+    tmp_path: Path, monkeypatch
+):
     """Ensure silent dummy fallbacks are eliminated; unparseable PDF raises ValueError."""
     empty_pdf = tmp_path / "empty_blueprint.pdf"
     doc = fitz.open()
@@ -140,7 +142,10 @@ def test_normalizer_raises_error_on_missing_mandatory_params(tmp_path: Path, mon
     doc.close()
 
     import app.pdf_intel.vision_extractor as ve
-    monkeypatch.setattr(ve, "extract_plan_facts_with_nemotron_vl", lambda *a, **kw: None)
+
+    monkeypatch.setattr(
+        ve, "extract_plan_facts_with_nemotron_vl", lambda *a, **kw: None
+    )
 
     with pytest.raises(ValueError, match="Failed to extract mandatory parameters"):
         build_plan_facts_from_pdf(empty_pdf)
@@ -154,10 +159,19 @@ def test_render_pdf_page_to_image(sample_drawing_pdf: Path):
     assert img_bytes[:2] == b"\xff\xd8"  # JPEG magic bytes
 
 
-def test_extract_plan_facts_with_nemotron_vl_mock(sample_drawing_pdf: Path, monkeypatch):
+def test_extract_plan_facts_with_nemotron_vl_mock(
+    sample_drawing_pdf: Path, monkeypatch
+):
     """Verify vision extraction parses LLM multimodal response into PlanFacts."""
+
     class MockVisionClient:
-        def complete_vision(self, system: str, prompt: str, image_bytes: bytes, mime_type: str = "image/png") -> str:
+        def complete_vision(
+            self,
+            system: str,
+            prompt: str,
+            image_bytes: bytes,
+            mime_type: str = "image/png",
+        ) -> str:
             assert len(image_bytes) > 0
             assert mime_type == "image/jpeg"
             assert "JSON" in system
@@ -201,21 +215,31 @@ def test_extract_plan_facts_with_nemotron_vl_mock(sample_drawing_pdf: Path, monk
 
 def test_extract_plan_facts_with_nemotron_vl_invalid_json(sample_drawing_pdf: Path):
     """Ensure invalid or corrupted LLM output returns None gracefully."""
+
     class BadClient:
-        def complete_vision(self, system: str, prompt: str, image_bytes: bytes, mime_type: str = "image/png") -> str:
+        def complete_vision(
+            self,
+            system: str,
+            prompt: str,
+            image_bytes: bytes,
+            mime_type: str = "image/png",
+        ) -> str:
             return "Sorry, I am unable to read this blueprint image."
 
     facts = extract_plan_facts_with_nemotron_vl(sample_drawing_pdf, client=BadClient())
     assert facts is None
 
 
-def test_extract_plan_facts_no_credentials_returns_none(sample_drawing_pdf: Path, monkeypatch):
+def test_extract_plan_facts_no_credentials_returns_none(
+    sample_drawing_pdf: Path, monkeypatch
+):
     """When no API credentials exist, vision extractor returns None without raising."""
     monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
     monkeypatch.delenv("NIM_API_KEY", raising=False)
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     from app.config import get_settings
+
     settings = get_settings()
     monkeypatch.setattr(settings, "nvidia_api_key", None)
     monkeypatch.setattr(settings, "gemini_api_key", None)
@@ -250,6 +274,7 @@ def test_normalizer_falls_back_to_vision_extractor(tmp_path: Path, monkeypatch):
     )
 
     import app.pdf_intel.vision_extractor as ve
+
     monkeypatch.setattr(
         ve,
         "extract_plan_facts_with_nemotron_vl",
@@ -278,6 +303,3 @@ def test_live_nemotron_vl_blueprint_parsing(sample_drawing_pdf: Path):
     assert facts.ground_coverage_sqm > 0
     assert facts.built_up_area_sqm > 0
     assert facts.front_setback_m > 0
-
-
-

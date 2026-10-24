@@ -12,7 +12,9 @@ import math
 from app.rules.models import OccupancyGroup
 
 
-def calculate_required_parking(occupancy: OccupancyGroup, built_up_area_sqm: float) -> int:
+def calculate_required_parking(
+    occupancy: OccupancyGroup, built_up_area_sqm: float
+) -> int:
     """Calculate the statutory minimum car parking slots required."""
     if built_up_area_sqm <= 0:
         return 0

@@ -48,9 +48,7 @@ Rules:
 4. Output raw JSON only. Do not wrap in markdown or add conversational filler.
 """
 
-NEMOTRON_VL_EXTRACTION_PROMPT = (
-    "Extract all architectural schedule parameters and site plan setbacks from this drawing into JSON."
-)
+NEMOTRON_VL_EXTRACTION_PROMPT = "Extract all architectural schedule parameters and site plan setbacks from this drawing into JSON."
 
 
 def render_pdf_page_to_image(
@@ -142,10 +140,26 @@ def _convert_dict_to_plan_facts(
         height = float(data.get("building_height_m") or 7.5)
         floors = int(data.get("number_of_floors") or 1)
         road_width = float(data.get("road_width_m") or 3.6)
-        front_sb = float(data.get("front_setback_m") if data.get("front_setback_m") is not None else 3.0)
-        rear_sb = float(data.get("rear_setback_m") if data.get("rear_setback_m") is not None else 1.5)
-        side_sb1 = float(data.get("side_setback_1_m") if data.get("side_setback_1_m") is not None else 1.2)
-        side_sb2 = float(data.get("side_setback_2_m") if data.get("side_setback_2_m") is not None else 1.0)
+        front_sb = float(
+            data.get("front_setback_m")
+            if data.get("front_setback_m") is not None
+            else 3.0
+        )
+        rear_sb = float(
+            data.get("rear_setback_m")
+            if data.get("rear_setback_m") is not None
+            else 1.5
+        )
+        side_sb1 = float(
+            data.get("side_setback_1_m")
+            if data.get("side_setback_1_m") is not None
+            else 1.2
+        )
+        side_sb2 = float(
+            data.get("side_setback_2_m")
+            if data.get("side_setback_2_m") is not None
+            else 1.0
+        )
         parking = int(data.get("parking_slots_provided") or 0)
 
         # Enforce positive requirements for core parameters
@@ -216,7 +230,9 @@ def extract_plan_facts_with_nemotron_vl(
 
             client = GeminiClient()
         else:
-            logger.info("No vision LLM credentials configured. Skipping vision extraction.")
+            logger.info(
+                "No vision LLM credentials configured. Skipping vision extraction."
+            )
             return None
 
     try:
@@ -233,7 +249,9 @@ def extract_plan_facts_with_nemotron_vl(
 
         data = _clean_json_text(raw_response)
         if not data:
-            logger.warning("Vision model returned non-JSON content: %s", raw_response[:200])
+            logger.warning(
+                "Vision model returned non-JSON content: %s", raw_response[:200]
+            )
             return None
 
         return _convert_dict_to_plan_facts(data, source_page=page_num + 1)

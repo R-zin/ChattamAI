@@ -111,15 +111,26 @@ class PlanFacts(BaseModel):
 class RuleViolation(BaseModel):
     """A mathematically or legally verified statutory infraction."""
 
-    rule_reference: str = Field(..., description="Statutory rule citation, e.g. 'Rule 25(1) / Table 6'")
+    rule_reference: str = Field(
+        ..., description="Statutory rule citation, e.g. 'Rule 25(1) / Table 6'"
+    )
     parameter: str = Field(..., description="Building parameter in violation")
-    severity: str = Field(..., description="'high' (critical safety/setback), 'medium', or 'low'")
+    severity: str = Field(
+        ..., description="'high' (critical safety/setback), 'medium', or 'low'"
+    )
     actual_value: float = Field(..., description="Actual value provided in the plan")
     required_value: float = Field(..., description="Statutory required threshold")
     unit: str = Field(..., description="Measurement unit (m, %, ratio, slots)")
-    deficit: float = Field(..., description="Amount by which plan falls short or exceeds the permissible limit")
-    description: str = Field(..., description="Human-readable explanation for engineers")
-    statutory_clause: str = Field(..., description="Exact clause / table description from KMBR/KPBR 2019")
+    deficit: float = Field(
+        ...,
+        description="Amount by which plan falls short or exceeds the permissible limit",
+    )
+    description: str = Field(
+        ..., description="Human-readable explanation for engineers"
+    )
+    statutory_clause: str = Field(
+        ..., description="Exact clause / table description from KMBR/KPBR 2019"
+    )
     concession_applied: Optional[str] = Field(
         default=None,
         description="Name of concession or relaxation evaluated (e.g. 'Chapter VI Small Plot')",

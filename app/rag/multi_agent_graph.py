@@ -48,6 +48,7 @@ async def node_intake_and_extract(state: MultiAgentComplianceState) -> Dict[str,
     else:
         # Fallback default plan facts from text
         from app.pdf_intel.drawing_extractor import classify_text_metadata
+
         text = state.get("plan_text", "")
         meta = classify_text_metadata(text)
         facts = PlanFacts(
@@ -86,7 +87,10 @@ def node_classify(state: MultiAgentComplianceState) -> Dict[str, Any]:
     # Reconcile PlanFacts with resolved classification if updated
     resolved_jurisdiction = classification["jurisdiction"]
     resolved_occupancy = classification["occupancy"]
-    if facts.jurisdiction != resolved_jurisdiction or facts.occupancy != resolved_occupancy:
+    if (
+        facts.jurisdiction != resolved_jurisdiction
+        or facts.occupancy != resolved_occupancy
+    ):
         facts = facts.model_copy(
             update={
                 "jurisdiction": resolved_jurisdiction,
@@ -125,7 +129,9 @@ def node_statutory_critic(state: MultiAgentComplianceState) -> Dict[str, Any]:
     elapsed = round((time.perf_counter() - t0) * 1000, 2)
     return {
         "critic_result": {
-            "active_violations": [v.model_dump() for v in critic_res["active_violations"]],
+            "active_violations": [
+                v.model_dump() for v in critic_res["active_violations"]
+            ],
             "exonerated_violations": critic_res["exonerated_violations"],
             "is_compliant": critic_res["is_compliant"],
             "applied_concessions": critic_res["applied_concessions"],
@@ -163,8 +169,8 @@ def node_synthesizer(state: MultiAgentComplianceState) -> Dict[str, Any]:
             f"Building plan is FULLY COMPLIANT with {facts.jurisdiction.value.capitalize()} "
             f"Building Rules (KPBR/KMBR 2019) for Group {facts.occupancy.value} Occupancy. "
             f"Ground coverage is {facts.ground_coverage_sqm:.1f} m² "
-            f"({(facts.ground_coverage_sqm/facts.plot_area_sqm)*100:.1f}%), "
-            f"and achieved FAR is {facts.built_up_area_sqm/facts.plot_area_sqm:.2f}."
+            f"({(facts.ground_coverage_sqm / facts.plot_area_sqm) * 100:.1f}%), "
+            f"and achieved FAR is {facts.built_up_area_sqm / facts.plot_area_sqm:.2f}."
         )
         if concessions:
             summary += f" Statutory concessions successfully applied: {', '.join(concessions)}."
@@ -213,4 +219,3 @@ def get_multi_agent_graph():
     if COMPILED_GRAPH is None:
         COMPILED_GRAPH = build_multi_agent_graph()
     return COMPILED_GRAPH
-

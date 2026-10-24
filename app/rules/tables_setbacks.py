@@ -29,7 +29,11 @@ def calculate_required_setbacks(
     - is_small_plot: True if plot area <= 125 sqm (Chapter VI concession applies).
     """
     # 1. Small-Plot Concessions (Chapter VI / Rule 27 for residential plots <= 125 m²)
-    if is_small_plot and occupancy == OccupancyGroup.A1_RESIDENTIAL and height_m <= 10.0:
+    if (
+        is_small_plot
+        and occupancy == OccupancyGroup.A1_RESIDENTIAL
+        and height_m <= 10.0
+    ):
         return {
             "front": 1.80,  # Concession front setback (Rule 27(1))
             "rear": 1.00,  # Concession rear setback (Rule 27(2))

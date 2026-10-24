@@ -164,7 +164,9 @@ def _extract_from_text(text: str) -> Dict[str, Any]:
             pct_val = float(m_pct.group(1))
             data["ground_coverage_pct"] = pct_val
             if "plot_area_sqm" in data and data["plot_area_sqm"] > 0:
-                data["ground_coverage_sqm"] = round(data["plot_area_sqm"] * (pct_val / 100.0), 2)
+                data["ground_coverage_sqm"] = round(
+                    data["plot_area_sqm"] * (pct_val / 100.0), 2
+                )
 
     # Building Height
     m = PATTERNS["building_height_m"].search(text)

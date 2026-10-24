@@ -51,7 +51,9 @@ def build_plan_facts_from_pdf(
         # If mandatory parameters could not be parsed via regex text extraction,
         # attempt multimodal vision extraction with Nemotron-3.5-VL
         try:
-            from app.pdf_intel.vision_extractor import extract_plan_facts_with_nemotron_vl
+            from app.pdf_intel.vision_extractor import (
+                extract_plan_facts_with_nemotron_vl,
+            )
 
             vision_facts = extract_plan_facts_with_nemotron_vl(pdf_path)
             if vision_facts:
@@ -77,9 +79,21 @@ def build_plan_facts_from_pdf(
     floors = int(merged.get("number_of_floors") or 1)
     road_width = float(merged.get("road_width_m") or 3.6)
     front_sb = float(merged["front_setback_m"])
-    rear_sb = float(merged.get("rear_setback_m") if merged.get("rear_setback_m") is not None else 1.5)
-    side_sb1 = float(merged.get("side_setback_1_m") if merged.get("side_setback_1_m") is not None else 1.2)
-    side_sb2 = float(merged.get("side_setback_2_m") if merged.get("side_setback_2_m") is not None else 1.0)
+    rear_sb = float(
+        merged.get("rear_setback_m")
+        if merged.get("rear_setback_m") is not None
+        else 1.5
+    )
+    side_sb1 = float(
+        merged.get("side_setback_1_m")
+        if merged.get("side_setback_1_m") is not None
+        else 1.2
+    )
+    side_sb2 = float(
+        merged.get("side_setback_2_m")
+        if merged.get("side_setback_2_m") is not None
+        else 1.0
+    )
     parking = int(merged.get("parking_slots_provided") or 0)
 
     jurisdiction = merged.get("jurisdiction") or Jurisdiction.PANCHAYAT

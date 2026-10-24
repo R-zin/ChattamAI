@@ -193,7 +193,9 @@ _ENTITIES_PATTERN = re.compile(
 )
 _PARAMS_PATTERN = re.compile(
     r"\b(?:"
-    + "|".join(re.escape(t) for t in sorted(_PLANNING_PARAMETERS, key=len, reverse=True))
+    + "|".join(
+        re.escape(t) for t in sorted(_PLANNING_PARAMETERS, key=len, reverse=True)
+    )
     + r")\b",
     re.IGNORECASE,
 )

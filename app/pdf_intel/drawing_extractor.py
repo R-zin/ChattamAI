@@ -58,13 +58,20 @@ def classify_text_metadata(text: str) -> Dict[str, Any]:
 
     # 2. Occupancy Classification (checked with word boundaries)
     occupancy = None
-    if _has_word(["commercial", "mercantile", "shops", "shop", "mall", "shopping", "group f"], lower):
+    if _has_word(
+        ["commercial", "mercantile", "shops", "shop", "mall", "shopping", "group f"],
+        lower,
+    ):
         occupancy = OccupancyGroup.F_MERCANTILE
     elif _has_word(["office", "administrative", "commercial office", "group e"], lower):
         occupancy = OccupancyGroup.E_OFFICE
-    elif _has_word(["school", "college", "educational", "kindergarten", "group b"], lower):
+    elif _has_word(
+        ["school", "college", "educational", "kindergarten", "group b"], lower
+    ):
         occupancy = OccupancyGroup.B_EDUCATIONAL
-    elif _has_word(["hospital", "clinic", "nursing home", "dispensary", "group c"], lower):
+    elif _has_word(
+        ["hospital", "clinic", "nursing home", "dispensary", "group c"], lower
+    ):
         occupancy = OccupancyGroup.C_MEDICAL
     elif _has_word(["auditorium", "assembly", "theatre", "hall", "group d"], lower):
         occupancy = OccupancyGroup.D_ASSEMBLY
@@ -74,11 +81,24 @@ def classify_text_metadata(text: str) -> Dict[str, Any]:
         occupancy = OccupancyGroup.G1_INDUSTRIAL_NON_HAZARDOUS
     elif _has_word(["hostel", "boarding", "dormitory", "group a2"], lower):
         occupancy = OccupancyGroup.A2_SPECIAL_RESIDENTIAL
-    elif _has_word(["residential", "residence", "villa", "dwelling", "house", "group a1", "group a"], lower):
+    elif _has_word(
+        [
+            "residential",
+            "residence",
+            "villa",
+            "dwelling",
+            "house",
+            "group a1",
+            "group a",
+        ],
+        lower,
+    ):
         occupancy = OccupancyGroup.A1_RESIDENTIAL
 
     # 3. Drawing Scale
-    scale_match = re.search(r"scale\s*[:=]?\s*([0-9]+\s*:\s*[0-9]+)", text, re.IGNORECASE)
+    scale_match = re.search(
+        r"scale\s*[:=]?\s*([0-9]+\s*:\s*[0-9]+)", text, re.IGNORECASE
+    )
     scale = scale_match.group(1).replace(" ", "") if scale_match else "1:100"
 
     return {

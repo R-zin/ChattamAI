@@ -110,7 +110,10 @@ def get_coverage_and_far(
     citation = spec["citation"]
 
     # KPBR Rule 27 relaxation for rural residential
-    if jurisdiction == Jurisdiction.PANCHAYAT and occupancy == OccupancyGroup.A1_RESIDENTIAL:
+    if (
+        jurisdiction == Jurisdiction.PANCHAYAT
+        and occupancy == OccupancyGroup.A1_RESIDENTIAL
+    ):
         if 0 < plot_area_sqm <= 500.0:
             max_coverage = 70.0
             citation += " (KPBR Rule 27 relaxation for plots <= 500m²)"

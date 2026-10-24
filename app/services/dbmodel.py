@@ -141,7 +141,9 @@ def create_otp_challenge_token(
     """Short-lived, single-purpose token issued after a correct password for a
     user who must complete TOTP. NOT an access token: the ``purpose`` claim is
     what ``get_current_user`` uses to reject it as a session token."""
-    expire = datetime.now(timezone.utc) + timedelta(seconds=_otp_challenge_ttl_seconds())
+    expire = datetime.now(timezone.utc) + timedelta(
+        seconds=_otp_challenge_ttl_seconds()
+    )
     claims: Dict[str, Any] = {
         "sub": user_id,
         "email": email,

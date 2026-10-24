@@ -19,6 +19,7 @@ from app.config import get_settings
 
 from app.routes import auth as auth_routes
 from app.routes import rag as rag_routes
+from app.routes import rag_v2 as rag_v2_routes
 
 _DIST_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
@@ -62,7 +63,7 @@ app.add_middleware(
 )
 
 _RATE_LIMIT_BUCKETS: dict = defaultdict(list)
-_SENSITIVE_PREFIXES = ("/auth/login", "/api/check", "/api/ingest")
+_SENSITIVE_PREFIXES = ("/auth/login", "/api/check", "/api/ingest", "/api/v2")
 _RATE_LIMIT_MAX_KEYS = 5000
 
 
@@ -100,6 +101,7 @@ async def rate_limit_middleware(request: Request, call_next):
 
 
 app.include_router(rag_routes.router)
+app.include_router(rag_v2_routes.router)
 app.include_router(auth_routes.auth_router)
 
 # Mount frontend assets if the built frontend distribution exists

@@ -21,3 +21,6 @@ testpaths = ["tests"]
 # asyncio_mode=auto lets async test functions run without explicit markers.
 asyncio_mode = "auto"
 addopts = "-ra"
+markers = [
+    "live_nvidia: Live tests requiring NVIDIA NIM API credentials (NVIDIA_API_KEY / NIM_API_KEY)",
+]

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -28,6 +29,8 @@ import faiss
 import numpy as np
 
 from app.rag.embeddings import EmbeddingProvider, l2_normalize
+
+logger = logging.getLogger(__name__)
 
 # Bump when the on-disk layout or similarity semantics change. A saved index
 # whose version does not match is ignored and rebuilt, so we never mix old
@@ -245,6 +248,13 @@ class RuleVectorStore:
         try:
             self._index = faiss.read_index(str(self.index_path))
         except Exception:  # noqa: BLE001 - unreadable index -> rebuild
+            return False
+        if getattr(self._index, "d", None) != self.provider.dim:
+            logger.info(
+                "Saved index dimension (%s) does not match provider dimension (%s); rebuilding index.",
+                getattr(self._index, "d", None),
+                self.provider.dim,
+            )
             return False
         self._texts = data["texts"]
         self._metas = data["metas"]

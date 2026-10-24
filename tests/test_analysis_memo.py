@@ -113,12 +113,21 @@ def test_recheck_after_index_change_invalidates_memo(fake_provider, tmp_path):
 # ---------------------------------------------------------------------------
 # RAGSystem readiness / degradation guards
 # ---------------------------------------------------------------------------
-def test_check_without_embeddings_raises_clear_error(tmp_path):
-    llm = FakeLLM(analyze_mode="ok")
-    rag = RAGSystem(provider=None, llm=llm, index_dir=str(tmp_path / "ix"))
-    # No provider -> no store -> graph never built.
-    with pytest.raises(RuntimeError, match="missing"):
-        rag.check(PLAN)
+def test_check_without_embeddings_raises_clear_error(tmp_path, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("NVIDIA_API_KEY", raising=False)
+    monkeypatch.delenv("NIM_API_KEY", raising=False)
+    get_settings.cache_clear()
+    try:
+        llm = FakeLLM(analyze_mode="ok")
+        rag = RAGSystem(provider=None, llm=llm, index_dir=str(tmp_path / "ix"))
+        # No provider -> no store -> graph never built.
+        with pytest.raises(RuntimeError, match="missing"):
+            rag.check(PLAN)
+    finally:
+        get_settings.cache_clear()
 
 
 def test_health_flags_reflect_injected_fakes(fake_provider, tmp_path):

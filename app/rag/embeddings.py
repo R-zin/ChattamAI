@@ -206,21 +206,135 @@ class EmbeddingCache(EmbeddingProvider):
         return matrix
 
 
-class NvidiaNemoEmbeddingProvider(EmbeddingProvider):
-    def __init__(self, dim: int = 1536):
-        self.dim = dim
-        self.model_name = os.getenv("NVIDIA_MODEL_NAME")
-        from openai import OpenAI
+class NvidiaEmbeddingProvider(EmbeddingProvider):
+    """NVIDIA NIM embedding provider (via OpenAI SDK pointing to NVIDIA NIM).
 
+    Defaults to the free `nvidia/nemotron-3-embed-1b` model (2048-dim) and
+    the NVIDIA hosted API catalog (https://integrate.api.nvidia.com/v1).
+    Batches large input lists into chunks of `batch_size` (default 64) to
+    prevent request timeouts and payload limits.
+    """
+
+    DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
+    DEFAULT_MODEL = "nvidia/nemotron-3-embed-1b"
+    DEFAULT_DIM = 2048
+
+    def __init__(
+        self,
+        model: Optional[str] = None,
+        dim: Optional[int] = None,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        batch_size: Optional[int] = None,
+    ) -> None:
+        from openai import OpenAI
+        from app.config import get_settings
+
+        settings = get_settings()
+        resolved_base_url = (
+            base_url
+            or os.getenv("NVIDIA_BASE_URL")
+            or os.getenv("NIM_BASE_URL")
+            or os.getenv("NVIDIA_API_URL")
+            or getattr(settings, "nvidia_base_url", None)
+            or self.DEFAULT_BASE_URL
+        )
+
+        resolved_key = (
+            api_key
+            or os.getenv("NVIDIA_API_KEY")
+            or os.getenv("NIM_API_KEY")
+            or getattr(settings, "nvidia_api_key", None)
+        )
+
+        is_hosted = "nvidia.com" in resolved_base_url.lower()
+        if not resolved_key:
+            if is_hosted:
+                raise RuntimeError(
+                    "No NVIDIA credentials found for embeddings. Set NVIDIA_API_KEY "
+                    "(or NIM_API_KEY) in the environment."
+                )
+            resolved_key = "not-used"
+
+        chosen_model = (
+            model
+            or os.getenv("EMBEDDING_MODEL")
+            or getattr(settings, "embedding_model", None)
+            or self.DEFAULT_MODEL
+        )
+        if not chosen_model or "embedding-3" in chosen_model:
+            chosen_model = self.DEFAULT_MODEL
+
+        self.model = chosen_model
+        if dim is not None:
+            self.dim = dim
+        elif self.model == self.DEFAULT_MODEL:
+            self.dim = self.DEFAULT_DIM
+        else:
+            self.dim = getattr(settings, "embedding_dim", None) or self.DEFAULT_DIM
+        self.batch_size = (
+            batch_size or getattr(settings, "embedding_batch_size", None) or 64
+        )
+        self.base_url = resolved_base_url
         self._client = OpenAI(
-            api_key=os.getenv("NVIDIA_API_KEY"), base_url=os.getenv("NVIDIA_API_URL")
+            api_key=resolved_key,
+            base_url=resolved_base_url,
+            timeout=getattr(settings, "llm_timeout", 60.0),
+            max_retries=getattr(settings, "llm_max_retries", 2),
         )
 
     def embed(self, texts: List[str]) -> np.ndarray:
         if not texts:
             return np.empty((0, self.dim), dtype="float32")
         cleaned = [t.strip() or " " for t in texts]
-        resp = self._client.embeddings.create(model=self.model_name, input=cleaned)
-        ordered = sorted(resp.data, key=lambda d: d.index)
-        matrix = np.array([d.embedding for d in ordered], dtype="float32")
-        return matrix
+
+        step = max(1, self.batch_size)
+        batches = [cleaned[i : i + step] for i in range(0, len(cleaned), step)]
+        parts = []
+        for batch in batches:
+            resp = self._client.embeddings.create(model=self.model, input=batch)
+            ordered = sorted(resp.data, key=lambda d: d.index)
+            part = np.array([d.embedding for d in ordered], dtype="float32")
+            parts.append(part)
+
+        return np.concatenate(parts, axis=0) if len(parts) > 1 else parts[0]
+
+
+NvidiaNemoEmbeddingProvider = NvidiaEmbeddingProvider
+
+
+def get_embedding_provider(
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+    dim: Optional[int] = None,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+) -> EmbeddingProvider:
+    """Factory to instantiate the appropriate embedding provider based on config."""
+    from app.config import get_settings
+
+    settings = get_settings()
+    active_provider = (
+        (provider or getattr(settings, "embedding_provider", None) or "nim")
+        .strip()
+        .lower()
+    )
+
+    if active_provider in ("nim", "nvidia", "nemotron"):
+        return NvidiaEmbeddingProvider(
+            model=model,
+            dim=dim,
+            api_key=api_key,
+            base_url=base_url,
+        )
+    elif active_provider == "openai":
+        return OpenAIEmbeddingProvider(
+            model=model or settings.embedding_model,
+            dim=dim or settings.embedding_dim,
+            api_key=api_key or settings.openai_api_key,
+            base_url=base_url or settings.openai_base_url,
+        )
+    else:
+        raise ValueError(
+            f"Unsupported embedding provider: {active_provider}. Choose 'nim' or 'openai'."
+        )

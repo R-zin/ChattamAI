@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { deriveStatus, STATUS_META, SEVERITY_META } from '../data'
+import { deriveStatus, STATUS_META, SEVERITY_META, isBuildingPlanText } from '../data'
 
 describe('deriveStatus', () => {
   it('returns insufficient when there are no rules and no violations', () => {
@@ -47,3 +47,38 @@ describe('meta maps', () => {
     }
   })
 })
+
+describe('isBuildingPlanText', () => {
+  it('rejects short or empty text', () => {
+    expect(isBuildingPlanText('')).toBe(false)
+    expect(isBuildingPlanText('hello')).toBe(false)
+    expect(isBuildingPlanText('just short text')).toBe(false)
+  })
+
+  it('rejects non-architectural content like recipes and code', () => {
+    expect(isBuildingPlanText('Recipe for chocolate cake: flour, sugar, eggs, bake for 30 minutes.')).toBe(false)
+    expect(isBuildingPlanText('def main():\n    import os\n    print("running system tests")')).toBe(false)
+    expect(isBuildingPlanText('John Doe Software Engineer resume with 5 years experience in React')).toBe(false)
+    expect(isBuildingPlanText('Invoice #12345 for services rendered. Total: $500.00')).toBe(false)
+  })
+
+  it('accepts architectural building plans and specifications', () => {
+    expect(isBuildingPlanText('3 floor building, 12m tall, 1m front setback')).toBe(true)
+    expect(
+      isBuildingPlanText(
+        'Single family residential building under Group A1 in Category-II Village Panchayat with total built-up area of 90 sq. metres, 2 storeys. Proposed front distance 1.0m.'
+      )
+    ).toBe(true)
+    expect(
+      isBuildingPlanText(
+        'Commercial building under Group F Occupancy on a plot of 850 sq. metres with height 16m.'
+      )
+    ).toBe(true)
+    expect(
+      isBuildingPlanText(
+        'Proposed small shed structure in residential plot with setbacks.'
+      )
+    ).toBe(true)
+  })
+})
+

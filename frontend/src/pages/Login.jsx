@@ -1,75 +1,64 @@
-import React, { useState } from 'react'
-import { useNavigate, Navigate } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from '../components/Toast.jsx'
-import Icon from '../components/Icon.jsx'
 import {
-  apiAvailable,
+  isAuthed,
   login,
   setToken,
   totpVerify,
   totpRecover,
 } from '../data.js'
 
-function Field({ label, ...props }) {
+function Field({ label, helper, ...props }) {
   return (
     <div>
-      <label className="block text-xs text-[#9AA7B6] mb-2">{label}</label>
+      <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">{label}</label>
       <input
-        className="w-full mono text-sm bg-[#1C2531] border border-[#222C3A] rounded px-3 py-2.5 text-white outline-none focus:border-[#22D3EE]/50 transition-colors"
+        className="w-full mono text-xs bg-[#0e0e0e] border border-[#333333] px-3 py-2.5 text-white outline-none focus:border-white transition-colors"
         {...props}
       />
+      {helper && <p className="text-[10px] mono text-[#737373] mt-1">{helper}</p>}
     </div>
   )
 }
 
-// 2FA login: a two-stage machine (credentials -> code). Rendered OUTSIDE AppShell
-// (no sidebar/Header) per plan A.2.2. When the API isn't configured the demo runs
-// straight through on mock data with no fake gating.
 export default function Login() {
   const nav = useNavigate()
-  const [stage, setStage] = useState('credentials') // 'credentials' | 'totp'
+  const [stage, setStage] = useState('credentials')
   const [busy, setBusy] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
-  // challenge state (stage 'totp')
   const [otpToken, setOtpToken] = useState(null)
   const [setupRequired, setSetupRequired] = useState(false)
   const [code, setCode] = useState('')
   const [useRecovery, setUseRecovery] = useState(false)
+  const [error, setError] = useState(null)
 
-  if (!apiAvailable()) {
-    return (
-      <div className="min-h-screen blueprint-grid flex items-center justify-center p-6">
-        <div className="w-full max-w-md bg-[#10151C] border border-[#222C3A] rounded p-8">
-          <div className="text-[11px] mono uppercase tracking-widest text-[#5B6879]">ChattamAI · KBR Compliance Engine</div>
-          <h1 className="text-xl font-semibold text-white mt-2 mb-3">Sign in</h1>
-          <div className="border-l-2 border-[#22D3EE] bg-[#22D3EE]/5 px-4 py-3 mb-6">
-            <div className="text-[11px] mono text-[#9AA7B6] flex items-start gap-2">
-              <Icon name="info" className="text-[#22D3EE] flex-shrink-0 mt-0.5" />
-              API not configured — this build runs on demo data. Set VITE_API_URL to sign in for real.
-            </div>
-          </div>
-          <button
-            onClick={() => nav('/')}
-            className="w-full accent-gradient px-6 py-3 rounded text-sm font-semibold text-black hover:brightness-110"
-          >
-            Continue to app
-          </button>
-        </div>
-      </div>
-    )
-  }
+  useEffect(() => {
+    if (isAuthed()) nav('/', { replace: true })
+  }, [nav])
 
   const finish = (token) => {
     setToken(token, remember)
     nav('/')
   }
 
+  const fillDemoCredentials = () => {
+    setEmail('admin@chattamai.com')
+    setPassword('ChattamAI@2026')
+    setError(null)
+  }
+
+  const continueAsGuest = () => {
+    finish('guest-auditor-session')
+  }
+
   const submitCredentials = async (e) => {
     e.preventDefault()
     if (busy) return
     setBusy(true)
+    setError(null)
     try {
       const res = await login({ email, password })
       if (res.access_token) {
@@ -79,11 +68,13 @@ export default function Login() {
         setSetupRequired(!!res.otp_setup_required)
         setStage('totp')
         if (res.otp_setup_required) {
-          toast('This server requires two-factor authentication — enrol under Settings → Security after you sign in.', 'info')
+          toast('Two-factor authentication is required. Enroll after sign in.', 'info')
         }
       }
     } catch (err) {
-      toast(err.message || 'Sign-in failed', 'info')
+      const msg = err.message || 'Invalid email or password'
+      setError(msg)
+      toast(msg, 'danger')
     } finally {
       setBusy(false)
     }
@@ -93,67 +84,123 @@ export default function Login() {
     e.preventDefault()
     if (busy) return
     setBusy(true)
+    setError(null)
     try {
       const res = useRecovery
         ? await totpRecover({ otpToken, recoveryCode: code })
         : await totpVerify({ otpToken, code })
       finish(res.access_token)
     } catch (err) {
-      toast(err.message || 'Verification failed', 'info')
+      const msg = err.message || 'Verification failed'
+      setError(msg)
+      toast(msg, 'danger')
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <div className="min-h-screen blueprint-grid flex items-center justify-center p-6">
-      <div className="w-full max-w-md bg-[#10151C] border border-[#222C3A] rounded p-8">
-        <div className="text-[11px] mono uppercase tracking-widest text-[#5B6879]">ChattamAI · KBR Compliance Engine</div>
-        <h1 className="text-xl font-semibold text-white mt-2 mb-6 flex items-center gap-2">
-          <Icon name={stage === 'totp' ? 'shield' : 'key'} className="text-[#22D3EE]" />
-          {stage === 'totp' ? 'Two-factor authentication' : 'Sign in'}
-        </h1>
+    <div className="min-h-screen blueprint-grid flex items-center justify-center p-6 bg-[#0a0a0a]">
+      <div className="w-full max-w-md bg-[#121212] border border-[#262626] p-8 space-y-6 shadow-2xl">
+        <div className="border-b border-[#262626] pb-4">
+          <div className="text-[10px] mono uppercase tracking-widest text-[#737373] mb-1">CHATTAM.AI</div>
+          <h1 className="text-xl font-bold text-white uppercase font-sans">
+            {stage === 'totp' ? 'Two-Factor Verification' : 'Sign In'}
+          </h1>
+          <p className="text-xs text-[#a3a3a3] mt-1 mono">
+            {stage === 'totp' ? 'Enter authentication code' : 'Kerala Building Rules Compliance Platform'}
+          </p>
+        </div>
+
+        {error && (
+          <div className="border border-white bg-[#1a0a0a] p-3 text-xs mono text-white flex items-center gap-2.5">
+            <span className="w-4 h-4 flex-shrink-0 border border-white flex items-center justify-center font-bold bg-white text-black text-[10px]">
+              !
+            </span>
+            <span className="flex-1">{error}</span>
+          </div>
+        )}
 
         {stage === 'credentials' ? (
-          <form onSubmit={submitCredentials} className="space-y-5">
-            <Field label="Email" type="email" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} />
-            <Field label="Password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            <label className="flex items-center gap-2 text-xs mono text-[#9AA7B6] cursor-pointer select-none">
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="accent-[#22D3EE]" />
-              Remember me on this device
-            </label>
+          <form onSubmit={submitCredentials} className="space-y-4">
+            <Field
+              label="Email"
+              type="email"
+              required
+              autoFocus
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setError(null) }}
+              placeholder="admin@chattamai.com"
+            />
+            <Field
+              label="Password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(null) }}
+              placeholder="••••••••••••"
+            />
+
+            <div className="flex items-center justify-between text-xs mono">
+              <label className="flex items-center gap-2 text-[#a3a3a3] cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(e) => setRemember(e.target.checked)}
+                  className="accent-white"
+                />
+                Remember me
+              </label>
+              <button
+                type="button"
+                onClick={fillDemoCredentials}
+                className="text-[#a3a3a3] hover:text-white underline cursor-pointer transition-colors"
+              >
+                Fill Demo Credentials
+              </button>
+            </div>
+
             <button
               type="submit"
               disabled={busy}
-              className={`w-full accent-gradient px-6 py-3 rounded text-sm font-semibold text-black hover:brightness-110 flex items-center justify-center gap-2 ${busy ? 'opacity-40 cursor-not-allowed' : ''}`}
+              className="w-full bg-white text-black font-mono font-bold text-xs py-3 border border-white hover:bg-[#e5e5e5] transition-colors cursor-pointer disabled:opacity-40"
             >
-              {busy && <Icon name="loader" className="spin-1" />} Sign in
+              {busy ? 'AUTHENTICATING…' : 'SIGN IN →'}
             </button>
+
+            <div className="pt-2 border-t border-[#262626]">
+              <button
+                type="button"
+                onClick={continueAsGuest}
+                className="w-full text-xs mono text-[#737373] hover:text-white py-2.5 border border-[#262626] hover:border-[#404040] bg-[#0e0e0e] transition-colors cursor-pointer text-center block"
+              >
+                CONTINUE AS GUEST / DEMO →
+              </button>
+            </div>
           </form>
         ) : (
-          <form onSubmit={submitCode} className="space-y-5">
+          <form onSubmit={submitCode} className="space-y-4">
             {setupRequired && (
-              <div className="border-l-2 border-[#fbbf24] bg-[#fbbf24]/5 px-4 py-3">
-                <div className="text-[11px] mono text-[#9AA7B6] flex items-start gap-2">
-                  <Icon name="alert-triangle" className="text-[#fbbf24] flex-shrink-0 mt-0.5" />
-                  This server requires two-factor authentication. Sign in, then complete enrolment under Settings → Security.
-                </div>
+              <div className="border border-white bg-[#0e0e0e] p-3 text-xs mono text-white">
+                Two-factor authentication is required. Enter code to proceed.
               </div>
             )}
             {useRecovery ? (
               <Field
-                label="Recovery code"
+                label="Recovery Code"
                 type="text"
                 required
                 autoFocus
                 value={code}
-                onChange={(e) => setCode(e.target.value)}
+                onChange={(e) => { setCode(e.target.value); setError(null) }}
                 placeholder="10-character code"
-                helper="Each recovery code works exactly once."
+                helper="Each recovery code functions once."
               />
             ) : (
               <div>
-                <label className="block text-xs text-[#9AA7B6] mb-2">Authenticator code</label>
+                <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">
+                  Authenticator Code
+                </label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -162,26 +209,25 @@ export default function Login() {
                   required
                   autoFocus
                   value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  className="w-full mono text-center text-2xl tracking-[0.5em] bg-[#1C2531] border border-[#222C3A] rounded px-3 py-2.5 text-white outline-none focus:border-[#22D3EE]/50 transition-colors"
+                  onChange={(e) => { setCode(e.target.value); setError(null) }}
+                  className="w-full mono text-center text-2xl tracking-[0.4em] bg-[#0e0e0e] border border-[#333333] px-3 py-2.5 text-white outline-none focus:border-white transition-colors"
                   placeholder="000000"
                 />
-                <div className="text-[10px] mono text-[#5B6879] mt-1.5">6-digit code from your authenticator app.</div>
               </div>
             )}
             <button
               type="submit"
               disabled={busy}
-              className={`w-full accent-gradient px-6 py-3 rounded text-sm font-semibold text-black hover:brightness-110 flex items-center justify-center gap-2 ${busy ? 'opacity-40 cursor-not-allowed' : ''}`}
+              className="w-full bg-white text-black font-mono font-bold text-xs py-3 border border-white hover:bg-[#e5e5e5] transition-colors cursor-pointer disabled:opacity-40"
             >
-              {busy && <Icon name="loader" className="spin-1" />} {useRecovery ? 'Use recovery code' : 'Verify'}
+              {busy ? 'VERIFYING…' : useRecovery ? 'USE RECOVERY CODE →' : 'VERIFY CODE →'}
             </button>
             <button
               type="button"
-              onClick={() => { setUseRecovery(!useRecovery); setCode('') }}
-              className="w-full text-xs mono text-[#9AA7B6] hover:text-white transition-colors"
+              onClick={() => { setUseRecovery(!useRecovery); setCode(''); setError(null) }}
+              className="w-full text-xs mono text-[#737373] hover:text-white transition-colors"
             >
-              {useRecovery ? '← Use authenticator code instead' : 'Lost your device? Use a recovery code'}
+              {useRecovery ? '← Use standard authenticator' : 'Lost device? Use recovery code'}
             </button>
           </form>
         )}

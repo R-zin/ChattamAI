@@ -19,20 +19,31 @@ export const apiAvailable = () => API_URL.length > 0
 // 1-hr JWT); localStorage only when the user opts "remember me". Keyed 'chattam.*'
 // to match the existing sessionStorage convention.
 const TOKEN_KEY = 'chattam.token'
-export const getToken = () =>
-  sessionStorage.getItem(TOKEN_KEY) || localStorage.getItem(TOKEN_KEY)
+export const getToken = () => {
+  try {
+    return (typeof sessionStorage !== 'undefined' && sessionStorage ? sessionStorage.getItem(TOKEN_KEY) : null) ||
+           (typeof localStorage !== 'undefined' && localStorage ? localStorage.getItem(TOKEN_KEY) : null) || null
+  } catch {
+    return null
+  }
+}
 export const setToken = (token, remember = false) => {
   clearToken()
-  ;(remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, token)
+  try {
+    const storage = remember ? (typeof localStorage !== 'undefined' ? localStorage : null) : (typeof sessionStorage !== 'undefined' ? sessionStorage : null)
+    storage?.setItem(TOKEN_KEY, token)
+  } catch {}
 }
 export const clearToken = () => {
-  sessionStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(TOKEN_KEY)
+  try {
+    if (typeof sessionStorage !== 'undefined' && sessionStorage) sessionStorage.removeItem(TOKEN_KEY)
+    if (typeof localStorage !== 'undefined' && localStorage) localStorage.removeItem(TOKEN_KEY)
+  } catch {}
 }
 export const isAuthed = () => !!getToken()
 
-export const embeddingModel = 'text-embedding-3-small (1536-dim)'
-export const analysisModel = 'gemini-2.5-flash'
+export const embeddingModel = 'nvidia/nemotron-3-embed-1b (2048-dim)'
+export const analysisModel = 'nvidia/nemotron-3.5-super-vl-120b-a12b'
 
 // ---- status derivation (design-system rule) -------------------------------
 export function deriveStatus(response) {
@@ -195,6 +206,61 @@ export const pipelineScript = [
   { t: 14, log: 'Assessment complete — 3 potential issues detected.', stage: 4 },
 ]
 
+// Validation for architectural building plan specifications
+const BUILDING_ENTITIES = [
+  'building', 'buildings', 'structure', 'structures', 'house', 'houses',
+  'villa', 'villas', 'apartment', 'apartments', 'flat', 'flats',
+  'residence', 'residential', 'commercial', 'office', 'hospital',
+  'clinic', 'dispensary', 'school', 'college', 'institution',
+  'institutional', 'mall', 'complex', 'multiplex', 'warehouse',
+  'factory', 'industrial', 'educational', 'hazardous', 'mercantile',
+  'assembly', 'occupancy', 'dwelling', 'shed', 'godown', 'cottage',
+  'auditorium', 'lodge', 'hostel', 'hotel', 'kbr', 'kpmbr',
+  'kerala building', 'lsgd', 'panchayat', 'municipality', 'corporation',
+  'group a', 'group a1', 'group a2', 'group b', 'group c', 'group d',
+  'group e', 'group f', 'group g', 'group h', 'group i', 'group j',
+  'development', 'construction', 'blueprint', 'floor plan', 'site plan',
+  'layout plan', 'architectural', 'drawing',
+]
+
+const PLANNING_PARAMETERS = [
+  'floor', 'floors', 'storey', 'storeys', 'story', 'stories', 'level',
+  'levels', 'height', 'tall', 'depth', 'width', 'length', 'dimension',
+  'dimensions', 'meter', 'meters', 'metre', 'metres', 'centimeter',
+  'centimeters', 'centimetre', 'centimetres', 'sqm', 'sq.m', 'sq m',
+  'sq.metre', 'sq.metres', 'sq.meter', 'sq.meters', 'square metre',
+  'square metres', 'square meter', 'square meters', 'sq ft', 'sqft',
+  'square feet', 'cent', 'cents', 'plot', 'site', 'area', 'built-up',
+  'builtup', 'built up', 'plinth', 'carpet area', 'fsi', 'far',
+  'floor space index', 'floor area ratio', 'coverage', 'ground coverage',
+  'setback', 'setbacks', 'set-back', 'set-backs', 'front setback',
+  'rear setback', 'side setback', 'front distance', 'rear distance',
+  'side distance', 'front open space', 'rear open space', 'side open space',
+  'open space', 'open spaces', 'road width', 'street width', 'access width',
+  'road', 'street', 'boundary', 'boundaries', 'abutting', 'parking',
+  'car parking', 'staircase', 'stairs', 'fire escape', 'fire safety',
+  'exit', 'corridor', 'passage', 'balcony', 'verandah', 'veranda',
+  'terrace', 'mezzanine', 'basement', 'cantilever', 'projection',
+  'canopy', 'parapet', 'ground floor', 'first floor', 'second floor',
+  'living room', 'bedroom', 'kitchen',
+]
+
+export function isBuildingPlanText(text) {
+  if (!text || typeof text !== 'string') return false
+  const cleaned = text.trim()
+  if (cleaned.length < 15) return false
+  const lower = cleaned.toLowerCase()
+  let entityHits = 0
+  for (const term of BUILDING_ENTITIES) {
+    if (lower.includes(term)) entityHits++
+  }
+  let paramHits = 0
+  for (const term of PLANNING_PARAMETERS) {
+    if (lower.includes(term)) paramHits++
+  }
+  return (entityHits >= 1 && paramHits >= 1) || paramHits >= 2
+}
+
 // ---- live API (optional) ----------------------------------------------------
 async function request(path, opts = {}) {
   const headers = { ...(opts.headers || {}) }
@@ -208,14 +274,158 @@ async function request(path, opts = {}) {
     }
     throw new Error('API 401')
   }
-  if (!res.ok) throw new Error(`API ${res.status}`)
+  if (!res.ok) {
+    let detail = ''
+    try {
+      const errJson = await res.json()
+      detail = errJson?.detail || errJson?.message || ''
+    } catch (_) {}
+    throw new Error(detail || `API ${res.status}`)
+  }
   return res.json()
+}
+
+export async function checkPdfV2(file) {
+  if (!apiAvailable()) {
+    await new Promise((r) => setTimeout(r, 800))
+    return {
+      is_compliant: false,
+      verdict: "Non-Compliant",
+      executive_summary: "Building plan has 1 statutory violation requiring design revision. Front Setback is 2.2m, falling short of the required 3.0m under Rule 25.",
+      plan_facts: {
+        jurisdiction: "panchayat",
+        occupancy: "A1",
+        plot_area_sqm: 240.0,
+        ground_coverage_sqm: 96.0,
+        built_up_area_sqm: 165.0,
+        building_height_m: 8.2,
+        number_of_floors: 2,
+        road_width_m: 4.5,
+        front_setback_m: 2.2,
+        rear_setback_m: 2.0,
+        side_setback_1_m: 1.5,
+        side_setback_2_m: 1.2,
+        parking_slots_provided: 1,
+      },
+      violations: [
+        {
+          rule_reference: "Rule 25(1) / Table 6",
+          parameter: "Front Setback",
+          severity: "high",
+          actual_value: 2.2,
+          required_value: 3.0,
+          unit: "m",
+          deficit: 0.8,
+          description: "Front Setback is 2.2m, but statutory minimum is 3.0m (deficit of 0.8m).",
+          statutory_clause: "Rule 25(1) Table 6: Minimum Open Spaces",
+        }
+      ],
+      exonerated_violations: [],
+      applied_concessions: ["KPBR Rule 27 rural coverage relaxation applied"],
+      eligible_concessions: ["KPBR Rule 27"],
+      remediations: [
+        {
+          parameter: "Front Setback",
+          deficit_summary: "Short by 0.8 m",
+          action: "Recede ground-floor car porch canopy and front boundary projection by 0.8m to satisfy Rule 25.",
+          target_value: "Minimum 3.0 m clear setback",
+        }
+      ],
+      telemetry: { intake_ms: 22.4, symbolic_eval_ms: 2.1, critic_ms: 1.8 },
+    }
+  }
+
+  const fd = new FormData()
+  fd.append('file', file)
+  return request('/api/v2/check/pdf', { method: 'POST', body: fd })
+}
+
+export async function exportPdfReportV2(file) {
+  if (!apiAvailable()) {
+    throw new Error('API server not connected. Connect backend to download compiled PDF certificate.')
+  }
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await fetch(`${API_URL}/api/v2/check/pdf/export-report`, {
+    method: 'POST',
+    body: fd,
+  })
+  if (!res.ok) throw new Error('Failed to export PDF report')
+  const blob = await res.blob()
+  const url = window.URL.createObjectURL(blob)
+  try {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `LSGD_KBR_Audit_${file.name.replace(/\.pdf$/i, '')}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  } finally {
+    window.URL.revokeObjectURL(url)
+  }
+}
+
+export async function evaluatePlanFactsV2(facts) {
+  if (!apiAvailable()) {
+    return {
+      is_compliant: true,
+      summary_verdict: "Fully Compliant with KMBR/KPBR 2019",
+      violations: [],
+      coverage_percent: 40.0,
+      max_coverage_percent: 65.0,
+      fsi_actual: 0.75,
+      base_fsi: 2.75,
+      max_fsi_permitted: 4.0,
+      parking_required: 1,
+      parking_slots_provided: 1,
+      concessions_eligible: [],
+      applied_concessions: [],
+      rule_citations: ["KMBR/KPBR 2019 Rule 24 Table 4", "Rule 25 Table 6"],
+    }
+  }
+  return request('/api/v2/evaluate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(facts),
+  })
+}
+
+export async function exportKSmartV2(payload) {
+  if (!apiAvailable()) {
+    return { status: "MOCK_EXPORTED", payload }
+  }
+  return request('/api/v2/reports/ksmart', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+}
+
+let _pendingAnalysisPromise = null
+
+export function setPendingAnalysis(promise) {
+  _pendingAnalysisPromise = promise
+}
+
+export function getPendingAnalysis() {
+  const p = _pendingAnalysisPromise
+  _pendingAnalysisPromise = null
+  return p
 }
 
 export async function analyzePlan({ planText, file, top_k }) {
   if (!apiAvailable()) {
     // graceful fallback: simulate latency + return the flagship demo payload
-    await new Promise((r) => setTimeout(r, 1600))
+    await new Promise((r) => setTimeout(r, 600))
+    if (file) {
+      const nonPlanKeywords = ['recipe', 'resume', 'invoice', 'code', 'script', 'dummy', 'invalid', 'random', 'test_non_plan']
+      const lowerName = (file.name || '').toLowerCase()
+      if (nonPlanKeywords.some((kw) => lowerName.includes(kw))) {
+        throw new Error('The content of the file is not a building plan.')
+      }
+    } else if (planText && !isBuildingPlanText(planText)) {
+      throw new Error('The content of the file is not a building plan.')
+    }
     return demoResponse
   }
   if (file) {

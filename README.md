@@ -58,6 +58,7 @@ cp .env.example .env        # set OPENAI_API_KEY and GEMINI_API_KEY
 Required env vars (see `.env.example`):
 - `OPENAI_API_KEY` — embeddings (`text-embedding-3-small`)
 - `GEMINI_API_KEY` — Gemini LLM analysis (`gemini-2.5-flash`, from Google AI Studio)
+- *(Alternative)* `NVIDIA_API_KEY` / `NVIDIA_BASE_URL` — if using `LLM_PROVIDER=nim` (`nvidia/nemotron-3.5-super-vl-120b-a12b`)
 - *(Alternative)* `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` — if using `LLM_PROVIDER=anthropic`
 - `KBR_DATA_DIR` — folder of KBR PDFs/text (default `./data/kbr`)
 

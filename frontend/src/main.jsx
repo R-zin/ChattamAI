@@ -15,6 +15,7 @@ import Projects from './pages/Projects.jsx'
 import Activity from './pages/Activity.jsx'
 import Settings from './pages/Settings.jsx'
 import Login from './pages/Login.jsx'
+import VisualWorkbench from './pages/VisualWorkbench.jsx'
 import { apiAvailable, isAuthed } from './data.js'
 
 // Mock-mode exempt: when the API isn't configured the demo renders on static
@@ -31,24 +32,30 @@ export default function App() {
       <ToastHost />
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route
+          path="/*"
+          element={
+            <RequireAuth>
+              <AppShell>
+                <Routes>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/new-check" element={<NewCheck />} />
+                  <Route path="/workbench" element={<VisualWorkbench />} />
+                  <Route path="/analysis" element={<Analysis />} />
+                  <Route path="/results/demo" element={<Results />} />
+                  <Route path="/results/insufficient" element={<Insufficient />} />
+                  <Route path="/kbr" element={<Knowledge />} />
+                  <Route path="/reports" element={<Reports />} />
+                  <Route path="/projects" element={<Projects />} />
+                  <Route path="/activity" element={<Activity />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </AppShell>
+            </RequireAuth>
+          }
+        />
       </Routes>
-      <RequireAuth>
-        <AppShell>
-          <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/new-check" element={<NewCheck />} />
-          <Route path="/analysis" element={<Analysis />} />
-          <Route path="/results/demo" element={<Results />} />
-          <Route path="/results/insufficient" element={<Insufficient />} />
-          <Route path="/kbr" element={<Knowledge />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/projects" element={<Projects />} />
-          <Route path="/activity" element={<Activity />} />
-          <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AppShell>
-      </RequireAuth>
     </BrowserRouter>
   )
 }

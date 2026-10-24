@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from jose import JWTError, jwt
@@ -65,7 +65,7 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def expiry_time() -> datetime:
-    return datetime.utcnow() + timedelta(seconds=_token_ttl_seconds())
+    return datetime.now(timezone.utc) + timedelta(seconds=_token_ttl_seconds())
 
 
 def hash_password(password: str) -> str:
@@ -93,7 +93,7 @@ def create_access_token(
     expires_delta: Optional[timedelta] = None,
 ) -> str:
     """Create a signed JWT carrying the user id + email, expiring after the TTL."""
-    expire = datetime.utcnow() + (
+    expire = datetime.now(timezone.utc) + (
         expires_delta
         if expires_delta is not None
         else timedelta(seconds=_token_ttl_seconds())
@@ -141,7 +141,9 @@ def create_otp_challenge_token(
     """Short-lived, single-purpose token issued after a correct password for a
     user who must complete TOTP. NOT an access token: the ``purpose`` claim is
     what ``get_current_user`` uses to reject it as a session token."""
-    expire = datetime.utcnow() + timedelta(seconds=_otp_challenge_ttl_seconds())
+    expire = datetime.now(timezone.utc) + timedelta(
+        seconds=_otp_challenge_ttl_seconds()
+    )
     claims: Dict[str, Any] = {
         "sub": user_id,
         "email": email,
@@ -181,7 +183,9 @@ class User(Base):
     user_id = Column(String, primary_key=True, default=new_id)
     email = Column(String, unique=True, nullable=False, index=True)
     password = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
     # 2FA (TOTP). The base32 secret is set at setup-time; ``totp_enabled`` flips
     # True only after the user proves they control the secret (first valid code).
     totp_secret = Column(String, nullable=True)
@@ -200,7 +204,9 @@ class RecoveryCode(Base):
     user_id = Column(String, ForeignKey("user.user_id"), nullable=False, index=True)
     code_hash = Column(String, nullable=False)  # sha256 hex of the plaintext code
     used_at = Column(DateTime, nullable=True)  # NULL = still available
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
     user = relationship("User", back_populates="recovery_codes")
 
 

@@ -8,14 +8,14 @@ import { analysisModel, apiAvailable, embeddingModel, totpDisable, totpEnable, t
 function Field({ label, value, onChange, type = 'text', helper }) {
   return (
     <div>
-      <label className="block text-xs text-[#9AA7B6] mb-2">{label}</label>
+      <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">{label}</label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full mono text-sm bg-[#1C2531] border border-[#222C3A] rounded px-3 py-2.5 text-white outline-none focus:border-[#22D3EE]/50 transition-colors"
+        className="w-full mono text-xs bg-[#0e0e0e] border border-[#333333] px-3 py-2 text-white outline-none focus:border-white transition-colors"
       />
-      {helper && <div className="text-[10px] mono text-[#5B6879] mt-1.5">{helper}</div>}
+      {helper && <div className="text-[9px] mono text-[#525252] mt-1">{helper}</div>}
     </div>
   )
 }
@@ -24,11 +24,11 @@ export default function Settings() {
   const [topK, setTopK] = useState('6')
   const [chunkSize, setChunkSize] = useState('1000')
   const [overlap, setOverlap] = useState('150')
-  const [provider, setProvider] = useState('Anthropic')
+  const [provider, setProvider] = useState('NVIDIA NIM')
   // --- 2FA state (Security section) ---
-  const [totp, setTotp] = useState(null)          // TotpStatusResponse | null
-  const [enroll, setEnroll] = useState(null)       // TotpSetupResponse | null
-  const [codesShown, setCodesShown] = useState(null) // recovery codes (shown once)
+  const [totp, setTotp] = useState(null)
+  const [enroll, setEnroll] = useState(null)
+  const [codesShown, setCodesShown] = useState(null)
   const [code, setCode] = useState('')
   const [enrollPw, setEnrollPw] = useState('')
   const [disarm, setDisarm] = useState(false)
@@ -86,129 +86,156 @@ export default function Settings() {
 
   return (
     <>
-      <Header eyebrow="System Configuration" title="Settings" subtitle="Retrieval, model, and analysis configuration" />
-      <div className="p-6 md:p-8 space-y-6 max-w-4xl">
-        <div className="border-l-2 border-[#22D3EE] bg-[#22D3EE]/5 px-4 py-3">
-          <div className="text-[11px] mono text-[#9AA7B6] flex items-start gap-2">
-            <Icon name="info" className="text-[#22D3EE] flex-shrink-0 mt-0.5" />
-            These settings affect future analyses — engineer review still required.
-          </div>
-        </div>
+      <Header
+        eyebrow="SYSTEM CONFIGURATION"
+        title="Settings"
+        subtitle="Manage NVIDIA NIM inference endpoints, vector retrieval parameters, and account security"
+      />
 
-        <section className="bg-[#10151C] border border-[#222C3A] rounded p-6">
-          <h3 className="text-sm font-semibold text-white uppercase tracking-wide flex items-center gap-2 mb-5"><Icon name="search" className="text-[#22D3EE]" /> Retrieval</h3>
-          <div className="grid sm:grid-cols-3 gap-5">
-            <Field label="top_k" value={topK} onChange={setTopK} type="number" helper="top_k — number of KBR chunks retrieved per analysis" />
-            <Field label="Chunk size" value={chunkSize} onChange={setChunkSize} type="number" helper="Max token length per document segment" />
-            <Field label="Chunk overlap" value={overlap} onChange={setOverlap} type="number" helper="Contextual overlap between adjacent chunks" />
+      <div className="p-6 md:p-8 space-y-6 max-w-4xl bg-[#0a0a0a]">
+
+        {/* Retrieval Settings */}
+        <section className="bg-[#121212] border border-[#262626] p-6 space-y-4">
+          <div className="flex items-center gap-2 border-b border-[#262626] pb-3">
+            <span className="w-1.5 h-1.5 bg-white inline-block" />
+            <h3 className="text-xs font-bold text-white uppercase tracking-widest mono">Vector Retrieval Parameters</h3>
+          </div>
+          <div className="grid sm:grid-cols-3 gap-4">
+            <Field label="TOP_K CHUNKS" value={topK} onChange={setTopK} type="number" helper="Max KBR rule chunks passed to LLM reasoning" />
+            <Field label="CHUNK SIZE" value={chunkSize} onChange={setChunkSize} type="number" helper="Character length per document split" />
+            <Field label="CHUNK OVERLAP" value={overlap} onChange={setOverlap} type="number" helper="Sliding window context preservation" />
           </div>
         </section>
 
-        <section className="bg-[#10151C] border border-[#222C3A] rounded p-6">
-          <h3 className="text-sm font-semibold text-white uppercase tracking-wide flex items-center gap-2 mb-5"><Icon name="cpu" className="text-[#22D3EE]" /> Model</h3>
-          <div className="grid sm:grid-cols-2 gap-5 mb-5">
+        {/* Model Inference Settings */}
+        <section className="bg-[#121212] border border-[#262626] p-6 space-y-4">
+          <div className="flex items-center gap-2 border-b border-[#262626] pb-3">
+            <span className="w-1.5 h-1.5 bg-white inline-block" />
+            <h3 className="text-xs font-bold text-white uppercase tracking-widest mono">AI Model Inference Configuration</h3>
+          </div>
+          <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-[#9AA7B6] mb-2">Analysis model</label>
-              <div className="mono text-sm bg-[#0C1117] border border-[#222C3A] rounded px-3 py-2.5 text-white">{analysisModel}</div>
+              <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">Active LLM Model</label>
+              <div className="mono text-xs bg-[#0e0e0e] border border-[#333333] px-3 py-2 text-white">
+                {provider === 'NVIDIA NIM' ? 'nvidia/nemotron-3.5-super-vl-120b-a12b' : analysisModel}
+              </div>
             </div>
             <div>
-              <label className="block text-xs text-[#9AA7B6] mb-2">Embedding model</label>
-              <div className="mono text-sm bg-[#0C1117] border border-[#222C3A] rounded px-3 py-2.5 text-white">{embeddingModel}</div>
+              <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">Dense Embedding Model</label>
+              <div className="mono text-xs bg-[#0e0e0e] border border-[#333333] px-3 py-2 text-white">{embeddingModel}</div>
             </div>
           </div>
           <div>
-            <label className="block text-xs text-[#9AA7B6] mb-2">Model provider</label>
-            <div className="inline-flex border border-[#222C3A] rounded overflow-hidden">
-              {['Anthropic', 'OpenRouter'].map((p) => (
-                <button key={p} onClick={() => setProvider(p)} className={`px-4 py-2 text-xs mono transition-colors ${provider === p ? 'bg-[#22D3EE]/15 text-[#22D3EE]' : 'text-[#5B6879] hover:text-white'}`}>
+            <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">Provider Endpoint</label>
+            <div className="inline-flex border border-[#333333] bg-[#0e0e0e]">
+              {['NVIDIA NIM', 'Anthropic', 'OpenRouter'].map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setProvider(p)}
+                  className={`px-4 py-2 text-xs mono transition-colors ${
+                    provider === p ? 'bg-white text-black font-bold' : 'text-[#737373] hover:text-white'
+                  }`}
+                >
                   {p}
                 </button>
               ))}
             </div>
-            <div className="text-[10px] mono text-[#5B6879] mt-1.5">Selected endpoint for LLM inference calls</div>
+            <div className="text-[9px] mono text-[#525252] mt-1">Configured for active compliance reasoning</div>
           </div>
         </section>
 
-        {/* Security / 2FA (plan slice A.2.4) */}
-        <section className="bg-[#10151C] border border-[#222C3A] rounded p-6">
-          <h3 className="text-sm font-semibold text-white uppercase tracking-wide flex items-center gap-2 mb-5"><Icon name="shield" className="text-[#22D3EE]" /> Security</h3>
+        {/* Security / 2FA Section */}
+        <section className="bg-[#121212] border border-[#262626] p-6 space-y-4">
+          <div className="flex items-center gap-2 border-b border-[#262626] pb-3">
+            <span className="w-1.5 h-1.5 bg-white inline-block" />
+            <h3 className="text-xs font-bold text-white uppercase tracking-widest mono">Security & Authentication (TOTP 2FA)</h3>
+          </div>
+
           {!apiAvailable() ? (
-            <div className="text-[11px] mono text-[#5B6879]">API not configured — two-factor authentication is managed by the backend. Set VITE_API_URL to enable it.</div>
+            <div className="text-xs mono text-[#737373]">API not configured — running on local mock security state.</div>
           ) : !totp ? (
-            <div className="text-[11px] mono text-[#5B6879]">Loading 2FA status…</div>
+            <div className="text-xs mono text-[#737373]">Checking 2FA configuration…</div>
           ) : (
-            <div className="space-y-5">
+            <div className="space-y-4">
               {totp.totp_required && !totp.totp_enabled && (
-                <div className="border-l-2 border-[#fbbf24] bg-[#fbbf24]/5 px-4 py-3">
-                  <div className="text-[11px] mono text-[#9AA7B6] flex items-start gap-2">
-                    <Icon name="alert-triangle" className="text-[#fbbf24] flex-shrink-0 mt-0.5" />
-                    This server requires two-factor authentication. Enrol below to keep access.
-                  </div>
+                <div className="border border-white p-3 bg-[#0e0e0e] text-xs mono text-white">
+                  [!] This auditor terminal requires two-factor authentication. Enroll below.
                 </div>
               )}
 
-              {/* Recovery codes shown ONCE after enabling */}
               {codesShown ? (
-                <div className="border border-[#22D3EE]/40 bg-[#22D3EE]/5 rounded p-4">
-                  <div className="text-xs mono text-[#22D3EE] mb-2">Recovery codes — store these somewhere safe. Each works once and is never shown again.</div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 mono text-sm text-white my-3">
+                <div className="border border-white bg-[#0e0e0e] p-4 space-y-3">
+                  <div className="text-xs mono text-white font-bold">RECOVERY CODES — STORE SECURELY:</div>
+                  <div className="grid grid-cols-2 gap-2 mono text-xs text-white bg-[#121212] p-3 border border-[#262626]">
                     {codesShown.map((c) => (<div key={c}>{c}</div>))}
                   </div>
-                  <div className="flex gap-3">
-                    <button onClick={downloadCodes} className="px-4 py-2 rounded text-xs font-medium text-black accent-gradient hover:brightness-110 flex items-center gap-2"><Icon name="download" /> Download</button>
-                    <button onClick={() => { navigator.clipboard?.writeText(codesShown.join('\n')); toast('Recovery codes copied.', 'ok') }} className="px-4 py-2 rounded text-xs font-medium text-[#9AA7B6] bg-[#161D27] border border-[#222C3A] hover:text-white">Copy</button>
-                    <button onClick={() => setCodesShown(null)} className="px-4 py-2 rounded text-xs font-medium text-[#9AA7B6] hover:text-white ml-auto">Done</button>
+                  <div className="flex gap-2">
+                    <button onClick={downloadCodes} className="px-3 py-1.5 bg-white text-black mono text-xs font-bold hover:bg-[#e5e5e5] flex items-center gap-1">
+                      <Icon name="download" /> DOWNLOAD
+                    </button>
+                    <button onClick={() => { navigator.clipboard?.writeText(codesShown.join('\n')); toast('Codes copied.', 'ok') }} className="px-3 py-1.5 border border-[#333333] hover:border-white text-white mono text-xs bg-[#121212]">
+                      COPY
+                    </button>
+                    <button onClick={() => setCodesShown(null)} className="px-3 py-1.5 text-xs mono text-[#a3a3a3] hover:text-white ml-auto">
+                      DONE
+                    </button>
                   </div>
                 </div>
               ) : enroll ? (
-                /* Enrollment in progress: QR + manual secret + confirm code */
                 <div className="space-y-4">
-                  <div className="text-[11px] mono text-[#9AA7B6]">Scan this QR with your authenticator app, or enter the key manually.</div>
+                  <div className="text-xs mono text-[#a3a3a3]">Scan QR with authenticator or enter key:</div>
                   <div className="flex flex-col sm:flex-row gap-5 items-start">
                     {enroll.qr_png_data_uri ? (
-                      <div className="bg-white p-3 rounded"><img src={enroll.qr_png_data_uri} alt="TOTP QR code" className="w-40 h-40" /></div>
+                      <div className="bg-white p-2 border border-white"><img src={enroll.qr_png_data_uri} alt="TOTP QR code" className="w-36 h-36" /></div>
                     ) : (
-                      <div className="w-40 h-40 bg-[#0C1117] border border-[#222C3A] rounded flex items-center justify-center text-[#5B6879] text-3xl"><Icon name="qrcode" /></div>
+                      <div className="w-36 h-36 bg-[#0e0e0e] border border-[#262626] flex items-center justify-center text-white text-2xl"><Icon name="qrcode" /></div>
                     )}
-                    <div className="flex-1 w-full space-y-4">
-                      <Field label="Manual entry key" value={enroll.secret} onChange={() => {}} helper="base32" />
-                      <Field label="Account password" type="password" value={enrollPw} onChange={setEnrollPw} />
-                      <Field label="Enter the 6-digit code to confirm" value={code} onChange={setCode} />
+                    <div className="flex-1 w-full space-y-3">
+                      <Field label="MANUAL ENTRY SECRET" value={enroll.secret} onChange={() => {}} helper="Base32 Key" />
+                      <Field label="ACCOUNT PASSWORD" type="password" value={enrollPw} onChange={setEnrollPw} />
+                      <Field label="6-DIGIT VERIFICATION CODE" value={code} onChange={setCode} />
                     </div>
                   </div>
                   <div className="flex gap-3">
-                    <button onClick={confirmEnroll} disabled={secBusy || code.length < 6 || !enrollPw} className={`px-4 py-2.5 rounded text-sm font-semibold text-black accent-gradient hover:brightness-110 ${(secBusy || code.length < 6 || !enrollPw) ? 'opacity-40 cursor-not-allowed' : ''}`}>Confirm &amp; enable</button>
-                    <button onClick={() => setEnroll(null)} disabled={secBusy} className="px-4 py-2 rounded text-xs font-medium text-[#9AA7B6] bg-[#161D27] border border-[#222C3A] hover:text-white">Cancel</button>
+                    <button
+                      onClick={confirmEnroll}
+                      disabled={secBusy || code.length < 6 || !enrollPw}
+                      className="px-4 py-2 bg-white text-black font-mono text-xs font-bold border border-white hover:bg-[#e5e5e5] disabled:opacity-40"
+                    >
+                      CONFIRM &amp; ENABLE
+                    </button>
+                    <button onClick={() => setEnroll(null)} className="px-4 py-2 text-xs mono text-[#a3a3a3] hover:text-white border border-[#333333] bg-[#0e0e0e]">
+                      CANCEL
+                    </button>
                   </div>
                 </div>
               ) : totp.totp_enabled ? (
-                /* Enrolled: status + disable */
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <span className="pill pill-ok">2FA ENABLED</span>
-                    <span className="text-xs mono text-[#9AA7B6]">{totp.recovery_codes_remaining} recovery code{totp.recovery_codes_remaining === 1 ? '' : 's'} remaining</span>
+                    <span className="text-[10px] mono bg-white text-black font-bold px-2 py-0.5">2FA ACTIVE</span>
+                    <span className="text-xs mono text-[#a3a3a3]">{totp.recovery_codes_remaining} codes remaining</span>
                   </div>
                   {disarm ? (
-                    <div className="space-y-3">
-                      <div className="grid sm:grid-cols-2 gap-4">
-                        <Field label="Password" type="password" value={disarmPw} onChange={setDisarmPw} />
-                        <Field label="Authenticator code" value={disarmCode} onChange={setDisarmCode} />
+                    <div className="space-y-3 pt-2">
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <Field label="PASSWORD" type="password" value={disarmPw} onChange={setDisarmPw} />
+                        <Field label="AUTHENTICATOR CODE" value={disarmCode} onChange={setDisarmCode} />
                       </div>
                       <div className="flex gap-3">
-                        <button onClick={confirmDisable} disabled={secBusy} className={`px-4 py-2 rounded text-xs font-medium text-black bg-[#f87171] hover:brightness-110 ${secBusy ? 'opacity-40 cursor-not-allowed' : ''}`}>Confirm disable</button>
-                        <button onClick={() => setDisarm(false)} className="px-4 py-2 rounded text-xs font-medium text-[#9AA7B6] bg-[#161D27] border border-[#222C3A] hover:text-white">Keep 2FA on</button>
+                        <button onClick={confirmDisable} disabled={secBusy} className="px-4 py-2 text-xs mono bg-white text-black font-bold hover:bg-[#e5e5e5]">CONFIRM DISABLE</button>
+                        <button onClick={() => setDisarm(false)} className="px-4 py-2 text-xs mono text-[#a3a3a3] hover:text-white border border-[#333333] bg-[#0e0e0e]">CANCEL</button>
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => setDisarm(true)} className="px-4 py-2.5 rounded text-sm font-medium text-[#9AA7B6] bg-[#161D27] border border-[#222C3A] hover:text-white flex items-center gap-2"><Icon name="shield-alert" /> Disable two-factor authentication</button>
+                    <button onClick={() => setDisarm(true)} className="px-3 py-1.5 text-xs mono text-[#a3a3a3] hover:text-white border border-[#333333] hover:border-white bg-[#0e0e0e]">
+                      DISABLE 2FA
+                    </button>
                   )}
                 </div>
               ) : (
-                /* Not enrolled: enable */
                 <div>
-                  <div className="text-[11px] mono text-[#9AA7B6] mb-4">Add a second layer of security with a time-based one-time code from an authenticator app.</div>
-                  <button onClick={startEnroll} disabled={secBusy} className={`px-4 py-2.5 rounded text-sm font-semibold text-black accent-gradient hover:brightness-110 flex items-center gap-2 ${secBusy ? 'opacity-40 cursor-not-allowed' : ''}`}>
-                    {secBusy && <Icon name="loader" className="spin-1" />} Enable two-factor authentication
+                  <button onClick={startEnroll} disabled={secBusy} className="px-4 py-2 bg-white text-black font-mono text-xs font-bold border border-white hover:bg-[#e5e5e5]">
+                    + ENABLE TWO-FACTOR AUTHENTICATION
                   </button>
                 </div>
               )}
@@ -216,22 +243,15 @@ export default function Settings() {
           )}
         </section>
 
-        <section className="bg-[#10151C] border border-[#222C3A] rounded p-6">
-          <h3 className="text-sm font-semibold text-white uppercase tracking-wide flex items-center gap-2 mb-5"><Icon name="database-zap" className="text-[#22D3EE]" /> System</h3>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <button onClick={() => toast('Re-ingesting KBR corpus — chunking + embedding over data/kbr.', 'ok')} className="px-4 py-2.5 rounded text-sm font-medium text-[#9AA7B6] bg-[#161D27] border border-[#222C3A] hover:text-white flex items-center gap-2">
-              <Icon name="refresh-cw" /> Re-ingest KBR corpus
-            </button>
-            <button onClick={() => toast('Rebuilding FAISS IndexFlatL2 from stored embeddings.', 'ok')} className="px-4 py-2.5 rounded text-sm font-medium text-[#9AA7B6] bg-[#161D27] border border-[#222C3A] hover:text-white flex items-center gap-2">
-              <Icon name="layers" /> Rebuild vector index
-            </button>
-          </div>
-        </section>
-
-        <button onClick={() => toast('Settings saved — applies to future analyses.', 'ok')} className="accent-gradient px-6 py-3 rounded text-sm font-semibold text-black hover:brightness-110">
-          Save Changes
+        {/* Save button */}
+        <button
+          onClick={() => toast('System configuration saved.', 'ok')}
+          className="bg-white text-black font-mono text-xs font-bold px-6 py-3 border border-white hover:bg-[#e5e5e5] transition-colors cursor-pointer"
+        >
+          SAVE CONFIGURATION CHANGES
         </button>
       </div>
+
       <AppFooter />
     </>
   )

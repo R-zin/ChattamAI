@@ -6,6 +6,8 @@ architectural, zoning, and physical parameters before compliance processing.
 
 from __future__ import annotations
 
+import re
+
 _BUILDING_ENTITIES = (
     "building",
     "buildings",
@@ -183,6 +185,20 @@ _PLANNING_PARAMETERS = (
 )
 
 
+_ENTITIES_PATTERN = re.compile(
+    r"\b(?:"
+    + "|".join(re.escape(t) for t in sorted(_BUILDING_ENTITIES, key=len, reverse=True))
+    + r")\b",
+    re.IGNORECASE,
+)
+_PARAMS_PATTERN = re.compile(
+    r"\b(?:"
+    + "|".join(re.escape(t) for t in sorted(_PLANNING_PARAMETERS, key=len, reverse=True))
+    + r")\b",
+    re.IGNORECASE,
+)
+
+
 def is_building_plan_text(text: str) -> bool:
     """Check if the given text represents a building plan or architectural specification.
 
@@ -198,11 +214,9 @@ def is_building_plan_text(text: str) -> bool:
     if len(cleaned) < 15:
         return False
 
-    text_lower = cleaned.lower()
-
-    # Fast check for term occurrences
-    entity_hits = sum(1 for term in _BUILDING_ENTITIES if term in text_lower)
-    param_hits = sum(1 for term in _PLANNING_PARAMETERS if term in text_lower)
+    # Regex word-boundary checks prevent false-positive substring hits
+    entity_hits = len(set(_ENTITIES_PATTERN.findall(cleaned)))
+    param_hits = len(set(_PARAMS_PATTERN.findall(cleaned)))
 
     if (entity_hits >= 1 and param_hits >= 1) or param_hits >= 2:
         return True

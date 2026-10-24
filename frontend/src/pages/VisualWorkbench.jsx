@@ -74,7 +74,7 @@ export default function VisualWorkbench() {
     try {
       const payload = {
         facts: auditResult.plan_facts,
-        evaluation: {
+        evaluation: auditResult.evaluation || {
           is_compliant: auditResult.is_compliant,
           summary_verdict: auditResult.verdict,
           violations: auditResult.violations,

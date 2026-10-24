@@ -11,7 +11,7 @@ Python 3.9 compatible: ``from __future__ import annotations`` and no PEP 604
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
@@ -63,7 +63,9 @@ class Report(Base):
     __tablename__ = "report"
 
     report_id = Column(Integer, primary_key=True, autoincrement=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(
+        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+    )
     plan_text = Column(Text, nullable=True)
     source = Column(String, nullable=True)  # e.g. "check" | "upload" | "ocr"
     summary = Column(Text, nullable=True)

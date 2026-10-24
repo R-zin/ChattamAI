@@ -113,6 +113,54 @@ class GeminiClient:
                     raise last_exc
         return ""
 
+    def complete_vision(
+        self,
+        system: str,
+        prompt: str,
+        image_bytes: bytes,
+        mime_type: str = "image/png",
+    ) -> str:
+        """Execute multimodal vision-language completion using google-genai."""
+        from google.genai import types
+
+        config_kwargs = {
+            "system_instruction": system,
+            "max_output_tokens": self.max_tokens,
+            "temperature": 0.0,
+        }
+        if "JSON" in system or "json" in prompt.lower():
+            config_kwargs["response_mime_type"] = "application/json"
+
+        config = types.GenerateContentConfig(**config_kwargs)
+        image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+
+        last_exc: Optional[Exception] = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = self._client.models.generate_content(
+                    model=self.model,
+                    contents=[prompt, image_part],
+                    config=config,
+                )
+                try:
+                    text = response.text or ""
+                except (AttributeError, ValueError):
+                    text = ""
+                return text
+            except Exception as exc:
+                last_exc = exc
+                logger.warning(
+                    "Gemini complete_vision() attempt %d/%d failed: %s",
+                    attempt + 1,
+                    self.max_retries + 1,
+                    exc,
+                )
+                if attempt < self.max_retries:
+                    time.sleep(1.0 * (attempt + 1))
+                else:
+                    raise last_exc
+        return ""
+
 
 class ClaudeClient:
     def __init__(
@@ -308,6 +356,70 @@ class NimClient:
                 last_exc = exc
                 logger.warning(
                     "NIM complete() attempt %d/%d failed: %s",
+                    attempt + 1,
+                    self.max_retries + 1,
+                    exc,
+                )
+                if attempt < self.max_retries:
+                    time.sleep(1.0 * (attempt + 1))
+                else:
+                    raise last_exc
+        return ""
+
+    def complete_vision(
+        self,
+        system: str,
+        prompt: str,
+        image_bytes: bytes,
+        mime_type: str = "image/png",
+    ) -> str:
+        """Execute multimodal vision-language completion with image + text input.
+
+        Encodes image bytes to an RFC 2397 base64 data URI and packages it into
+        an OpenAI-compatible multimodal content array.
+        """
+        import base64
+
+        b64_img = base64.b64encode(image_bytes).decode("ascii")
+        data_uri = f"data:{mime_type};base64,{b64_img}"
+
+        user_content = [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": data_uri}},
+        ]
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_content},
+        ]
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": self.max_tokens,
+            "temperature": 0.0,
+        }
+        if "JSON" in system or "json" in prompt.lower():
+            kwargs["response_format"] = {"type": "json_object"}
+
+        last_exc: Optional[Exception] = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                resp = self._client.chat.completions.create(**kwargs)
+                return resp.choices[0].message.content or ""
+            except Exception as exc:
+                if (
+                    "response_format" in kwargs
+                    and attempt == 0
+                    and "response_format" in str(exc).lower()
+                ):
+                    logger.warning(
+                        "NIM vision endpoint rejected response_format, retrying without: %s",
+                        exc,
+                    )
+                    kwargs.pop("response_format", None)
+                    continue
+                last_exc = exc
+                logger.warning(
+                    "NIM complete_vision() attempt %d/%d failed: %s",
                     attempt + 1,
                     self.max_retries + 1,
                     exc,

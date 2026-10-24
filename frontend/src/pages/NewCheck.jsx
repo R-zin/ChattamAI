@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Header } from '../components/AppShell.jsx'
 import { AppFooter } from '../components/Shared.jsx'
 import Icon from '../components/Icon.jsx'
-import { analyzePlan, isBuildingPlanText } from '../data.js'
+import { analyzePlan, isBuildingPlanText, setPendingAnalysis } from '../data.js'
 
 const SAMPLES = [
   {
@@ -74,8 +74,9 @@ export default function NewCheck() {
       sessionStorage.setItem('chattam.pending', JSON.stringify({ planText, fileName: file?.name || null }))
     } catch {}
     const p = analyzePlan({ planText, file })
+    setPendingAnalysis(p)
     sessionStorage.setItem('chattam.pendingCall', 'pending')
-    nav('/analysis', { state: { pending: p, meta: { fileName: file?.name || 'pasted-plan.txt' } } })
+    nav('/analysis', { state: { meta: { fileName: file?.name || 'pasted-plan.txt' } } })
   }
 
   return (

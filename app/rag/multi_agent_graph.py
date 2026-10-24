@@ -11,6 +11,7 @@ Cooperative cyclical workflow:
 
 from __future__ import annotations
 
+import asyncio
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict
@@ -21,7 +22,7 @@ from app.rag.agents.classifier import classify_submission
 from app.rag.agents.remediation import generate_remediations
 from app.rag.agents.statutory_critic import critique_violations
 from app.rules.evaluator import evaluate_plan_facts
-from app.rules.models import PlanFacts, RuleViolation
+from app.rules.models import Jurisdiction, OccupancyGroup, PlanFacts, RuleViolation
 
 
 class MultiAgentComplianceState(TypedDict, total=False):
@@ -36,22 +37,22 @@ class MultiAgentComplianceState(TypedDict, total=False):
     telemetry: Optional[Dict[str, Any]]
 
 
-def node_intake_and_extract(state: MultiAgentComplianceState) -> Dict[str, Any]:
+async def node_intake_and_extract(state: MultiAgentComplianceState) -> Dict[str, Any]:
     """Extract structured PlanFacts from architectural PDF or text input."""
     t0 = time.perf_counter()
     if state.get("plan_facts") is not None:
         facts = state["plan_facts"]
     elif state.get("pdf_path"):
         pdf_p = Path(state["pdf_path"])
-        facts = build_plan_facts_from_pdf(pdf_p)
+        facts = await asyncio.to_thread(build_plan_facts_from_pdf, pdf_p)
     else:
         # Fallback default plan facts from text
         from app.pdf_intel.drawing_extractor import classify_text_metadata
         text = state.get("plan_text", "")
         meta = classify_text_metadata(text)
         facts = PlanFacts(
-            jurisdiction=meta["jurisdiction"],
-            occupancy=meta["occupancy"],
+            jurisdiction=meta.get("jurisdiction") or Jurisdiction.PANCHAYAT,
+            occupancy=meta.get("occupancy") or OccupancyGroup.A1_RESIDENTIAL,
             plot_area_sqm=200.0,
             built_up_area_sqm=180.0,
             ground_coverage_sqm=90.0,
@@ -81,8 +82,21 @@ def node_classify(state: MultiAgentComplianceState) -> Dict[str, Any]:
         declared_jurisdiction=facts.jurisdiction,
         declared_occupancy=facts.occupancy,
     )
+
+    # Reconcile PlanFacts with resolved classification if updated
+    resolved_jurisdiction = classification["jurisdiction"]
+    resolved_occupancy = classification["occupancy"]
+    if facts.jurisdiction != resolved_jurisdiction or facts.occupancy != resolved_occupancy:
+        facts = facts.model_copy(
+            update={
+                "jurisdiction": resolved_jurisdiction,
+                "occupancy": resolved_occupancy,
+            }
+        )
+
     elapsed = round((time.perf_counter() - t0) * 1000, 2)
     return {
+        "plan_facts": facts,
         "classification": classification,
         "telemetry": {**state.get("telemetry", {}), "classify_ms": elapsed},
     }
@@ -188,3 +202,15 @@ def build_multi_agent_graph():
     graph.add_edge("synthesizer", END)
 
     return graph.compile()
+
+
+COMPILED_GRAPH = build_multi_agent_graph()
+
+
+def get_multi_agent_graph():
+    """Return the cached, pre-compiled singleton instance of the multi-agent graph."""
+    global COMPILED_GRAPH
+    if COMPILED_GRAPH is None:
+        COMPILED_GRAPH = build_multi_agent_graph()
+    return COMPILED_GRAPH
+

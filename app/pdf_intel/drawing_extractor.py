@@ -23,6 +23,8 @@ def extract_title_block_info(pdf_path: Path) -> Dict[str, Any]:
     doc = fitz.open(str(pdf_path))
     aggregated_text = ""
     try:
+        if len(doc) == 0:
+            return classify_text_metadata("")
         # Check first page and last page (where title blocks typically reside)
         pages_to_check = [0]
         if len(doc) > 1:
@@ -48,14 +50,14 @@ def classify_text_metadata(text: str) -> Dict[str, Any]:
     lower = text.lower()
 
     # 1. Jurisdiction detection
-    jurisdiction = Jurisdiction.PANCHAYAT  # Default
+    jurisdiction = None
     if _has_word(["corporation", "municipality", "kmbr", "municipal"], lower):
         jurisdiction = Jurisdiction.MUNICIPALITY
     elif _has_word(["panchayat", "grama panchayat", "kpbr"], lower):
         jurisdiction = Jurisdiction.PANCHAYAT
 
     # 2. Occupancy Classification (checked with word boundaries)
-    occupancy = OccupancyGroup.A1_RESIDENTIAL  # Default
+    occupancy = None
     if _has_word(["commercial", "mercantile", "shops", "shop", "mall", "shopping", "group f"], lower):
         occupancy = OccupancyGroup.F_MERCANTILE
     elif _has_word(["office", "administrative", "commercial office", "group e"], lower):
@@ -80,7 +82,9 @@ def classify_text_metadata(text: str) -> Dict[str, Any]:
     scale = scale_match.group(1).replace(" ", "") if scale_match else "1:100"
 
     return {
-        "jurisdiction": jurisdiction,
-        "occupancy": occupancy,
+        "jurisdiction": jurisdiction or Jurisdiction.PANCHAYAT,
+        "occupancy": occupancy or OccupancyGroup.A1_RESIDENTIAL,
         "drawing_scale": scale,
+        "has_explicit_jurisdiction": jurisdiction is not None,
+        "has_explicit_occupancy": occupancy is not None,
     }

@@ -232,3 +232,140 @@ def test_api_v2_lookup_endpoints():
     tables = tables_resp.json()
     assert "table_4_coverage_far" in tables
     assert tables["table_4_coverage_far"]["A1"]["max_coverage_pct"] == 65.0
+
+
+def test_api_v2_upload_size_limit_exceeded():
+    """Verify that uploads exceeding 25MB return HTTP 413."""
+    from app.routes.rag_v2 import MAX_UPLOAD_SIZE
+
+    oversized = b"%" + b"0" * (MAX_UPLOAD_SIZE + 10)
+    resp = client.post(
+        "/api/v2/check/pdf",
+        files={"file": ("huge_blueprint.pdf", oversized, "application/pdf")},
+    )
+    assert resp.status_code == 413
+    assert "File too large" in resp.json()["detail"]
+
+
+def test_api_v2_export_report_sanitizes_filename():
+    """Verify filename sanitization prevents header injection in export endpoint."""
+    import fitz
+
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text(
+        (50, 50),
+        "PROPOSED RESIDENTIAL BUILDING IN KERALA PANCHAYAT\n"
+        "Plot Area: 250.00 Sq.m\n"
+        "Ground Floor Area: 100.00 Sq.m\n"
+        "Total Built-up Area: 180.00 Sq.m\n"
+        "Front Setback: 3.50 m\n",
+    )
+    valid_pdf_bytes = doc.tobytes()
+    doc.close()
+
+    malicious_filename = 'plan\r\nX-Injected-Header: evil\n"quote.pdf'
+    resp = client.post(
+        "/api/v2/check/pdf/export-report",
+        files={"file": (malicious_filename, valid_pdf_bytes, "application/pdf")},
+    )
+    assert resp.status_code == 200
+    cd = resp.headers.get("content-disposition", "")
+    assert "\r" not in cd
+    assert "\n" not in cd
+    assert '"quote' not in cd
+    assert "LSGD_KBR_Audit_" in cd
+    assert cd.endswith('.pdf"')
+
+
+def test_api_v2_auth_enforced(monkeypatch):
+    """When AUTH_REQUIRED is set, V2 routes require a bearer token."""
+    monkeypatch.setenv("AUTH_REQUIRED", "true")
+    resp = client.post(
+        "/api/v2/evaluate",
+        json={
+            "plot_area_sqm": 200.0,
+            "built_up_area_sqm": 150.0,
+            "ground_coverage_sqm": 80.0,
+            "building_height_m": 7.0,
+            "road_width_m": 4.0,
+            "front_setback_m": 3.0,
+            "rear_setback_m": 1.5,
+            "side_setback_1_m": 1.2,
+            "side_setback_2_m": 1.0,
+        },
+    )
+    assert resp.status_code == 401
+
+
+def test_api_v2_persists_report():
+    """Evaluating compliance via /api/v2/evaluate persists to reports."""
+    eval_resp = client.post(
+        "/api/v2/evaluate",
+        json={
+            "plot_area_sqm": 200.0,
+            "built_up_area_sqm": 150.0,
+            "ground_coverage_sqm": 80.0,
+            "building_height_m": 7.0,
+            "road_width_m": 4.0,
+            "front_setback_m": 3.0,
+            "rear_setback_m": 1.5,
+            "side_setback_1_m": 1.2,
+            "side_setback_2_m": 1.0,
+        },
+    )
+    assert eval_resp.status_code == 200
+    reports_resp = client.get("/api/reports")
+    assert reports_resp.status_code == 200
+    data = reports_resp.json()
+    assert len(data) > 0
+    assert any(r["source"] == "evaluate_v2" for r in data)
+
+
+def test_statutory_critic_side_setback_concession_distinction():
+    """Verify that statutory critic does not falsely exonerate Side Setback 1 if < 0.9m."""
+    from app.rag.agents.statutory_critic import critique_violations
+    from app.rules.models import RuleViolation
+
+    facts = PlanFacts(
+        jurisdiction=Jurisdiction.PANCHAYAT,
+        occupancy=OccupancyGroup.A1_RESIDENTIAL,
+        plot_area_sqm=100.0,  # small plot
+        ground_coverage_sqm=50.0,
+        built_up_area_sqm=80.0,
+        building_height_m=6.0,
+        road_width_m=3.0,
+        front_setback_m=2.0,
+        rear_setback_m=1.2,
+        side_setback_1_m=0.70,  # Below 0.90m concession threshold
+        side_setback_2_m=0.70,  # Above 0.60m concession threshold
+    )
+    v1 = RuleViolation(
+        rule_reference="Rule 25(3)",
+        parameter="Side Setback 1",
+        severity="medium",
+        actual_value=0.70,
+        required_value=1.20,
+        unit="m",
+        deficit=0.50,
+        description="Side 1 is 0.7m",
+        statutory_clause="Rule 25(3)",
+    )
+    v2 = RuleViolation(
+        rule_reference="Rule 25(3)",
+        parameter="Side Setback 2",
+        severity="medium",
+        actual_value=0.70,
+        required_value=1.00,
+        unit="m",
+        deficit=0.30,
+        description="Side 2 is 0.7m",
+        statutory_clause="Rule 25(3)",
+    )
+    critic = critique_violations(facts, [v1, v2])
+    # Side Setback 2 (0.7m >= 0.6m) is exonerated under Rule 27(3)
+    # Side Setback 1 (0.7m < 0.9m) must remain active
+    assert any(x["parameter"] == "Side Setback 2" for x in critic["exonerated_violations"])
+    assert any(v.parameter == "Side Setback 1" for v in critic["active_violations"])
+
+

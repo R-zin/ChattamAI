@@ -63,7 +63,7 @@ app.add_middleware(
 )
 
 _RATE_LIMIT_BUCKETS: dict = defaultdict(list)
-_SENSITIVE_PREFIXES = ("/auth/login", "/api/check", "/api/ingest")
+_SENSITIVE_PREFIXES = ("/auth/login", "/api/check", "/api/ingest", "/api/v2")
 _RATE_LIMIT_MAX_KEYS = 5000
 
 

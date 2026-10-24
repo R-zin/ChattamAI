@@ -265,17 +265,22 @@ def generate_compliance_pdf_report_v2(
 
     # Remediation Section
     if remediations:
+        import textwrap
+
         c.ensure_space(50)
         c.draw_text("3. ACTIONABLE ARCHITECTURAL REMEDIATION MEASURES", m, c.y, font="F2", size=10)
         c.y -= 14
         for idx, r in enumerate(remediations, start=1):
-            c.ensure_space(28)
+            c.ensure_space(32)
             c.draw_text(f"  {idx}. {r['parameter']}: {r['deficit_summary']}", m + 6, c.y, font="F2", size=8.5, r=0.7, g=0.1, b=0.1)
             c.y -= 12
-            # Wrap action text simply
-            action_snippet = r["action"][:95]
-            c.draw_text(f"     Action: {action_snippet}", m + 14, c.y, font="F1", size=8, r=0.2, g=0.2, b=0.2)
-            c.y -= 14
+            action_lines = textwrap.wrap(r["action"], width=95)
+            for line_idx, line in enumerate(action_lines):
+                c.ensure_space(14)
+                prefix = "Action: " if line_idx == 0 else "        "
+                c.draw_text(f"     {prefix}{line}", m + 14, c.y, font="F1", size=8, r=0.2, g=0.2, b=0.2)
+                c.y -= 11
+            c.y -= 4
 
     c.y -= 12
 

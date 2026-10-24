@@ -36,13 +36,22 @@ def critique_violations(
                     "concession": "Chapter VI Rule 27(2): Rear setback concession (>= 1.0m) applies.",
                 })
                 continue
-            elif "Side" in v.parameter and v.actual_value >= 0.60:
-                exonerated_violations.append({
-                    "parameter": v.parameter,
-                    "original_deficit": v.deficit,
-                    "concession": "Chapter VI Rule 27(3): Side yard concession (>= 0.6m) applies.",
-                })
-                continue
+            elif "Side" in v.parameter:
+                # Rule 27(3): One side yard must be at least 0.90m, the other at least 0.60m
+                if v.parameter == "Side Setback 1" and v.actual_value >= 0.90:
+                    exonerated_violations.append({
+                        "parameter": v.parameter,
+                        "original_deficit": v.deficit,
+                        "concession": "Chapter VI Rule 27(3): Side Yard 1 concession (>= 0.9m) applies.",
+                    })
+                    continue
+                elif v.parameter == "Side Setback 2" and v.actual_value >= 0.60:
+                    exonerated_violations.append({
+                        "parameter": v.parameter,
+                        "original_deficit": v.deficit,
+                        "concession": "Chapter VI Rule 27(3): Side Yard 2 concession (>= 0.6m) applies.",
+                    })
+                    continue
 
         # Check parking exemption for <= 150 sqm residential
         if v.parameter == "Car Parking Slots" and facts.built_up_area_sqm <= 150.0:

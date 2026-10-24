@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
-import { pipelineScript, deriveStatus, analyzePlan } from '../data.js'
+import { pipelineScript, deriveStatus, analyzePlan, getPendingAnalysis } from '../data.js'
 
 const STAGES = [
   { no: '01', name: 'EXTRACT FACTS', desc: 'Extracting architectural parameters', icon: 'drafting-compass' },
@@ -17,9 +17,11 @@ export default function Analysis() {
   const [elapsed, setElapsed] = useState(0)
   const [logCount, setLogCount] = useState(0)
   const [error, setError] = useState(null)
+  const [apiDone, setApiDone] = useState(false)
   const startRef = useRef(null)
   const cancelledRef = useRef(false)
-  const pendingRef = useRef(state?.pending || analyzePlan({ planText: '' }))
+  const navigatedRef = useRef(false)
+  const pendingRef = useRef(getPendingAnalysis() || state?.pending || analyzePlan({ planText: '' }))
 
   // Run the api call in the background while the animation plays.
   useEffect(() => {
@@ -27,6 +29,7 @@ export default function Analysis() {
       .then((resp) => {
         if (cancelledRef.current) return
         sessionStorage.setItem('chattam.result', JSON.stringify(resp))
+        setApiDone(true)
       })
       .catch((err) => {
         if (cancelledRef.current) return
@@ -41,30 +44,36 @@ export default function Analysis() {
     const tick = () => {
       if (cancelledRef.current) return
       const t = (Date.now() - startRef.current) / 1000
-      setElapsed(t)
+      setElapsed(Math.min(t, TOTAL))
       setLogCount(pipelineScript.filter((s) => s.t <= t).length)
       if (t < TOTAL) {
         raf = requestAnimationFrame(tick)
-      } else {
-        setTimeout(() => {
-          if (cancelledRef.current) return
-          let to = '/results/demo'
-          try {
-            const raw = sessionStorage.getItem('chattam.result')
-            if (raw) to = deriveStatus(JSON.parse(raw)) === 'insufficient' ? '/results/insufficient' : '/results/demo'
-          } catch {}
-          nav(to, { replace: true })
-        }, 600)
-        return
       }
-      if (!cancelledRef.current) raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
     return () => {
       cancelledRef.current = true
       cancelAnimationFrame(raf)
     }
-  }, [nav, error])
+  }, [error])
+
+  // Synchronize navigation: only navigate once animation has finished AND api promise has resolved
+  useEffect(() => {
+    if (error || navigatedRef.current) return
+    if (elapsed >= TOTAL && apiDone) {
+      navigatedRef.current = true
+      const timer = setTimeout(() => {
+        if (cancelledRef.current) return
+        let to = '/results/demo'
+        try {
+          const raw = sessionStorage.getItem('chattam.result')
+          if (raw) to = deriveStatus(JSON.parse(raw)) === 'insufficient' ? '/results/insufficient' : '/results/demo'
+        } catch {}
+        nav(to, { replace: true })
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [elapsed, apiDone, error, nav])
 
   const activeStage = (() => {
     let idx = 0

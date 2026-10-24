@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict
 import fitz  # PyMuPDF
 
 
@@ -40,7 +40,11 @@ PATTERNS = {
         re.IGNORECASE,
     ),
     "ground_coverage_sqm": re.compile(
-        rf"(?:ground\s*floor(?:\s*area)?|plinth\s*area|ground\s*coverage|footprint)[^\d\n]*{_NUM_PATTERN}\s*(?:sq\.?\s*m|m²|sqm|sq\s*mtrs?|%?)",
+        rf"(?:ground\s*floor(?:\s*area)?|plinth\s*area|ground\s*coverage|footprint)[^\d\n%]*{_NUM_PATTERN}\s*(?:sq\.?\s*m|m²|sqm|sq\s*mtrs?)\b",
+        re.IGNORECASE,
+    ),
+    "ground_coverage_pct": re.compile(
+        rf"(?:ground\s*coverage|footprint|coverage)[^\d\n]*{_NUM_PATTERN}\s*(?:%|percent)\b",
         re.IGNORECASE,
     ),
     "built_up_area_sqm": re.compile(
@@ -97,6 +101,8 @@ def parse_pdf_area_statement(pdf_path: Path) -> Dict[str, Any]:
     best_page = 1
 
     try:
+        if len(doc) == 0:
+            return findings
         # Step 1: Scan full text across all pages
         full_text_by_page = []
         for page_idx, page in enumerate(doc, start=1):
@@ -152,6 +158,13 @@ def _extract_from_text(text: str) -> Dict[str, Any]:
     m = PATTERNS["ground_coverage_sqm"].search(text)
     if m:
         data["ground_coverage_sqm"] = float(m.group(1))
+    else:
+        m_pct = PATTERNS["ground_coverage_pct"].search(text)
+        if m_pct:
+            pct_val = float(m_pct.group(1))
+            data["ground_coverage_pct"] = pct_val
+            if "plot_area_sqm" in data and data["plot_area_sqm"] > 0:
+                data["ground_coverage_sqm"] = round(data["plot_area_sqm"] * (pct_val / 100.0), 2)
 
     # Building Height
     m = PATTERNS["building_height_m"].search(text)

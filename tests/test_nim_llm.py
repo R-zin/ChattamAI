@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -178,3 +179,49 @@ def test_health_endpoint_reports_nim_provider(app_client):
     data = resp.json()
     assert data["llm_provider"] == "nim"
     assert data["llm_model"] == "nvidia/nemotron-3.5-super-vl-120b-a12b"
+
+
+def test_nim_client_complete_vision():
+    """Verify that complete_vision formats base64 image data URI correctly."""
+    with patch("openai.OpenAI") as mock_client_cls:
+        mock_instance = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.choices = [
+            MagicMock(message=MagicMock(content='{"plot_area_sqm": 250.0}'))
+        ]
+        mock_instance.chat.completions.create.return_value = mock_resp
+        mock_client_cls.return_value = mock_instance
+
+        client = NimClient(api_key="nvapi-test-key")
+        dummy_png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+        res = client.complete_vision(
+            system="Extract blueprint",
+            prompt="Find plot area in JSON",
+            image_bytes=dummy_png,
+        )
+
+        assert res == '{"plot_area_sqm": 250.0}'
+        call_kwargs = mock_instance.chat.completions.create.call_args.kwargs
+        messages = call_kwargs["messages"]
+        assert len(messages) == 2
+        assert messages[0]["role"] == "system"
+        assert messages[1]["role"] == "user"
+        content = messages[1]["content"]
+        assert content[0]["type"] == "text"
+        assert content[1]["type"] == "image_url"
+        assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+@pytest.mark.live_nvidia
+@pytest.mark.skipif(
+    not os.getenv("NVIDIA_API_KEY")
+    or os.getenv("NVIDIA_API_KEY", "").startswith(("nvapi-test", "sk-test", "mock")),
+    reason="Live NVIDIA_API_KEY secret not available in environment",
+)
+def test_live_nim_client_complete():
+    """Verify live connectivity and completion against NVIDIA NIM API."""
+    client = NimClient()
+    out = client.complete(system="Answer concisely.", user="Reply with the single word PONG")
+    assert "PONG" in out.upper()
+
+

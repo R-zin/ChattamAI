@@ -440,9 +440,9 @@ def totp_recover(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid recovery code"
         )
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone as _tz
 
-    row.used_at = _dt.utcnow()  # single-use
+    row.used_at = _dt.now(_tz.utc)  # single-use
     db.commit()
     return TokenResponse(
         access_token=create_access_token(user_id=user.user_id, email=user.email),

@@ -353,12 +353,16 @@ export async function exportPdfReportV2(file) {
   if (!res.ok) throw new Error('Failed to export PDF report')
   const blob = await res.blob()
   const url = window.URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `LSGD_KBR_Audit_${file.name.replace(/\.pdf$/i, '')}.pdf`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
+  try {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `LSGD_KBR_Audit_${file.name.replace(/\.pdf$/i, '')}.pdf`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  } finally {
+    window.URL.revokeObjectURL(url)
+  }
 }
 
 export async function evaluatePlanFactsV2(facts) {
@@ -395,6 +399,18 @@ export async function exportKSmartV2(payload) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+}
+
+let _pendingAnalysisPromise = null
+
+export function setPendingAnalysis(promise) {
+  _pendingAnalysisPromise = promise
+}
+
+export function getPendingAnalysis() {
+  const p = _pendingAnalysisPromise
+  _pendingAnalysisPromise = null
+  return p
 }
 
 export async function analyzePlan({ planText, file, top_k }) {

@@ -44,14 +44,18 @@ function EvidenceDrawer({ rule, onClose }) {
   }, [onClose])
   if (!rule) return null
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label="KBR Clause Evidence">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <aside className="relative w-full sm:w-[460px] h-full bg-[#0e0e0e] border-l border-[#262626] shadow-2xl flex flex-col fade-rise">
         <div className="px-6 py-4 border-b border-[#262626] flex items-center justify-between bg-[#121212]">
           <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 mono">
             <span className="w-1.5 h-1.5 bg-white inline-block" /> KBR Clause Evidence
           </h3>
-          <button onClick={onClose} className="p-1 text-[#737373] hover:text-white border border-transparent hover:border-[#333333] transition-colors">
+          <button
+            onClick={onClose}
+            aria-label="Close evidence drawer"
+            className="p-1 text-[#737373] hover:text-white border border-transparent hover:border-[#333333] transition-colors focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none"
+          >
             <Icon name="x" className="text-base" />
           </button>
         </div>

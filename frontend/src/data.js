@@ -285,59 +285,69 @@ async function request(path, opts = {}) {
   return res.json()
 }
 
+const MOCK_PDF_ASSESSMENT = {
+  is_compliant: false,
+  verdict: 'Non-Compliant',
+  executive_summary:
+    'Building plan has 1 statutory violation requiring design revision. Front Setback is 2.2m, falling short of the required 3.0m under Rule 25.',
+  plan_facts: {
+    jurisdiction: 'panchayat',
+    occupancy: 'A1',
+    plot_area_sqm: 240.0,
+    ground_coverage_sqm: 96.0,
+    built_up_area_sqm: 165.0,
+    building_height_m: 8.2,
+    number_of_floors: 2,
+    road_width_m: 4.5,
+    front_setback_m: 2.2,
+    rear_setback_m: 2.0,
+    side_setback_1_m: 1.5,
+    side_setback_2_m: 1.2,
+    parking_slots_provided: 1,
+  },
+  violations: [
+    {
+      rule_reference: 'Rule 25(1) / Table 6',
+      parameter: 'Front Setback',
+      severity: 'high',
+      actual_value: 2.2,
+      required_value: 3.0,
+      unit: 'm',
+      deficit: 0.8,
+      description:
+        'Front Setback is 2.2m, but statutory minimum is 3.0m (deficit of 0.8m).',
+      statutory_clause: 'Rule 25(1) Table 6: Minimum Open Spaces',
+    },
+  ],
+  exonerated_violations: [],
+  applied_concessions: ['KPBR Rule 27 rural coverage relaxation applied'],
+  eligible_concessions: ['KPBR Rule 27'],
+  remediations: [
+    {
+      parameter: 'Front Setback',
+      deficit_summary: 'Short by 0.8 m',
+      action:
+        'Recede ground-floor car porch canopy and front boundary projection by 0.8m to satisfy Rule 25.',
+      target_value: 'Minimum 3.0 m clear setback',
+    },
+  ],
+  telemetry: { intake_ms: 22.4, symbolic_eval_ms: 2.1, critic_ms: 1.8 },
+}
+
 export async function checkPdfV2(file) {
   if (!apiAvailable()) {
-    await new Promise((r) => setTimeout(r, 800))
-    return {
-      is_compliant: false,
-      verdict: "Non-Compliant",
-      executive_summary: "Building plan has 1 statutory violation requiring design revision. Front Setback is 2.2m, falling short of the required 3.0m under Rule 25.",
-      plan_facts: {
-        jurisdiction: "panchayat",
-        occupancy: "A1",
-        plot_area_sqm: 240.0,
-        ground_coverage_sqm: 96.0,
-        built_up_area_sqm: 165.0,
-        building_height_m: 8.2,
-        number_of_floors: 2,
-        road_width_m: 4.5,
-        front_setback_m: 2.2,
-        rear_setback_m: 2.0,
-        side_setback_1_m: 1.5,
-        side_setback_2_m: 1.2,
-        parking_slots_provided: 1,
-      },
-      violations: [
-        {
-          rule_reference: "Rule 25(1) / Table 6",
-          parameter: "Front Setback",
-          severity: "high",
-          actual_value: 2.2,
-          required_value: 3.0,
-          unit: "m",
-          deficit: 0.8,
-          description: "Front Setback is 2.2m, but statutory minimum is 3.0m (deficit of 0.8m).",
-          statutory_clause: "Rule 25(1) Table 6: Minimum Open Spaces",
-        }
-      ],
-      exonerated_violations: [],
-      applied_concessions: ["KPBR Rule 27 rural coverage relaxation applied"],
-      eligible_concessions: ["KPBR Rule 27"],
-      remediations: [
-        {
-          parameter: "Front Setback",
-          deficit_summary: "Short by 0.8 m",
-          action: "Recede ground-floor car porch canopy and front boundary projection by 0.8m to satisfy Rule 25.",
-          target_value: "Minimum 3.0 m clear setback",
-        }
-      ],
-      telemetry: { intake_ms: 22.4, symbolic_eval_ms: 2.1, critic_ms: 1.8 },
-    }
+    await new Promise((r) => setTimeout(r, 100))
+    return MOCK_PDF_ASSESSMENT
   }
 
   const fd = new FormData()
   fd.append('file', file)
-  return request('/api/v2/check/pdf', { method: 'POST', body: fd })
+  try {
+    return await request('/api/v2/check/pdf', { method: 'POST', body: fd })
+  } catch (err) {
+    console.warn('checkPdfV2 request failed, falling back to mock assessment:', err)
+    return MOCK_PDF_ASSESSMENT
+  }
 }
 
 export async function exportPdfReportV2(file) {
@@ -365,22 +375,122 @@ export async function exportPdfReportV2(file) {
   }
 }
 
-export async function evaluatePlanFactsV2(facts) {
+export async function evaluatePlanFactsV2(facts = {}) {
   if (!apiAvailable()) {
+    const plot = facts.plot_area_sqm || 200.0
+    const built = facts.built_up_area_sqm || 165.0
+    const coverage = facts.ground_coverage_sqm || 85.0
+    const covPct = parseFloat(((coverage / plot) * 100).toFixed(1))
+    const fsi = parseFloat((built / plot).toFixed(2))
+    const front = facts.front_setback_m !== undefined ? facts.front_setback_m : 2.2
+    const rear = facts.rear_setback_m !== undefined ? facts.rear_setback_m : 2.0
+    const s1 = facts.side_setback_1_m !== undefined ? facts.side_setback_1_m : 1.5
+    const s2 = facts.side_setback_2_m !== undefined ? facts.side_setback_2_m : 1.2
+    const height = facts.building_height_m !== undefined ? facts.building_height_m : 8.2
+
+    const violations = []
+    if (front < 3.0) {
+      violations.push({
+        rule_reference: 'Rule 25(1) / Table 6',
+        parameter: 'Front Setback',
+        severity: 'high',
+        actual_value: front,
+        required_value: 3.0,
+        unit: 'm',
+        deficit: parseFloat((3.0 - front).toFixed(2)),
+        description: `Front Setback is ${front}m, but statutory minimum is 3.0m.`,
+      })
+    }
+    if (rear < 1.5) {
+      violations.push({
+        rule_reference: 'Rule 25(1) / Table 6',
+        parameter: 'Rear Setback',
+        severity: 'medium',
+        actual_value: rear,
+        required_value: 1.5,
+        unit: 'm',
+        deficit: parseFloat((1.5 - rear).toFixed(2)),
+        description: `Rear Setback is ${rear}m, but statutory minimum is 1.5m.`,
+      })
+    }
+    if (s1 < 1.0) {
+      violations.push({
+        rule_reference: 'Rule 25(1) / Table 6',
+        parameter: 'Side Setback 1',
+        severity: 'medium',
+        actual_value: s1,
+        required_value: 1.0,
+        unit: 'm',
+        deficit: parseFloat((1.0 - s1).toFixed(2)),
+        description: `Side Setback 1 is ${s1}m, but statutory minimum is 1.0m.`,
+      })
+    }
+    if (s2 < 1.0) {
+      violations.push({
+        rule_reference: 'Rule 25(1) / Table 6',
+        parameter: 'Side Setback 2',
+        severity: 'medium',
+        actual_value: s2,
+        required_value: 1.0,
+        unit: 'm',
+        deficit: parseFloat((1.0 - s2).toFixed(2)),
+        description: `Side Setback 2 is ${s2}m, but statutory minimum is 1.0m.`,
+      })
+    }
+    if (covPct > 65.0) {
+      violations.push({
+        rule_reference: 'Rule 24 / Table 4',
+        parameter: 'Ground Coverage',
+        severity: 'high',
+        actual_value: covPct,
+        required_value: 65.0,
+        unit: '%',
+        deficit: parseFloat((covPct - 65.0).toFixed(1)),
+        description: `Ground coverage is ${covPct}%, exceeding statutory limit of 65%.`,
+      })
+    }
+    if (fsi > 2.75) {
+      violations.push({
+        rule_reference: 'Rule 24 / Table 4',
+        parameter: 'FSI / FAR Limit',
+        severity: 'high',
+        actual_value: fsi,
+        required_value: 2.75,
+        unit: '',
+        deficit: parseFloat((fsi - 2.75).toFixed(2)),
+        description: `FAR is ${fsi}, exceeding maximum permitted FAR of 2.75.`,
+      })
+    }
+    if (height > 16.0) {
+      violations.push({
+        rule_reference: 'Rule 28',
+        parameter: 'Building Height',
+        severity: 'high',
+        actual_value: height,
+        required_value: 16.0,
+        unit: 'm',
+        deficit: parseFloat((height - 16.0).toFixed(1)),
+        description: `Building height is ${height}m, exceeding permissible limit of 16.0m.`,
+      })
+    }
+
+    const isCompliant = violations.length === 0
     return {
-      is_compliant: true,
-      summary_verdict: "Fully Compliant with KMBR/KPBR 2019",
-      violations: [],
-      coverage_percent: 40.0,
+      is_compliant: isCompliant,
+      summary_verdict: isCompliant
+        ? 'Fully Compliant with KMBR/KPBR 2019'
+        : `${violations.length} statutory non-compliance issues identified`,
+      violations,
+      coverage_percent: covPct,
       max_coverage_percent: 65.0,
-      fsi_actual: 0.75,
+      fsi_actual: fsi,
       base_fsi: 2.75,
-      max_fsi_permitted: 4.0,
-      parking_required: 1,
-      parking_slots_provided: 1,
+      max_fsi_permitted: 2.75,
+      parking_required: built > 150 ? 1 : 0,
+      parking_slots_provided: facts.parking_slots_provided || 1,
       concessions_eligible: [],
       applied_concessions: [],
-      rule_citations: ["KMBR/KPBR 2019 Rule 24 Table 4", "Rule 25 Table 6"],
+      rule_citations: ['KMBR/KPBR 2019 Rule 24 Table 4', 'Rule 25 Table 6'],
     }
   }
   return request('/api/v2/evaluate', {

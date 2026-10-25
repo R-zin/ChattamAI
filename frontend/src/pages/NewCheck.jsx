@@ -114,11 +114,20 @@ export default function NewCheck() {
 
           {/* File Upload Dropzone */}
           <div
+            role="button"
+            tabIndex={0}
+            aria-label="Upload Architectural Blueprint (PDF or Image)"
             onDragOver={(e) => { e.preventDefault(); setDrag(true) }}
             onDragLeave={() => setDrag(false)}
             onDrop={onDrop}
             onClick={() => fileRef.current?.click()}
-            className={`relative cursor-pointer border-2 border-dashed p-10 text-center transition-all overflow-hidden bg-[#0e0e0e] ${
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                fileRef.current?.click()
+              }
+            }}
+            className={`relative cursor-pointer border-2 border-dashed p-10 text-center transition-all overflow-hidden bg-[#0e0e0e] focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none ${
               fileError ? 'border-white bg-[#1a0e0e]' : drag ? 'border-white bg-[#181818]' : 'border-[#333333] hover:border-white'
             }`}
           >

@@ -279,3 +279,21 @@ def app_client(tmp_path):
         client.fake_llm = llm  # type: ignore[attr-defined]
         client.fake_provider = provider  # type: ignore[attr-defined]
         yield client
+
+
+@pytest.fixture(autouse=True)
+def _reset_global_rate_limits():
+    """Reset the in-memory rate limiter before and after each test to prevent test bleed."""
+    try:
+        from app.main import reset_rate_limits
+
+        reset_rate_limits()
+    except Exception:
+        pass
+    yield
+    try:
+        from app.main import reset_rate_limits
+
+        reset_rate_limits()
+    except Exception:
+        pass

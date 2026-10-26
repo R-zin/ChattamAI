@@ -178,6 +178,29 @@ def generate_recovery_codes(count: Optional[int] = None) -> List[str]:
     return [secrets.token_hex(5) for _ in range(n)]
 
 
+# --- OAuth CSRF State Helpers ---
+
+
+def create_oauth_state_token(redirect_uri: Optional[str] = None) -> str:
+    """Create a tamper-proof signed state token with 5-minute TTL to defend against OAuth CSRF."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=5)
+    claims: Dict[str, Any] = {
+        "purpose": "google_oauth_state",
+        "nonce": secrets.token_hex(16),
+        "redirect_uri": redirect_uri or "",
+        "exp": expire,
+    }
+    return jwt.encode(claims, _auth_secret(), algorithm=_auth_algorithm())
+
+
+def decode_oauth_state_token(token: str) -> Dict[str, Any]:
+    """Decode and validate an OAuth state token. Raises JWTError if invalid or expired."""
+    payload = jwt.decode(token, _auth_secret(), algorithms=[_auth_algorithm()])
+    if payload.get("purpose") != "google_oauth_state":
+        raise JWTError("not a valid oauth state token")
+    return payload
+
+
 class User(Base):
     __tablename__ = "user"
     user_id = Column(String, primary_key=True, default=new_id)
@@ -190,6 +213,9 @@ class User(Base):
     # True only after the user proves they control the secret (first valid code).
     totp_secret = Column(String, nullable=True)
     totp_enabled = Column(Boolean, nullable=False, default=False)
+    # OAuth federation (Google, etc.)
+    auth_provider = Column(String, nullable=False, default="local")
+    google_sub = Column(String, nullable=True, index=True)
     sessions = relationship(
         "UserSession", back_populates="user", cascade="all, delete, delete-orphan"
     )
@@ -230,6 +256,8 @@ __all__ = [
     "decode_otp_challenge_token",
     "hash_recovery_code",
     "generate_recovery_codes",
+    "create_oauth_state_token",
+    "decode_oauth_state_token",
     "new_id",
     "expiry_time",
     "JWTError",

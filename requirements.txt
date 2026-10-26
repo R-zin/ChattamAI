@@ -54,5 +54,8 @@ bcrypt==4.0.1
 pyotp==2.9.0
 qrcode[pil]==8.2
 
+# HTTP client for Google OAuth verification and external service integration
+httpx>=0.27.0
+
 # Migrations (additive; best-effort at boot, falls back to create_all if absent).
 alembic==1.13.2

@@ -19,7 +19,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _ensure_user_totp_columns() -> None:
-    """Additively ALTER an existing ``user`` table for the 2FA columns.
+    """Additively ALTER an existing ``user`` table for the 2FA and OAuth columns.
 
     Fresh databases get these from ``create_all``; this is the only hand-migration
     needed until Alembic lands (DEVELOPMENT.md §9). Standard ``ADD COLUMN`` is
@@ -38,6 +38,15 @@ def _ensure_user_totp_columns() -> None:
                     "BOOLEAN NOT NULL DEFAULT 0"
                 )
             )
+        if "auth_provider" not in cols:
+            conn.execute(
+                text(
+                    "ALTER TABLE user ADD COLUMN auth_provider "
+                    "VARCHAR NOT NULL DEFAULT 'local'"
+                )
+            )
+        if "google_sub" not in cols:
+            conn.execute(text("ALTER TABLE user ADD COLUMN google_sub VARCHAR"))
 
 
 # --- Reports (T1.1/Alembic) --------------------------------------------------
@@ -79,9 +88,8 @@ def init_db() -> None:
     """
     from app.services import dbmodel, report_model  # noqa: F401  (register models)
 
-    if _run_alembic_upgrade():
-        return
-    Base.metadata.create_all(bind=engine)
+    if not _run_alembic_upgrade():
+        Base.metadata.create_all(bind=engine)
     _ensure_user_totp_columns()
 
 

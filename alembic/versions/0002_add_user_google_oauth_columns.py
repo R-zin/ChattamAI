@@ -22,9 +22,7 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "user",
-        sa.Column(
-            "auth_provider", sa.String(), nullable=False, server_default="local"
-        ),
+        sa.Column("auth_provider", sa.String(), nullable=False, server_default="local"),
     )
     op.add_column("user", sa.Column("google_sub", sa.String(), nullable=True))
     op.create_index(op.f("ix_user_google_sub"), "user", ["google_sub"], unique=False)

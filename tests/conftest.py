@@ -286,12 +286,14 @@ def _reset_global_rate_limits():
     """Reset the in-memory rate limiter before and after each test to prevent test bleed."""
     try:
         from app.main import reset_rate_limits
+
         reset_rate_limits()
     except Exception:
         pass
     yield
     try:
         from app.main import reset_rate_limits
+
         reset_rate_limits()
     except Exception:
         pass

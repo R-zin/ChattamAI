@@ -87,7 +87,9 @@ async def exchange_google_code(
         raise ValueError("Invalid or expired OAuth state token.") from exc
 
     expected_redirect = decoded_state.get("redirect_uri")
-    effective_redirect = redirect_uri or expected_redirect or get_settings().google_redirect_uri
+    effective_redirect = (
+        redirect_uri or expected_redirect or get_settings().google_redirect_uri
+    )
 
     settings = get_settings()
     client_id = settings.google_client_id
@@ -96,7 +98,11 @@ async def exchange_google_code(
     # Dev / test mock support
     if code.startswith("mock-google-code") or not (client_id and client_secret):
         if code.startswith("mock-google-code"):
-            email_part = code.replace("mock-google-code-", "") if "-" in code else "architect@kerala.gov.in"
+            email_part = (
+                code.replace("mock-google-code-", "")
+                if "-" in code
+                else "architect@kerala.gov.in"
+            )
             return {
                 "email": email_part if "@" in email_part else f"{email_part}@gmail.com",
                 "sub": f"mock-google-sub-{code}",
@@ -121,7 +127,9 @@ async def exchange_google_code(
             token_resp = await client.post(_GOOGLE_TOKEN_ENDPOINT, data=token_payload)
         except Exception as exc:
             logger.error("Network error reaching Google token endpoint: %s", exc)
-            raise ValueError("Failed to connect to Google authentication server.") from exc
+            raise ValueError(
+                "Failed to connect to Google authentication server."
+            ) from exc
 
         if token_resp.status_code != 200:
             logger.warning(
@@ -177,7 +185,11 @@ async def verify_google_id_token(credential: str) -> Dict[str, Any]:
     Validates signature and claims with Google's tokeninfo service.
     """
     if credential.startswith("mock-google-token"):
-        email = credential.replace("mock-google-token-", "") if "-" in credential else "testuser@gmail.com"
+        email = (
+            credential.replace("mock-google-token-", "")
+            if "-" in credential
+            else "testuser@gmail.com"
+        )
         return {
             "email": email if "@" in email else f"{email}@gmail.com",
             "sub": "mock-sub-98765",
@@ -195,10 +207,16 @@ async def verify_google_id_token(credential: str) -> Dict[str, Any]:
             )
         except Exception as exc:
             logger.error("Network error querying Google tokeninfo: %s", exc)
-            raise ValueError("Failed to connect to Google token validation server.") from exc
+            raise ValueError(
+                "Failed to connect to Google token validation server."
+            ) from exc
 
         if resp.status_code != 200:
-            logger.warning("Google tokeninfo rejected ID token (%d): %s", resp.status_code, resp.text)
+            logger.warning(
+                "Google tokeninfo rejected ID token (%d): %s",
+                resp.status_code,
+                resp.text,
+            )
             raise ValueError("Invalid Google credential token.")
 
         token_info = resp.json()

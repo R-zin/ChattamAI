@@ -212,6 +212,11 @@ def upload_kbr_document(file: UploadFile = File(...)) -> Dict[str, Any]:
             status_code=413,
             detail="File too large. Maximum upload size is 25 MB.",
         )
+    if suffix == ".pdf" and not content.lstrip().startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=400,
+            detail="Corrupted or invalid PDF document (missing %PDF magic header).",
+        )
     data_dir = get_settings().kbr_data_dir
     data_dir.mkdir(parents=True, exist_ok=True)
     target = data_dir / Path(file.filename or "uploaded_rule.txt").name
@@ -348,6 +353,11 @@ def check_upload(
             status_code=413,
             detail="File too large. Maximum upload size is 25 MB.",
         )
+    if suffix == ".pdf" and not content.lstrip().startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=400,
+            detail="Corrupted or invalid PDF document (missing %PDF magic header).",
+        )
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(content)
         tmp_path = Path(tmp.name)
@@ -429,6 +439,11 @@ def check_plan_ocr(
         raise HTTPException(
             status_code=413,
             detail="File too large. Maximum upload size is 25 MB.",
+        )
+    if suffix == ".pdf" and not content.lstrip().startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=400,
+            detail="Corrupted or invalid PDF document (missing %PDF magic header).",
         )
     raw_path: Optional[Path] = None
     txt_path: Optional[Path] = None

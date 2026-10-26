@@ -213,11 +213,27 @@ class Settings(BaseModel):
     # Recovery codes issued (once) at enable-time; each is single-use.
     totp_recovery_count: int = int(os.getenv("TOTP_RECOVERY_COUNT", "8"))
 
+    # --- Google OAuth (OpenID Connect / Google Identity Services) ---
+    google_client_id: Optional[str] = Field(
+        default_factory=lambda: os.getenv("GOOGLE_CLIENT_ID")
+    )
+    google_client_secret: Optional[str] = Field(
+        default_factory=lambda: os.getenv("GOOGLE_CLIENT_SECRET")
+    )
+    google_redirect_uri: Optional[str] = Field(
+        default_factory=lambda: os.getenv(
+            "GOOGLE_REDIRECT_URI", "http://localhost:5173/login"
+        )
+    )
+
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./chattamai.db")
     session_timeout_seconds: int = int(os.getenv("TIME_OUT", "3600"))
 
     # --- Security & Rate Limiting ---
-    cors_origins: str = os.getenv("CORS_ORIGINS", "*")
+    cors_origins: str = os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000",
+    )
     rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
 
     model_config = {"arbitrary_types_allowed": True}

@@ -760,3 +760,60 @@ export async function totpRecover({ otpToken, recoveryCode }) {
   if (!res.ok) throw new Error(`Recovery failed (${res.status})`)
   return res.json()
 }
+
+// ---- Google OAuth 2.0 API ----------------------------------------------------
+export async function getGoogleAuthUrl({ redirectUri } = {}) {
+  if (!apiAvailable()) {
+    return {
+      url: `${window.location.origin}/login?code=mock-google-code-demo&state=mock-state`,
+      state: 'mock-state',
+      client_id: 'demo-google-client-id',
+    }
+  }
+  const query = redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ''
+  const res = await fetch(`${API_URL}/auth/google/url${query}`)
+  if (!res.ok) throw new Error(`Failed to initialize Google OAuth (${res.status})`)
+  return res.json()
+}
+
+export async function googleCallbackLogin({ code, state, redirectUri } = {}) {
+  if (!apiAvailable()) {
+    await new Promise((r) => setTimeout(r, 400))
+    return { access_token: 'demo-google-token', token_type: 'bearer', expires_in: 3600 }
+  }
+  const res = await fetch(`${API_URL}/auth/google/callback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, state, redirect_uri: redirectUri }),
+  })
+  if (!res.ok) {
+    let msg = `Google sign in failed (${res.status})`
+    try {
+      const err = await res.json()
+      if (err?.detail) msg = err.detail
+    } catch (_) {}
+    throw new Error(msg)
+  }
+  return res.json()
+}
+
+export async function googleTokenLogin({ credential }) {
+  if (!apiAvailable()) {
+    await new Promise((r) => setTimeout(r, 400))
+    return { access_token: 'demo-google-token', token_type: 'bearer', expires_in: 3600 }
+  }
+  const res = await fetch(`${API_URL}/auth/google/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential }),
+  })
+  if (!res.ok) {
+    let msg = `Google token verification failed (${res.status})`
+    try {
+      const err = await res.json()
+      if (err?.detail) msg = err.detail
+    } catch (_) {}
+    throw new Error(msg)
+  }
+  return res.json()
+}

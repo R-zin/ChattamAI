@@ -26,6 +26,9 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.schemas import (
+    GoogleAuthUrlResponse,
+    GoogleCallbackRequest,
+    GoogleTokenVerifyRequest,
     LoginRequest,
     OtpRequiredResponse,
     RegisterRequest,
@@ -40,6 +43,11 @@ from app.schemas import (
     UserResponse,
 )
 from app.services.database import SessionLocal
+from app.services.google_oauth import (
+    build_google_auth_url,
+    exchange_google_code,
+    verify_google_id_token,
+)
 from app.services.dbmodel import (
     RecoveryCode,
     User,
@@ -213,6 +221,142 @@ def login_json(payload: LoginRequest = Body(...), db: Session = Depends(get_db))
             ),
             expires_in=_otp_challenge_ttl(),
         )
+    token = create_access_token(user_id=user.user_id, email=user.email)
+    return TokenResponse(access_token=token, expires_in=_token_ttl())
+
+
+# --- Google OAuth 2.0 endpoints ---
+
+
+@auth_router.get(
+    "/google/url",
+    response_model=GoogleAuthUrlResponse,
+    operation_id="google_auth_url",
+)
+def google_auth_url(
+    redirect_uri: Optional[str] = None,
+) -> GoogleAuthUrlResponse:
+    """Generate a Google OAuth 2.0 authorization URL containing a signed CSRF state parameter."""
+    url, state, client_id = build_google_auth_url(redirect_uri=redirect_uri)
+    return GoogleAuthUrlResponse(url=url, state=state, client_id=client_id)
+
+
+@auth_router.post(
+    "/google/callback",
+    response_model=Any,
+    operation_id="google_callback",
+)
+async def google_callback(
+    req: GoogleCallbackRequest,
+    db: Session = Depends(get_db),
+) -> Any:
+    """Exchange Google authorization code for a session token.
+
+    Protects against CSRF via the signed state token, provisions or links the user,
+    and enforces 2FA if enabled on the user account.
+    """
+    try:
+        profile = await exchange_google_code(
+            code=req.code,
+            state=req.state,
+            redirect_uri=req.redirect_uri,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+    email = profile["email"]
+    sub = profile["sub"]
+
+    user = _get_user_by_email(db, email)
+    if not user:
+        import secrets
+
+        user = User(
+            user_id=new_id(),
+            email=email,
+            password=hash_password(secrets.token_urlsafe(32)),
+            auth_provider="google",
+            google_sub=sub,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    else:
+        if not user.google_sub:
+            user.google_sub = sub
+            if not user.auth_provider or user.auth_provider == "local":
+                user.auth_provider = "google"
+            db.commit()
+
+    if user.totp_enabled or _totp_required():
+        setup_required = not bool(user.totp_enabled)
+        return OtpRequiredResponse(
+            otp_setup_required=setup_required,
+            otp_token=create_otp_challenge_token(
+                user.user_id, user.email, setup_required=setup_required
+            ),
+            expires_in=_otp_challenge_ttl(),
+        )
+
+    token = create_access_token(user_id=user.user_id, email=user.email)
+    return TokenResponse(access_token=token, expires_in=_token_ttl())
+
+
+@auth_router.post(
+    "/google/token",
+    response_model=Any,
+    operation_id="google_token",
+)
+async def google_token(
+    req: GoogleTokenVerifyRequest,
+    db: Session = Depends(get_db),
+) -> Any:
+    """Verify Google ID token (One-Tap / GIS) and log in or provision user."""
+    try:
+        profile = await verify_google_id_token(req.credential)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+    email = profile["email"]
+    sub = profile["sub"]
+
+    user = _get_user_by_email(db, email)
+    if not user:
+        import secrets
+
+        user = User(
+            user_id=new_id(),
+            email=email,
+            password=hash_password(secrets.token_urlsafe(32)),
+            auth_provider="google",
+            google_sub=sub,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    else:
+        if not user.google_sub:
+            user.google_sub = sub
+            if not user.auth_provider or user.auth_provider == "local":
+                user.auth_provider = "google"
+            db.commit()
+
+    if user.totp_enabled or _totp_required():
+        setup_required = not bool(user.totp_enabled)
+        return OtpRequiredResponse(
+            otp_setup_required=setup_required,
+            otp_token=create_otp_challenge_token(
+                user.user_id, user.email, setup_required=setup_required
+            ),
+            expires_in=_otp_challenge_ttl(),
+        )
+
     token = create_access_token(user_id=user.user_id, email=user.email)
     return TokenResponse(access_token=token, expires_in=_token_ttl())
 
@@ -525,6 +669,7 @@ def read_me(current_user: User = Depends(get_current_user)) -> UserResponse:
             current_user.created_at.isoformat() if current_user.created_at else None
         ),
         totp_enabled=bool(current_user.totp_enabled),
+        auth_provider=getattr(current_user, "auth_provider", "local"),
     )
 
 

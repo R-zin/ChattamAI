@@ -111,6 +111,34 @@ class UserResponse(BaseModel):
     email: str
     created_at: Optional[str] = None
     totp_enabled: bool = False
+    auth_provider: Optional[str] = "local"
+
+
+# --- Google OAuth models (additive) ---------------------------------------
+
+
+class GoogleAuthUrlResponse(BaseModel):
+    """Response returned by ``GET /auth/google/url``."""
+
+    url: str
+    state: str
+    client_id: Optional[str] = None
+
+
+class GoogleCallbackRequest(BaseModel):
+    """Payload for ``POST /auth/google/callback``."""
+
+    code: str = Field(..., description="Google authorization code", min_length=1)
+    state: str = Field(..., description="CSRF state token", min_length=1)
+    redirect_uri: Optional[str] = Field(
+        default=None, description="Optional custom redirect_uri"
+    )
+
+
+class GoogleTokenVerifyRequest(BaseModel):
+    """Payload for ``POST /auth/google/token`` (Google One-Tap / GIS credential)."""
+
+    credential: str = Field(..., description="Google ID Token JWT", min_length=10)
 
 
 # --- TOTP / 2FA models (additive) ------------------------------------------

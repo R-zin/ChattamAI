@@ -55,23 +55,73 @@ origins = [o.strip() for o in cors_setting.split(",") if o.strip()]
 if not origins:
     origins = ["*"]
 
+allow_creds = origins != ["*"]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_credentials=allow_creds,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Enforce defense-in-depth HTTP security headers (OWASP Security Misconfiguration)."""
+    response = await call_next(request)
+    headers = response.headers
+    headers["X-Content-Type-Options"] = "nosniff"
+    headers["X-Frame-Options"] = "DENY"
+    headers["X-XSS-Protection"] = "1; mode=block"
+    headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    if request.url.scheme == "https":
+        headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    # Strict Content-Security-Policy supporting Google OAuth and Swagger Docs CDN
+    csp_directives = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' https://accounts.google.com https://apis.google.com https://cdn.jsdelivr.net",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
+        "font-src 'self' https://fonts.gstatic.com data:",
+        "img-src 'self' data: https: blob:",
+        "connect-src 'self' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com https://integrate.api.nvidia.com",
+        "frame-src 'self' https://accounts.google.com",
+        "object-src 'none'",
+        "base-uri 'self'",
+    ]
+    headers["Content-Security-Policy"] = "; ".join(csp_directives)
+    return response
+
+
 _RATE_LIMIT_BUCKETS: dict = defaultdict(list)
-_SENSITIVE_PREFIXES = ("/auth/login", "/api/check", "/api/ingest", "/api/v2")
+_SENSITIVE_PREFIXES = (
+    "/auth/login",
+    "/auth/register",
+    "/auth/google",
+    "/auth/totp",
+    "/api/check",
+    "/api/ingest",
+    "/api/v2",
+)
 _RATE_LIMIT_MAX_KEYS = 5000
+
+
+def reset_rate_limits() -> None:
+    """Clear in-memory rate-limiting buckets (useful for tests and maintenance)."""
+    _RATE_LIMIT_BUCKETS.clear()
 
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     path = request.url.path
     if any(path.startswith(p) for p in _SENSITIVE_PREFIXES):
-        client_ip = request.client.host if request.client else "127.0.0.1"
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            client_ip = forwarded.split(",")[0].strip()
+        else:
+            client_ip = request.client.host if request.client else "127.0.0.1"
         now = time.time()
         window = 60.0
         max_requests = get_settings().rate_limit_per_minute

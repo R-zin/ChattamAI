@@ -6,8 +6,21 @@ import VisualWorkbench from '../pages/VisualWorkbench.jsx'
 import Reports from '../pages/Reports.jsx'
 import Projects from '../pages/Projects.jsx'
 import Dashboard from '../pages/Dashboard.jsx'
+import Login from '../pages/Login.jsx'
 
 describe('Application Pages', () => {
+  describe('Login', () => {
+    it('renders login form and Google OAuth button', () => {
+      render(
+        <BrowserRouter>
+          <Login />
+        </BrowserRouter>
+      )
+      expect(screen.getByRole('button', { name: /sign in with google/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /sign in with password/i })).toBeInTheDocument()
+      expect(screen.getByPlaceholderText(/admin@chattamai.com/i)).toBeInTheDocument()
+    })
+  })
   describe('VisualWorkbench', () => {
     it('renders header, drop zone, and empty state initially', () => {
       render(

@@ -134,6 +134,11 @@ async def check_architectural_pdf(
             status_code=413,
             detail="File too large. Maximum upload size is 25 MB.",
         )
+    if not content.lstrip().startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=400,
+            detail="Corrupted or invalid PDF document (missing %PDF magic header).",
+        )
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
         tmp.write(content)
@@ -213,6 +218,11 @@ async def check_pdf_and_export_report(
         raise HTTPException(
             status_code=413,
             detail="File too large. Maximum upload size is 25 MB.",
+        )
+    if not content.lstrip().startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=400,
+            detail="Corrupted or invalid PDF document (missing %PDF magic header).",
         )
 
     with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appName": {
+      "value": "chattamai"
+    },
+    "environment": {
+      "value": "student"
+    },
+    "cpu": {
+      "value": "0.75"
+    },
+    "memory": {
+      "value": "1.5Gi"
+    },
+    "minReplicas": {
+      "value": 0
+    },
+    "maxReplicas": {
+      "value": 2
+    },
+    "authRequired": {
+      "value": true
+    },
+    "totpRequired": {
+      "value": false
+    },
+    "corsOrigins": {
+      "value": "http://localhost:5173,http://localhost:8000"
+    }
+  }
+}

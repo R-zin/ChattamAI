@@ -25,6 +25,11 @@ services:
       - SECRET_KEY=${SECRET_KEY:-chattamai-docker-secret-change-me}
       - AUTH_REQUIRED=${AUTH_REQUIRED:-false}
       - TOTP_REQUIRED=${TOTP_REQUIRED:-false}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-http://localhost:5173/login}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000}
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-120}
       - KBR_DATA_DIR=/app/data/kbr
       - INDEX_DIR=/app/data/index
       - DATABASE_URL=sqlite:////app/data/chattamai.db

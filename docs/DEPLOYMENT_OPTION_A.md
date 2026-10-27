@@ -54,6 +54,11 @@ Fly.io provides serverless machine sleeping (scales to 0 when idle) and persiste
      ADMIN_KEY="your-secure-admin-key" \
      OPENAI_API_KEY="sk-..." \
      GEMINI_API_KEY="AIza..." \
+     NVIDIA_API_KEY="nvapi-..." \
+     GOOGLE_CLIENT_ID="your-google-client-id" \
+     GOOGLE_CLIENT_SECRET="your-google-client-secret" \
+     GOOGLE_REDIRECT_URI="https://your-app.vercel.app/login" \
+     CORS_ORIGINS="https://your-app.vercel.app,http://localhost:5173" \
      AUTH_REQUIRED="1"
    ```
 5. Deploy:

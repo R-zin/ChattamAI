@@ -44,9 +44,9 @@ This app is a single-page app; routing is handled client-side and `frontend/verc
 The app **runs fully on realistic mock data** when no API is configured — ideal for the public demo. To talk to the live FastAPI RAG backend (which binds to localhost in dev):
 
 - Copy `.env.example` → `.env` and set `VITE_API_URL=http://127.0.0.1:8000`
-- For a deployed Vercel build calling a remote API, add `VITE_API_URL` in the project's **Environment Variables** and ensure the backend is reachable + CORS-open (it already allows `*`).
+- For a deployed Vercel build calling a remote API, add `VITE_API_URL` in the project's **Environment Variables** and ensure your frontend domain is whitelisted in the backend `CORS_ORIGINS` setting.
 
-Used endpoints: `GET /api/health`, `POST /api/check`, `POST /api/check/upload`, `POST /api/ingest`.
+Used endpoints: `GET /api/health`, `POST /api/check`, `POST /api/check/upload`, `POST /api/v2/check/blueprint`, `POST /api/ingest`, `GET /auth/google/url`, `POST /auth/google/callback`.
 
 ## Data-honesty note (matches the real API)
 The backend returns `extracted_facts[]`, `violations[]` (`rule_reference`, `severity`, `description`, `plan_value`, `required_value`), and `retrieved_rules[]` (`source`, `rule_id:null`, `excerpt`, `score` = FAISS L2). It does **not** return an overall verdict, a 0–100 score, per-fact confidence, or rule numbers — those are **presentational** and derived in `src/data.js` (`deriveStatus`): `insufficient` when nothing is retrieved, `violation` on any `high` severity, otherwise `review`/`compliant`.

@@ -158,13 +158,16 @@ For a **line-referenced map of every function and where it lives** (full-system
 flowchart, call graph, and extension/test seams), see
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Production & Security Hardening
+
+- **CORS Hardening**: Configurable via `CORS_ORIGINS` (defaults to local dev endpoints; set to your specific production origins e.g. `https://chattamai.vercel.app`).
+- **Security Headers & CSP**: Built-in HTTP middleware injects `Content-Security-Policy`, `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
+- **Authentication**: Supports JWT token auth, TOTP 2-Factor Authentication, and Google OAuth 2.0 / OpenID Connect federation.
+- **Upload Validation**: Enforces 25MB file size caps and `%PDF-` magic header bytes validation.
+- **Rate Limiting**: Protects sensitive endpoints (`/auth/*`, `/api/check`, `/api/v2/*`) with configurable per-IP rate limits (`RATE_LIMIT_PER_MINUTE`).
+
 ## Limitations
 
-- Plan parsing supports **text-based** PDFs/txt, and **image / image-only-PDF plans
-  via opt-in OCR** (`POST /api/check/plan-ocr`, `OCR_ENABLED=true`, requires the
-  system Tesseract binary). OCR v1 is **layout-free** (words, not geometry) — see
-  plan.md.
 - Analysis depends on what rules were ingested and retrieved; always have an
   engineer review the output before acting on it.
-- `CORS` is wide open (`allow_origins=["*"]`) and the default `SECRET_KEY` is
-  insecure — tighten both before any public deployment.
+- Ensure production deployments set a cryptographically secure `SECRET_KEY` and define appropriate `CORS_ORIGINS`.

@@ -158,6 +158,11 @@ For a **line-referenced map of every function and where it lives** (full-system
 flowchart, call graph, and extension/test seams), see
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Production Deployment
+
+- **Microsoft Azure (Container Apps)**: Deploy the full-stack container with Azure Files persistent volume for FAISS & SQLite. See [docs/DEPLOYMENT_AZURE.md](docs/DEPLOYMENT_AZURE.md).
+- **Fly.io + Vercel + Cloudflare (Option A)**: Edge-routed deployment with persistent volume on Fly.io and React frontend on Vercel CDN. See [docs/DEPLOYMENT_OPTION_A.md](docs/DEPLOYMENT_OPTION_A.md).
+
 ## Production & Security Hardening
 
 - **CORS Hardening**: Configurable via `CORS_ORIGINS` (defaults to local dev endpoints; set to your specific production origins e.g. `https://chattamai.vercel.app`).

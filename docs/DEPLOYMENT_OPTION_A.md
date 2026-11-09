@@ -84,14 +84,20 @@ The Cloudflare Worker in `cloudflare/` proxies API traffic to your backend conta
    ALLOWED_ORIGINS = "https://your-app.vercel.app,http://localhost:5173"
    ```
 3. Deploy the Worker:
-   ```bash
-   npx wrangler deploy
-   ```
-   *Note your Cloudflare Worker URL, e.g.: `https://chattamai-edge-gateway.<your-subdomain>.workers.dev`*
+   - **Via CLI:**
+     ```bash
+     npx wrangler deploy
+     ```
+   - **Via Cloudflare Git Integration (Workers Builds):**
+     In your Cloudflare dashboard (*Workers & Pages > chattamai > Settings > Build*):
+     - **Root Directory**: `cloudflare`
+     - **Build Command**: leave default or `npx wrangler deploy --dry-run`
+   
+   *Note your Cloudflare Worker URL, e.g.: `https://chattamai.<your-subdomain>.workers.dev`*
 
 4. Verify edge health:
    ```bash
-   curl https://chattamai-edge-gateway.<your-subdomain>.workers.dev/cf-health
+   curl https://chattamai.<your-subdomain>.workers.dev/cf-health
    ```
 
 ---
@@ -109,7 +115,7 @@ The frontend is an optimized Vite React SPA configured with `frontend/vercel.jso
    - **Root Directory**: `frontend`
 4. Add Environment Variable:
    - **Name**: `VITE_API_URL`
-   - **Value**: `https://chattamai-edge-gateway.<your-subdomain>.workers.dev` *(your Cloudflare Worker URL)*
+   - **Value**: `https://chattamai.<your-subdomain>.workers.dev` *(your Cloudflare Worker URL)*
 5. Click **Deploy**.
 
 ### Option 3B: Via Vercel CLI
@@ -119,7 +125,7 @@ npm install -g vercel
 cd frontend
 vercel link
 vercel env add VITE_API_URL production
-# When prompted, enter: https://chattamai-edge-gateway.<your-subdomain>.workers.dev
+# When prompted, enter: https://chattamai.<your-subdomain>.workers.dev
 vercel --prod
 ```
 

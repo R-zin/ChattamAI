@@ -27,6 +27,8 @@ coverage.xml
 # Env / secrets
 .env
 .env.local
+.vercel/
+frontend/.vercel/
 
 # IDE
 .idea/

@@ -58,6 +58,49 @@ class Violation(BaseModel):
     )
 
 
+class DiscrepancyItem(BaseModel):
+    rule_reference: str = Field(..., description="Which rule/section is implicated")
+    type: str = Field(
+        ...,
+        description="Type of discrepancy: false_positive | hallucination | missed_violation | value_mismatch",
+    )
+    description: str = Field(..., description="Detailed description of the discrepancy")
+    primary_finding: Optional[str] = Field(
+        default=None, description="What the primary LLM found or asserted"
+    )
+    verifier_finding: Optional[str] = Field(
+        default=None, description="What the secondary verifier found or resolved"
+    )
+
+
+class VerificationResult(BaseModel):
+    status: str = Field(
+        ...,
+        description="Verification outcome: confirmed | flagged_discrepancy | adjusted | skipped | error",
+    )
+    verified_by_model: Optional[str] = Field(
+        default=None, description="Name or identifier of the verifying LLM model"
+    )
+    confidence_score: float = Field(
+        default=1.0,
+        ge=0.0,
+        le=1.0,
+        description="Verifier confidence score between 0.0 and 1.0",
+    )
+    cross_check_notes: Optional[str] = Field(
+        default=None, description="Auditor synthesis and justification notes"
+    )
+    discrepancies: List[DiscrepancyItem] = Field(
+        default_factory=list, description="List of detected discrepancies"
+    )
+    primary_violations_count: int = Field(
+        default=0, description="Count of violations flagged by primary LLM"
+    )
+    final_violations_count: int = Field(
+        default=0, description="Count of violations accepted after verification"
+    )
+
+
 class ComplianceResponse(BaseModel):
     extracted_facts: List[str]
     summary: str
@@ -65,6 +108,9 @@ class ComplianceResponse(BaseModel):
     retrieved_rules: List[RuleReference]
     report_id: Optional[int] = Field(
         default=None, description="Persisted assessment report ID"
+    )
+    verification: Optional[VerificationResult] = Field(
+        default=None, description="Audit and double-check results from secondary LLM"
     )
 
 
@@ -77,6 +123,18 @@ class HealthResponse(BaseModel):
     llm_model: Optional[str] = None
     embedding_provider: Optional[str] = None
     embedding_model: Optional[str] = None
+    verifier_enabled: bool = Field(
+        default=False, description="Whether secondary dual-LLM verification is enabled"
+    )
+    verifier_provider: Optional[str] = Field(
+        default=None, description="Secondary verifier provider"
+    )
+    verifier_model: Optional[str] = Field(
+        default=None, description="Secondary verifier model"
+    )
+    verifier_ready: bool = Field(
+        default=False, description="Whether secondary verifier client is ready"
+    )
 
 
 # --- Auth models (additive; existing RAG models above are unchanged) ---------

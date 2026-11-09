@@ -171,6 +171,7 @@ async def check_architectural_pdf(
                 {"rule_id": c, "source": "KBR 2019", "excerpt": c, "score": 1.0}
                 for c in evaluation_dict.get("rule_citations", [])
             ],
+            "verification": result.get("verification"),
         }
         _persist_report(
             plan_text=f"Uploaded PDF: {file.filename or 'drawing.pdf'}",
@@ -190,6 +191,7 @@ async def check_architectural_pdf(
             "applied_concessions": critic["applied_concessions"],
             "eligible_concessions": critic["eligible_concessions"],
             "remediations": result["remediations"],
+            "verification": result.get("verification"),
             "telemetry": result.get("telemetry", {}),
             "report_id": persist_payload.get("report_id"),
         }

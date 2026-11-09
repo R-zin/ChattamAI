@@ -4,6 +4,7 @@ import { AppFooter } from '../components/Shared.jsx'
 import Icon from '../components/Icon.jsx'
 import { toast } from '../components/Toast.jsx'
 import Pill from '../components/Pill.jsx'
+import VerificationAuditBadge from '../components/VerificationAuditBadge.jsx'
 import {
   Button,
   Card,
@@ -29,6 +30,8 @@ export default function VisualWorkbench() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [auditResult, setAuditResult] = useState(null)
+  const assessment = auditResult
+  const result = auditResult
   const [ksmartModal, setKsmartModal] = useState(null)
 
   // Interactive What-If slider states
@@ -354,6 +357,13 @@ export default function VisualWorkbench() {
                   <p className="text-xs text-[#a3a3a3] mt-0.5">
                     {auditResult.executive_summary}
                   </p>
+                  {(assessment?.verification || result?.verification) && (
+                    <div className="mt-3">
+                      <VerificationAuditBadge
+                        verification={assessment?.verification || result?.verification}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -64,6 +64,52 @@ def test_get_report_by_id_success(app_client):
     body = resp.json()
     assert body["report_id"] == target_id
     assert body["status"] == reports[0]["status"]
+    assert "verification" in body
+
+
+def test_get_report_by_id_includes_populated_verification(app_client):
+    from tests.test_double_check import MockVerifierLLM
+    from app.rag.graph import (
+        Context,
+        build_compliance_graph,
+        build_async_compliance_graph,
+    )
+
+    verifier = MockVerifierLLM(
+        response_json={
+            "status": "adjusted",
+            "confidence_score": 0.95,
+            "cross_check_notes": "Audited via test.",
+            "discrepancies": [],
+            "final_violations": [],
+        },
+        model="verifier-3",
+    )
+    rag = app_client.app.state.rag
+    rag.verifier_llm = verifier
+    rag.verifier_ready = True
+    rag.verifier_model = "verifier-3"
+    ctx = Context(
+        llm=rag._llm,
+        store=rag._store,
+        default_top_k=rag.settings.top_k,
+        analysis_cache=rag._analysis_memo,
+        verifier_llm=verifier,
+    )
+    rag._graph = build_compliance_graph(ctx)
+    rag._agraph = build_async_compliance_graph(ctx)
+
+    check_resp = app_client.post("/api/check", json={"plan_text": PLAN})
+    assert check_resp.status_code == 200
+    report_id = check_resp.json()["report_id"]
+
+    resp = app_client.get(f"/api/reports/{report_id}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["verification"] is not None
+    assert body["verification"]["status"] == "adjusted"
+    assert body["verification"]["verified_by_model"] == "verifier-3"
+    assert body["verification"]["confidence_score"] == 0.95
 
 
 def test_get_report_by_id_404(app_client):

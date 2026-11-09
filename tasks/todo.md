@@ -1,251 +1,185 @@
-# Task List: Nemotron-VL Blueprint Parsing & Audit Remediation
+# Task List: OpenAI-Compatible Dual LLM Double-Checking & Verification Engine
 
-## Task 1: Enforce Upload Size Caps, Header Sanitization, and Rate Limiting on V2 Routes
+## Task 1: Implement Configuration Settings and OpenAI-Compatible Client
 
-**Description:** Secure `/api/v2/check/pdf` and `/api/v2/check/pdf/export-report` against resource exhaustion and denial-of-service by applying a 25MB upload limit, bounded file reads, filename sanitization on `Content-Disposition`, and including `/api/v2` in the IP rate limiting middleware.
+**Description:** Add configuration variables to `app/config.py` for configuring an independent OpenAI-compatible verification provider (base URL, API key, model, temperature, timeout, retries, strict mode). Implement `OpenAICompatibleClient` and factory function `get_verifier_client()` in `app/rag/llm.py` using the official `openai` Python SDK with automated JSON mode fallback and retry resilience. Wire `OpenAICompatibleClient` into `get_llm_client()` so both the primary LLM provider and the secondary verifier can run against any OpenAI-compatible API.
 
 **Acceptance criteria:**
-- [ ] Uploads exceeding 25MB to `/api/v2/check/pdf` or `/api/v2/check/pdf/export-report` immediately return HTTP 413.
-- [ ] `file.read()` reads at most `MAX_UPLOAD_SIZE + 1` bytes rather than unbounded streams into memory.
-- [ ] `Content-Disposition` filename stem in the export endpoint is sanitized against CRLF (`\r\n`) and quotes.
-- [ ] `_SENSITIVE_PREFIXES` in `app/main.py` includes `"/api/v2"`.
+- [x] `app/config.py` defines `verifier_enabled`, `verifier_provider`, `verifier_base_url`, `verifier_api_key`, `verifier_model`, `verifier_temperature`, `verifier_timeout`, `verifier_max_retries`, and `verifier_strict_mode` with sensible defaults.
+- [x] `OpenAICompatibleClient` connects to any standard OpenAI-compatible API endpoint (e.g. OpenAI, Groq, Together, Ollama, vLLM, DeepSeek, local NIM).
+- [x] `get_llm_client()` supports `provider in ("openai", "openai_compatible")` so both primary and secondary LLMs can be configured with OpenAI-compatible APIs.
+- [x] If an endpoint rejects `response_format={"type": "json_object"}`, `OpenAICompatibleClient.complete()` automatically falls back to standard completions without crashing.
+- [x] `get_verifier_client()` returns `None` cleanly when `VERIFIER_ENABLED` is `False`.
 
 **Verification:**
-- [ ] Tests pass: `pytest tests/test_security_audit_fixes.py tests/test_symbolic_engine.py`
-- [ ] Manual check: Uploading a mock file >25MB returns HTTP 413.
+- [x] Tests pass: `.venv/bin/pytest tests/test_verifier_llm.py`
+- [x] Build succeeds: `.venv/bin/python -c "from app.rag.llm import get_verifier_client; print(get_verifier_client())"`
+- [x] Manual check: Verify client instantiation with custom mock `base_url` and mock API key.
 
 **Dependencies:** None
 
 **Files likely touched:**
-- `app/routes/rag_v2.py`
-- `app/main.py`
-- `tests/test_symbolic_engine.py`
+- `app/config.py`
+- `app/rag/llm.py`
+- `tests/test_verifier_llm.py`
 
-**Estimated scope:** Small (2 files)
+**Estimated scope:** Small (2 codebase files, 1 test file)
 
 ---
 
-## Task 2: Implement Authentication Gating and Persistent Report Storage for V2 Runs
+## Task 2: Create Verification Prompts and Response Schemas
 
-**Description:** Add `require_auth` dependencies to V2 endpoints so they respect `AUTH_REQUIRED=True`, and integrate report persistence so checks run via V2 write to the SQLite `report` table and show up in `/reports` and `/activity`.
+**Description:** Define system and user prompt templates in `app/rag/prompts.py` instructing the secondary LLM to rigorously audit the primary model's findings for hallucinations, false positives (including Rule 27 small-plot concessions), missed violations, and value mismatches. Extend `app/schemas.py` with `DiscrepancyItem`, `VerificationResult`, and updated `ComplianceResponse` and `HealthResponse` models.
 
 **Acceptance criteria:**
-- [ ] `/api/v2/check/pdf`, `/api/v2/evaluate`, and `/api/v2/reports/ksmart` respect `get_settings().auth_required` via `Depends(require_auth)`.
-- [ ] V2 check runs call `_persist_report()` with status, violations, and facts.
-- [ ] Persisted V2 reports can be retrieved via `GET /api/reports`.
+- [x] `SYSTEM_DOUBLE_CHECK` and `build_verify_user(facts, rules, primary_violations)` in `app/rag/prompts.py` enforce strict JSON output with status, confidence score, cross-check notes, discrepancies, and final vetted violations.
+- [x] `DiscrepancyItem` and `VerificationResult` models are defined in `app/schemas.py` with full Pydantic v2 validation.
+- [x] `ComplianceResponse` includes optional `verification: Optional[VerificationResult] = None` while preserving complete backward compatibility with existing clients.
+- [x] `HealthResponse` includes verifier status fields (`verifier_enabled`, `verifier_provider`, `verifier_model`, `verifier_ready`).
 
 **Verification:**
-- [ ] Tests pass: `pytest tests/test_reports_api.py tests/test_symbolic_engine.py`
-- [ ] Manual check: Run a V2 check with auth enabled and verify it appears in `GET /api/reports`.
+- [x] Tests pass: `.venv/bin/pytest tests/test_verification_schemas.py`
+- [x] Build succeeds: `.venv/bin/python -c "from app.schemas import ComplianceResponse, VerificationResult; print('Schemas valid')"`
+- [x] Manual check: Verify that a sample JSON verification payload validates against `VerificationResult`.
 
 **Dependencies:** Task 1
 
 **Files likely touched:**
-- `app/routes/rag_v2.py`
-- `app/routes/rag.py`
-- `tests/test_symbolic_engine.py`
+- `app/rag/prompts.py`
+- `app/schemas.py`
+- `tests/test_verification_schemas.py`
 
-**Estimated scope:** Small (2-3 files)
-
----
-
-## Checkpoint: Security & Gateways
-- [ ] All tests pass
-- [ ] Upload size capped at 25MB
-- [ ] V2 endpoints guarded by auth and rate limiter
-- [ ] Reports persist to SQLite
+**Estimated scope:** Small (2 codebase files, 1 test file)
 
 ---
 
-## Task 3: Eliminate Silent Dummy Fallbacks in PDF Normalizer & Fix Regex Defects
+## Checkpoint: Foundation Verification
+- [x] Unit tests for `OpenAICompatibleClient` pass
+- [x] Verification prompt formatting and schema serialization tests pass
+- [x] Configuration loads correctly with and without environment overrides
+- [x] No regression in existing tests (`.venv/bin/pytest tests/test_gemini_llm.py tests/test_nim_llm.py`)
 
-**Description:** Remove all hardcoded default fallbacks (`plot_area = 200.0`, `height = 7.5`, etc.) from `app/pdf_intel/normalizer.py`. If mandatory parameters cannot be extracted, raise an explicit validation error. Fix the percentage unit capture bug in `area_statement_parser.py` and enforce word boundaries in `validation.py`.
+---
+
+## Task 3: Integrate Verification Node into V1 LangGraph State Machine
+
+**Description:** Add `primary_violations` and `verification` to `ComplianceState` in `app/rag/graph.py`. Create `verify_analysis` (sync) and `averify_analysis` (async) nodes placed between `analyze` and `summarize`. Wire `verifier_llm` through `Context` and `RAGSystem` (`app/rag/system.py`). When the verifier is disabled or encounters an error, gracefully fallback to primary violations without breaking the workflow.
 
 **Acceptance criteria:**
-- [ ] `build_plan_facts_from_pdf` requires mandatory parameters (`plot_area_sqm`, `ground_coverage_sqm`, `front_setback_m`, etc.) and raises `ValueError` if missing without user overrides.
-- [ ] `PATTERNS["ground_coverage_sqm"]` does not parse `"65%"` as `65.0` square metres.
-- [ ] `app/rag/validation.py` uses word boundary checks (`\b`) so terms like "shed" and "cent" do not match words like "wished" or "incentive".
+- [x] `verify_analysis` node executes between `analyze` and `summarize` in both synchronous and asynchronous compliance graphs.
+- [x] If `verifier_llm` is not configured, `verify_analysis` returns `verification={"status": "skipped"}` with negligible overhead.
+- [x] Validated verifier outputs update `state["violations"]` with vetted violations, while retaining original `state["primary_violations"]` and populating `state["verification"]`.
+- [x] If the verifier call fails (e.g., timeout or network error), the node catches the exception, logs a warning, retains primary violations, and sets `verification={"status": "error"}`.
+- [x] `summarize` node prompt incorporates verification reconciliation context so the executive summary reflects vetted results.
 
 **Verification:**
-- [ ] Tests pass: `pytest tests/test_pdf_intel.py tests/test_plan_validation.py`
-- [ ] Unit test confirms an unparseable PDF raises `ValueError` instead of returning a dummy 200m² plan.
+- [x] Tests pass: `.venv/bin/pytest tests/test_double_check.py`
+- [x] Build succeeds: `.venv/bin/python -c "from app.rag.graph import build_compliance_graph, Context; g = build_compliance_graph(Context(llm=None, store=None)); print('Graph compiled')"`
+- [x] Manual check: Run a simulated compliance check with a mock verifier that flags a false positive; verify that the false positive is removed from final violations.
 
-**Dependencies:** None
+**Dependencies:** Task 1, Task 2
 
 **Files likely touched:**
-- `app/pdf_intel/normalizer.py`
-- `app/pdf_intel/area_statement_parser.py`
-- `app/rag/validation.py`
-- `tests/test_pdf_intel.py`
+- `app/rag/graph.py`
+- `app/rag/system.py`
+- `tests/test_double_check.py`
 
-**Estimated scope:** Medium (4 files)
+**Estimated scope:** Medium (2 codebase files, 1 test file)
 
 ---
 
-## Task 4: Fix Concession Rule Consistency & Report Formatting
+## Task 4: Report Persistence, API Contract & Diagnostics Integration
 
-**Description:** Align concession checking in `statutory_critic.py` with Rule 27(3) so that Side Yard 1 ($\ge 0.9\text{m}$) is not falsely exonerated by a loose 0.6m check. Fix text truncation in `pdf_report_v2.py` to wrap remediation actions properly.
+**Description:** Update report persistence in `app/routes/rag.py` and `app/services/report_model.py` so the `verification` audit block is stored in the SQLite database and returned in `GET /api/reports` and `GET /api/reports/{id}`. Update `GET /api/health` to report secondary verifier availability and diagnostic status.
 
 **Acceptance criteria:**
-- [ ] `critique_violations` in `statutory_critic.py` distinguishes between Side Setback 1 ($\ge 0.9\text{m}$) and Side Setback 2 ($\ge 0.6\text{m}$) for small plots.
-- [ ] Concession evaluation relies on canonical evaluator values without conflicting thresholds.
-- [ ] `generate_compliance_pdf_report_v2` wraps action text across lines without cutting off words at 95 characters.
+- [x] `_persist_report` stores `verification` dictionary in SQLite `report` table without schema breakage (using JSON column or serialized text).
+- [x] `GET /api/reports` and `GET /api/reports/{id}` return the verification audit object in the report detail payload.
+- [x] `GET /api/health` reports `verifier_enabled`, `verifier_provider`, `verifier_model`, and `verifier_ready`.
+- [x] Existing report generation endpoints continue to function for historical reports created before the verifier was added.
 
 **Verification:**
-- [ ] Tests pass: `pytest tests/test_symbolic_engine.py tests/test_pdf_report_v2.py`
-- [ ] Visual verification: Generated PDF report contains complete multi-line remediation instructions.
+- [x] Tests pass: `.venv/bin/pytest tests/test_reports_api.py tests/test_reports_persist.py tests/test_api.py`
+- [x] Build succeeds: `.venv/bin/python -c "from app.main import app; print('App initialized')"`
+- [x] Manual check: Trigger a check with verification enabled, query `GET /api/reports/{id}`, and verify the presence of `verification` field.
 
 **Dependencies:** Task 3
 
 **Files likely touched:**
-- `app/rag/agents/statutory_critic.py`
-- `app/services/pdf_report_v2.py`
-- `tests/test_symbolic_engine.py`
+- `app/routes/rag.py`
+- `app/services/report_model.py`
+- `app/schemas_reports.py`
+- `tests/test_reports_api.py`
 
-**Estimated scope:** Small (2-3 files)
-
----
-
-## Checkpoint: Correctness & Mathematical Integrity
-- [ ] All tests pass
-- [ ] No dummy fallbacks exist in the extraction pipeline
-- [ ] Concessions strictly match KPBR/KMBR Chapter VI rules
-- [ ] PDF Audit Certificate formatting renders completely
+**Estimated scope:** Small (3 codebase files, 1 test file)
 
 ---
 
-## Task 5: Add Multimodal Vision Capabilities to `NimClient`
+## Checkpoint: V1 Compliance Pipeline & Persistence
+- [x] `POST /api/check` successfully verifies candidate violations when secondary LLM is enabled
+- [x] Passthrough verified when verifier is disabled
+- [x] Full persistence and retrieval of verification audit logs verified in SQLite
+- [x] All existing V1 tests pass without regression
 
-**Description:** Extend `NimClient` in `app/rag/llm.py` with `complete_vision()` to support image inputs using OpenAI-compatible multimodal message payloads (`image_url` data URI), with retry and timeout protections.
+---
+
+## Task 5: Integrate Statutory Verifier Node into V2 Multi-Agent Graph
+
+**Description:** Extend the V2 Multi-Agent LangGraph workflow (`app/rag/multi_agent_graph.py`) by adding an LLM-powered statutory cross-checker agent node (`node_statutory_cross_checker`) positioned between `critic` and `remediation`. This agent audits the symbolic evaluation and concession findings against drawing facts, detecting unhandled statutory nuances before generating remediation notes.
 
 **Acceptance criteria:**
-- [ ] `NimClient.complete_vision(system, prompt, image_bytes, mime_type)` accepts raw image bytes and sends base64 data URI messages.
-- [ ] Honors model temperature, timeouts, and max retries.
-- [ ] Unit tests verify mock multimodal request formatting.
+- [x] `node_statutory_cross_checker` node added to V2 Multi-Agent graph between `critic` and `remediation`.
+- [x] If `verifier_llm` is not configured, the node seamlessly passes through the state without delaying execution.
+- [x] When active, cross-checks active violations and exonerations against plan facts and statutory notes, enriching the state with verification telemetry and discrepancies.
+- [x] V2 check responses (`POST /api/v2/check/pdf`) include the `verification` audit block in the response payload and report record.
 
 **Verification:**
-- [ ] Tests pass: `pytest tests/test_nim_llm.py`
+- [x] Tests pass: `.venv/bin/pytest tests/test_v2_double_check.py tests/test_symbolic_engine.py`
+- [x] Build succeeds: `.venv/bin/python -c "from app.rag.multi_agent_graph import get_multi_agent_graph; g = get_multi_agent_graph(); print('V2 Graph compiled')"`
+- [x] Manual check: Run a V2 blueprint check and confirm verification metadata in the returned JSON.
 
-**Dependencies:** None
-
-**Files likely touched:**
-- `app/rag/llm.py`
-- `tests/test_nim_llm.py`
-
-**Estimated scope:** Small (2 files)
-
----
-
-## Task 6: Implement Raster Blueprint Vision Extractor (`app/pdf_intel/vision_extractor.py`)
-
-**Description:** Create a vision-based architectural drawing extractor that renders PDF sheets to high-resolution images, calls `nvidia/nemotron-3.5-super-vl-120b-a12b`, and extracts certified parameters directly into `PlanFacts` Pydantic models when text parsing is insufficient.
-
-**Acceptance criteria:**
-- [x] `extract_plan_facts_with_nemotron_vl(pdf_path: Path)` renders the blueprint to an image and prompts Nemotron-3.5-VL with strict JSON schema instructions.
-- [x] Extracted JSON is validated into a `PlanFacts` instance.
-- [x] `build_plan_facts_from_pdf` invokes the vision extractor when regex text extraction returns incomplete mandatory fields.
-- [x] Unit tests cover both successful vision extraction and fallback handling with faked/mocked responses.
-
-**Verification:**
-- [x] Tests pass: `pytest tests/test_pdf_intel.py tests/test_nim_llm.py`
-
-**Dependencies:** Task 3, Task 5
-
-**Files likely touched:**
-- `app/pdf_intel/vision_extractor.py`
-- `app/pdf_intel/normalizer.py`
-- `app/pdf_intel/__init__.py`
-- `tests/test_pdf_intel.py`
-
-**Estimated scope:** Medium (4 files)
-
----
-
-## Task 7: Optimize LangGraph Orchestration (Async Execution, Pre-compilation & Clean Graph)
-
-**Description:** Pre-compile the multi-agent compliance LangGraph at application boot rather than compiling per request. Run PDF reading and vision extraction inside `asyncio.to_thread` to ensure non-blocking IO. Clean up the `node_classify` node to reconcile facts properly.
-
-**Acceptance criteria:**
-- [x] `build_multi_agent_graph()` is called once during app lifespan or module load and cached.
-- [x] PDF extraction in `node_intake_and_extract` executes in a thread pool worker via `asyncio.to_thread`.
-- [x] `node_classify` reconciles title block classifications with `PlanFacts`.
-
-**Verification:**
-- [x] Tests pass: `pytest tests/test_multi_agent_graph.py tests/test_symbolic_engine.py`
-
-**Dependencies:** Task 6
+**Dependencies:** Task 3, Task 4
 
 **Files likely touched:**
 - `app/rag/multi_agent_graph.py`
 - `app/routes/rag_v2.py`
-- `tests/test_multi_agent_graph.py`
+- `tests/test_v2_double_check.py`
 
-**Estimated scope:** Small (2-3 files)
-
----
-
-## Checkpoint: Multimodal Blueprint Ingestion
-- [x] All tests pass
-- [x] Raster blueprints parsed via Nemotron-VL
-- [x] Event loop never blocked during PDF parsing
-- [x] Graph compiled once at startup
+**Estimated scope:** Medium (2 codebase files, 1 test file)
 
 ---
 
-## Task 8: Fix Frontend Race Condition, History State, and Memory Leaks
+## Task 6: Implement Frontend Dual-LLM Audit Badges & Discrepancy UI
 
-**Description:** Fix `frontend/src/pages/Analysis.jsx` to prevent premature navigation when checks take >14s. Refactor `NewCheck.jsx` to stop passing raw Promise objects through router history state, and add `URL.revokeObjectURL()` in `data.js` to prevent blob memory leaks.
+**Description:** Update the frontend React application (`frontend/src/pages/Results.jsx` and `frontend/src/pages/VisualWorkbench.jsx`) to display a dedicated "Dual-LLM Verification" status card/badge. Provide an expandable audit drawer/accordion showing verified status, verifier model, confidence score, cross-check notes, and a side-by-side comparison of any discrepancies resolved between the primary and secondary models.
 
 **Acceptance criteria:**
-- [x] `Analysis.jsx` waits for the analysis promise to resolve before navigating to results.
-- [x] `NewCheck.jsx` uses standard state keys or sessionStorage rather than non-serializable Promise instances in router state.
-- [x] `exportPdfReportV2` in `frontend/src/data.js` calls `URL.revokeObjectURL(url)` after triggering the download.
+- [x] `Results.jsx` displays a verification badge:
+  - Green "Double-Checked & Confirmed by [Model]" when status is `confirmed`.
+  - Amber "Discrepancies Resolved ([N] adjusted)" when discrepancies are flagged.
+  - Informative badge when verifier is inactive or in error fallback.
+- [x] An expandable drawer/card renders `cross_check_notes` and itemized `discrepancies` (rule reference, primary finding vs verifier finding, discrepancy type).
+- [x] `VisualWorkbench.jsx` reflects the verification audit status for V2 blueprint checks.
+- [x] Clean visual design matching existing Tailwind CSS color schemes and dark/light modes.
 
 **Verification:**
 - [x] Tests pass: `cd frontend && npm test -- --run`
 - [x] Build succeeds: `cd frontend && npm run build`
+- [x] Manual check: Inspect the Results page with mock verification data to ensure smooth rendering and responsive UI.
 
-**Dependencies:** None
-
-**Files likely touched:**
-- `frontend/src/pages/Analysis.jsx`
-- `frontend/src/pages/NewCheck.jsx`
-- `frontend/src/data.js`
-
-**Estimated scope:** Small (3 files)
-
----
-
-## Task 9: Synchronize K-Smart Contract, Resolve Ruff Lint Errors & Deprecations
-
-**Description:** Update `POST /api/v2/check/pdf` to return the complete `ComplianceEvaluation` model so `VisualWorkbench.jsx` does not hardcode parameters client-side. Fix all 4 ruff F401 unused imports, and update `datetime.utcnow()` to `datetime.now(timezone.utc)`.
-
-**Acceptance criteria:**
-- [x] `check_architectural_pdf` response includes full `evaluation` metrics (`coverage_percent`, `max_coverage_percent`, `fsi_actual`, `max_fsi_permitted`, `parking_required`).
-- [x] `VisualWorkbench.jsx` uses the backend-provided evaluation for K-Smart export without hardcoded overrides.
-- [x] `ruff check .` returns zero errors.
-- [x] `datetime.utcnow()` deprecation warnings resolved across models and routes.
-
-**Verification:**
-- [x] Tests pass: `pytest` (clean run, zero F401 errors from ruff)
-- [x] Build succeeds: `cd frontend && npm run build`
-
-**Dependencies:** Task 2, Task 7, Task 8
+**Dependencies:** Task 4, Task 5
 
 **Files likely touched:**
-- `app/routes/rag_v2.py`
+- `frontend/src/pages/Results.jsx`
 - `frontend/src/pages/VisualWorkbench.jsx`
-- `app/pdf_intel/area_statement_parser.py`
-- `tests/test_pdf_intel.py`
-- `app/routes/auth.py`
-- `app/services/dbmodel.py`
+- `frontend/src/components/VerificationAuditBadge.jsx` (new component)
 
-**Estimated scope:** Medium (5 files)
+**Estimated scope:** Medium (3 frontend files)
 
 ---
 
 ## Checkpoint: Final System Verification
-- [x] All backend pytest tests pass (240+)
-- [x] `ruff check .` passes with 0 errors
-- [x] Frontend vitest and build succeed cleanly
-- [x] All audit findings and Nemotron-VL vision integration complete
+- [x] All backend test suites pass (`.venv/bin/pytest tests/` - all 260+ tests passing)
+- [x] Frontend builds cleanly with zero errors (`npm run build`)
+- [x] V1 and V2 verification flows tested with mock OpenAI-compatible endpoints
+- [x] Documentation updated with environment variable guidance (`.env.example`)

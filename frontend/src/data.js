@@ -159,6 +159,16 @@ export const demoResponse = {
     { node: 'analyze', status: 'done', detail: '3.1s · claude-3-5-sonnet', ts: '2026-08-12 14:21:46' },
     { node: 'summarize', status: 'done', detail: '1.2s · report_gen', ts: '2026-08-12 14:21:47' },
   ],
+  verification: {
+    status: 'confirmed',
+    verified_by_model: 'DeepSeek-R1 (Verifier)',
+    confidence_score: 0.98,
+    cross_check_notes:
+      'All candidate violations verified against KMBR/KPBR 2019 excerpts. Front setback and parking deficit confirmed.',
+    discrepancies: [],
+    primary_violations_count: 3,
+    final_violations_count: 3,
+  },
 }
 
 // structured fact grid (presentational confidence overlay)
@@ -332,6 +342,16 @@ const MOCK_PDF_ASSESSMENT = {
     },
   ],
   telemetry: { intake_ms: 22.4, symbolic_eval_ms: 2.1, critic_ms: 1.8 },
+  verification: {
+    status: 'confirmed',
+    verified_by_model: 'Nemotron-4-340B (Statutory Verifier)',
+    confidence_score: 0.98,
+    cross_check_notes:
+      'Statutory cross-checker verified plan facts against Rule 25 / Table 6. Front setback deficit of 0.8m confirmed.',
+    discrepancies: [],
+    primary_violations_count: 1,
+    final_violations_count: 1,
+  },
 }
 
 export async function checkPdfV2(file) {

@@ -431,6 +431,210 @@ class NimClient:
         return ""
 
 
+class OpenAICompatibleClient:
+    """Generic OpenAI-compatible client wrapper for primary or verification LLMs.
+
+    Supports official OpenAI, Groq, Together, Ollama, vLLM, DeepSeek, and
+    local or hosted OpenAI-compatible inference servers.
+    """
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
+        model: Optional[str] = None,
+        temperature: Optional[float] = None,
+        timeout: Optional[float] = None,
+        max_retries: Optional[int] = None,
+        max_tokens: Optional[int] = None,
+        provider_name: str = "openai",
+    ) -> None:
+        from openai import OpenAI
+
+        settings = get_settings()
+        if timeout is None:
+            timeout = settings.llm_timeout
+        if max_retries is None:
+            max_retries = settings.llm_max_retries
+        if max_tokens is None:
+            max_tokens = settings.llm_max_tokens
+        if temperature is None:
+            temperature = 0.0
+
+        resolved_base_url = (
+            base_url
+            or os.getenv("OPENAI_BASE_URL")
+            or getattr(settings, "openai_base_url", None)
+        )
+
+        resolved_key = (
+            api_key
+            or os.getenv("OPENAI_API_KEY")
+            or getattr(settings, "openai_api_key", None)
+        )
+
+        # Check whether endpoint is hosted cloud vs self-hosted local
+        is_hosted = (
+            not resolved_base_url
+            or any(
+                domain in resolved_base_url.lower()
+                for domain in (
+                    "openai.com",
+                    "groq.com",
+                    "together.xyz",
+                    "together.ai",
+                    "deepseek.com",
+                )
+            )
+            or provider_name.lower() in ("openai", "groq", "together")
+        )
+        if resolved_base_url and any(
+            local in resolved_base_url.lower()
+            for local in ("localhost", "127.0.0.1", "0.0.0.0")
+        ):
+            is_hosted = False
+
+        if not resolved_key:
+            if is_hosted:
+                raise RuntimeError(
+                    f"No API key provided for hosted OpenAI-compatible provider '{provider_name}'. "
+                    f"Set OPENAI_API_KEY or {provider_name.upper()}_API_KEY in the environment."
+                )
+            resolved_key = "not-used"
+
+        client_kwargs = {
+            "api_key": resolved_key,
+            "timeout": timeout,
+            "max_retries": max_retries,
+        }
+        if resolved_base_url:
+            client_kwargs["base_url"] = resolved_base_url
+
+        self._client = OpenAI(**client_kwargs)
+
+        chosen_model = model or os.getenv("LLM_MODEL") or settings.llm_model
+        if not chosen_model or chosen_model.startswith(
+            ("gemini-", "claude-", "nvidia/")
+        ):
+            chosen_model = "gpt-4o-mini"
+
+        self.model = chosen_model
+        self.base_url = resolved_base_url
+        self.temperature = temperature
+        self.timeout = timeout
+        self.max_tokens = max_tokens
+        self.max_retries = max_retries
+        self.provider = provider_name
+
+    def complete(
+        self,
+        system: str,
+        user: str,
+        temperature: Optional[float] = None,
+    ) -> str:
+        temp = self.temperature if temperature is None else temperature
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ]
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": self.max_tokens,
+            "temperature": temp,
+        }
+        if "json" in system.lower():
+            kwargs["response_format"] = {"type": "json_object"}
+
+        last_exc: Optional[Exception] = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                resp = self._client.chat.completions.create(**kwargs)
+                return resp.choices[0].message.content or ""
+            except Exception as exc:
+                if (
+                    "response_format" in kwargs
+                    and "response_format" in str(exc).lower()
+                ):
+                    logger.warning(
+                        "OpenAI-compatible endpoint rejected response_format, retrying without: %s",
+                        exc,
+                    )
+                    kwargs.pop("response_format", None)
+                    continue
+                last_exc = exc
+                logger.warning(
+                    "OpenAI-compatible complete() attempt %d/%d failed: %s",
+                    attempt + 1,
+                    self.max_retries + 1,
+                    exc,
+                )
+                if attempt < self.max_retries:
+                    time.sleep(1.0 * (attempt + 1))
+                else:
+                    raise last_exc
+        return ""
+
+    def complete_vision(
+        self,
+        system: str,
+        prompt: str,
+        image_bytes: bytes,
+        mime_type: str = "image/png",
+    ) -> str:
+        """Execute multimodal vision-language completion with image + text input."""
+        import base64
+
+        b64_img = base64.b64encode(image_bytes).decode("ascii")
+        data_uri = f"data:{mime_type};base64,{b64_img}"
+
+        user_content = [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": data_uri}},
+        ]
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user_content},
+        ]
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": self.max_tokens,
+            "temperature": self.temperature,
+        }
+        if "json" in system.lower() or "json" in prompt.lower():
+            kwargs["response_format"] = {"type": "json_object"}
+
+        last_exc: Optional[Exception] = None
+        for attempt in range(self.max_retries + 1):
+            try:
+                resp = self._client.chat.completions.create(**kwargs)
+                return resp.choices[0].message.content or ""
+            except Exception as exc:
+                if (
+                    "response_format" in kwargs
+                    and "response_format" in str(exc).lower()
+                ):
+                    logger.warning(
+                        "OpenAI-compatible vision endpoint rejected response_format, retrying without: %s",
+                        exc,
+                    )
+                    kwargs.pop("response_format", None)
+                    continue
+                last_exc = exc
+                logger.warning(
+                    "OpenAI-compatible complete_vision() attempt %d/%d failed: %s",
+                    attempt + 1,
+                    self.max_retries + 1,
+                    exc,
+                )
+                if attempt < self.max_retries:
+                    time.sleep(1.0 * (attempt + 1))
+                else:
+                    raise last_exc
+        return ""
+
+
 def get_llm_client(
     provider: Optional[str] = None,
     timeout: Optional[float] = None,
@@ -452,7 +656,30 @@ def get_llm_client(
             timeout=timeout,
             max_retries=max_retries,
         )
+    elif active_provider in ("openai", "openai_compatible"):
+        return OpenAICompatibleClient(
+            timeout=timeout,
+            max_retries=max_retries,
+            provider_name=active_provider,
+        )
     else:
         raise ValueError(
-            f"Unsupported LLM provider: {active_provider}. Choose 'gemini', 'anthropic', 'openrouter', or 'nim'."
+            f"Unsupported LLM provider: {active_provider}. Choose 'gemini', 'anthropic', 'openrouter', 'nim', or 'openai'."
         )
+
+
+def get_verifier_client() -> Optional[OpenAICompatibleClient]:
+    """Factory function returning a configured verifier LLM client, or None if disabled."""
+    settings = get_settings()
+    if not settings.verifier_enabled:
+        return None
+    return OpenAICompatibleClient(
+        api_key=settings.verifier_api_key,
+        base_url=settings.verifier_base_url,
+        model=settings.verifier_model,
+        temperature=settings.verifier_temperature,
+        timeout=settings.verifier_timeout,
+        max_retries=settings.verifier_max_retries,
+        max_tokens=settings.verifier_max_tokens,
+        provider_name=settings.verifier_provider,
+    )

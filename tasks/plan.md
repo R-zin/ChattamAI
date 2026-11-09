@@ -1,64 +1,58 @@
-# Implementation Plan: Multimodal Nemotron-VL Blueprint Parsing & Audit Remediation
+# Implementation Plan: OpenAI-Compatible Dual LLM Double-Checking & Verification Engine
 
 ## Overview
 
-This plan enhances ChattamAI by implementing multimodal architectural blueprint parsing using **NVIDIA Nemotron 3.5 Super VL 120B** (`nvidia/nemotron-3.5-super-vl-120b-a12b`) for complex raster drawings and resolving all critical, security, correctness, and architectural defects identified in the codebase audit. 
-
-Upon completion, ChattamAI will:
-1. Reliably extract certified parameters from complex/raster architectural blueprints via Nemotron-3.5-VL with zero dummy fallbacks.
-2. Enforce strict upload limits (25MB), IP rate-limiting, and authentication gating on `/api/v2/*` endpoints.
-3. Fix statutory concession logic, report formatting, and frontend race conditions.
-4. Pass all automated tests and linter checks with zero warnings or dead imports.
+This implementation plan adds a secondary LLM verification engine to ChattamAI to double-check compliance findings produced by the primary LLM provider. Both the primary and secondary LLM providers are configured via OpenAI-compatible APIs (supporting official OpenAI, Groq, Together AI, Ollama, vLLM, DeepSeek, and NVIDIA NIM endpoints). The secondary verifier performs an adversarial cross-examination across both compliance pipelines—V1 Semantic RAG (`/api/check`) and V2 Multi-Agent Architectural Blueprint compliance (`/api/v2/check/pdf`)—detecting hallucinated statutory rules, eliminating false positives (such as small-plot concessions under Chapter VI Rule 27), surfacing missed violations (false negatives), and verifying numerical thresholds. The resulting audit trail is persisted in the database and rendered in the frontend UI.
 
 ---
 
 ## Architecture Decisions
 
-- **ADR-01: Multimodal Vision Seam in `NimClient`:** Extend `NimClient` with `complete_vision()` using the standard OpenAI-compatible `image_url` base64 payload format, enabling vision inference on hosted or local NIM endpoints without introducing heavy external orchestration libraries.
-- **ADR-02: Strict Boundary Validation over Dummy Fallbacks:** Remove all synthetic defaults (`plot_area = 200.0`, `height = 7.5`, etc.) from `normalizer.py`. If neither local schedule parsing nor Nemotron-VL vision extraction can locate required building parameters, return a strict `422 Unprocessable Entity` with a detailed parameter deficit message.
-- **ADR-03: Threaded PDF IO & Startup Graph Pre-compilation:** Run blocking PyMuPDF / rasterization operations inside `asyncio.to_thread` and pre-compile the LangGraph multi-agent compliance pipeline at server startup to prevent event loop stalls.
-- **ADR-04: Full Contract Alignment for K-Smart & Reports:** Return the complete `ComplianceEvaluation` payload from `/api/v2/check/pdf` and record runs in the SQLite database via `_persist_report()`, ensuring client state and persistence parity with V1 routes.
+- **ADR-01: Provider-Agnostic `OpenAICompatibleClient` for Primary & Secondary LLMs in `app/rag/llm.py`:**
+  Implement a generalized `OpenAICompatibleClient` wrapper using the official `openai` Python SDK. It accepts standard parameters (`base_url`, `api_key`, `model`, `temperature`, `timeout`, `max_retries`, `max_tokens`) and handles endpoint discrepancies (such as JSON mode fallback when an endpoint rejects `response_format={"type": "json_object"}`). Wire `OpenAICompatibleClient` into `get_llm_client()` (for primary providers: `openai`, `openai_compatible`) as well as `get_verifier_client()` (for secondary double-checker). This enables both the first provider and the second provider to connect to any OpenAI-compatible endpoint (OpenAI, Groq, Together, Ollama, vLLM, DeepSeek, or local/remote NVIDIA NIM instances).
+
+- **ADR-02: Non-Breaking Feature Flagging & Safe Defaults:**
+  Control the secondary verifier via `VERIFIER_ENABLED` (boolean, default: `False`) and dedicated `VERIFIER_*` environment variables in `app/config.py`. When disabled or unconfigured, the verification node operates as a zero-overhead passthrough (`status="skipped"`), ensuring that all 260+ existing tests and deployment environments function without requiring secondary API credentials.
+
+- **ADR-03: LangGraph State Machine Seams for V1 and V2:**
+  - In the V1 Semantic RAG workflow (`app/rag/graph.py`), place the `verify_analysis` node between `analyze` and `summarize`. The verifier cross-examines the primary model's candidate violations against the extracted facts and retrieved KBR rule chunks, updating the state with `primary_violations`, `violations` (the vetted set), and a structured `verification` audit object.
+  - In the V2 Multi-Agent pipeline (`app/rag/multi_agent_graph.py`), introduce an LLM statutory cross-checker agent (`node_statutory_cross_checker`) positioned between `critic` and `remediation`, ensuring that deterministic evaluations and statutory concession critiques are audited against drawing text and legal exceptions.
+
+- **ADR-04: Structured Audit Schema & Persistence Contract:**
+  Define `VerificationResult` and `DiscrepancyItem` in `app/schemas.py`. Discrepancies classify issues into four explicit categories: `hallucination`, `false_positive`, `missed_violation`, and `value_mismatch`. Persist the verification payload in the SQLite `report` table so verification audit histories are retrievable via `/api/reports` and visible on the frontend.
+
+- **ADR-05: Non-Blocking Graceful Degradation:**
+  If the secondary verifier experiences a network timeout, rate limit, or invalid response, the workflow catches the exception, preserves the primary LLM's findings, logs an informative warning, and sets `verification.status="error"` rather than failing the user's compliance request.
 
 ---
 
 ## Task List
 
-### Phase 1: Security Hardening & Gateways
-- [x] Task 1: Enforce upload size caps, header sanitization, and rate limiting on V2 routes
-- [x] Task 2: Implement authentication gating and persistent report storage for V2 runs
+### Phase 1: Core Provider & Verification Foundation
+- [x] Task 1: Implement Configuration Settings and `OpenAICompatibleClient`
+- [x] Task 2: Create Verification Prompts and Response Schemas
 
-### Checkpoint: Security & Gateways
-- [x] All V2 endpoints reject files >25MB with HTTP 413
-- [x] V2 endpoints rate-limited under `_SENSITIVE_PREFIXES`
-- [x] V2 checks persist to SQLite and reflect in `/api/reports`
+### Checkpoint: Foundation
+- [x] Unit tests for `OpenAICompatibleClient` and config parsing pass cleanly.
+- [x] Pydantic validation for `VerificationResult` and `DiscrepancyItem` verified.
 
-### Phase 2: Correctness & Elimination of Hallucinated Fallbacks
-- [x] Task 3: Remove dummy fallbacks in `normalizer.py`, fix regex unit parsing, and word boundaries
-- [x] Task 4: Fix concession logic in `statutory_critic.py` and text truncation in `pdf_report_v2.py`
+### Phase 2: V1 Semantic RAG Pipeline Integration
+- [x] Task 3: Integrate Verification Node into V1 LangGraph State Machine
+- [x] Task 4: Report Persistence, API Contract & Diagnostics Integration
 
-### Checkpoint: Correctness & Mathematical Integrity
-- [x] Unparseable PDFs reject with clear HTTP 422 instead of hallucinated passes
-- [x] Side Setback 1 and Side Setback 2 evaluated according to Rule 27(3) (0.9m and 0.6m)
-- [x] PDF Audit Certificate renders clean multi-line remediation notes
+### Checkpoint: V1 Compliance Pipeline
+- [x] `POST /api/check` successfully cross-examines findings when verifier is enabled.
+- [x] When verifier is disabled, pipeline executes zero-overhead passthrough.
+- [x] Audit trail persists to SQLite and shows in `GET /api/reports`.
 
-### Phase 3: Multimodal Blueprint Parsing with NVIDIA Nemotron-3.5-VL
-- [x] Task 5: Add vision inference capability to `NimClient`
-- [x] Task 6: Implement raster blueprint vision extractor (`app/pdf_intel/vision_extractor.py`)
-- [x] Task 7: Optimize LangGraph orchestration (pre-compilation, threaded execution, dead node removal)
-
-### Checkpoint: Multimodal Extraction
-- [x] Raster blueprint images extracted into validated `PlanFacts` via Nemotron-3.5-VL
-- [x] PyMuPDF rendering executed in worker threads without event loop blocking
-- [x] Multi-agent graph compiled once at boot
-
-### Phase 4: Frontend Workbench & Codebase Hygiene
-- [x] Task 8: Fix frontend animation race condition, history state, and object URL memory leak
-- [x] Task 9: Synchronize Visual Workbench K-Smart payload, resolve ruff lint errors, and deprecations
+### Phase 3: V2 Multi-Agent Pipeline & Frontend Experience
+- [x] Task 5: Integrate Statutory Verifier Node into V2 Multi-Agent Graph
+- [x] Task 6: Implement Frontend Dual-LLM Audit Badges & Discrepancy UI
 
 ### Checkpoint: Complete Verification
-- [x] All 240+ backend tests pass
-- [x] `ruff check .` returns 0 errors
-- [x] Frontend builds and tests pass cleanly
+- [x] All backend test suites pass (`pytest tests/`) with zero regressions.
+- [x] Frontend builds cleanly (`npm run build`) and test suites pass.
+- [x] Dual-LLM verification workflow verified end-to-end.
 
 ---
 
@@ -66,12 +60,13 @@ Upon completion, ChattamAI will:
 
 | Risk | Impact | Mitigation |
 | :--- | :--- | :--- |
-| **NVIDIA NIM Vision Rate/Token Limits** | High | Compress/downscale rendered raster pages to 150-200 DPI JPEG/PNG before base64 encoding; cache extraction by PDF hash. |
-| **Missing NVIDIA_API_KEY in Offline Dev** | Medium | Gracefully fallback to deterministic textual/table extraction when vision credentials are not configured. |
-| **Breaking Existing Tests with Strict Validation** | High | Update test fixtures that relied on unparseable dummy PDFs to use well-formed synthetic Area Statements. |
+| **Secondary LLM Latency & Timeouts** | Medium | Implement configurable timeout (`VERIFIER_TIMEOUT`, default 45s), low temperature (0.0), and non-blocking fallback that retains primary findings if the verifier times out. |
+| **Incompatible Endpoint Parameters (e.g. `response_format`)** | High | Implement automatic retry loop in `OpenAICompatibleClient` that strips `response_format={"type": "json_object"}` if the upstream OpenAI-compatible proxy rejects it. |
+| **Verifier Hallucinations / Over-Eager Pruning** | High | Provide a strict system prompt (`SYSTEM_DOUBLE_CHECK`) requiring factual citations; introduce `VERIFIER_STRICT_MODE` flag; preserve `primary_violations` in the response so engineers can view both findings. |
+| **Breaking Existing Test Fixtures** | High | Default `VERIFIER_ENABLED=False` and `verifier_llm=None` in `RAGSystem`. Inject mock verifier clients in dedicated test suites using standard pytest fixtures. |
 
 ---
 
 ## Open Questions
 
-- None. All requirements and architectural specifications have been resolved.
+- None. Both V1 and V2 compliance pipeline integration and OpenAI-compatible provider abstraction have been aligned with requirements.

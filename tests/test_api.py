@@ -33,6 +33,27 @@ def test_health_ok_with_fakes(app_client):
     assert health.status == "ok"
     # app_client preloads two rules into the index.
     assert health.index_size == 2
+    # Verify verifier fields in health payload
+    assert isinstance(health.verifier_enabled, bool)
+    assert isinstance(health.verifier_ready, bool)
+
+
+def test_health_reports_verifier_when_active(app_client, monkeypatch):
+    monkeypatch.setenv("VERIFIER_ENABLED", "true")
+    monkeypatch.setenv("VERIFIER_PROVIDER", "openai_compatible")
+    monkeypatch.setenv("VERIFIER_MODEL", "qwen-2.5-72b")
+
+    rag = app_client.app.state.rag
+    rag.verifier_ready = True
+    rag.verifier_provider = "openai_compatible"
+    rag.verifier_model = "qwen-2.5-72b"
+
+    resp = app_client.get("/api/health")
+    assert resp.status_code == 200
+    health = HealthResponse(**resp.json())
+    assert health.verifier_ready is True
+    assert health.verifier_provider == "openai_compatible"
+    assert health.verifier_model == "qwen-2.5-72b"
 
 
 def test_check_returns_shaped_compliance_response(app_client):

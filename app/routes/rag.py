@@ -53,6 +53,10 @@ def _persist_report(
         from app.services.database import SessionLocal
         from app.services.report_model import Report, derive_status
 
+        verification_data = result.get("verification")
+        if hasattr(verification_data, "model_dump"):
+            verification_data = verification_data.model_dump()
+
         report = Report(
             plan_text=plan_text,
             source=source,
@@ -60,6 +64,7 @@ def _persist_report(
             extracted_facts=result.get("extracted_facts"),
             violations=result.get("violations"),
             retrieved_rules=result.get("retrieved_rules"),
+            verification=verification_data,
             status=derive_status(result.get("violations"), error=result.get("error")),
             user_id=user_id,
         )
@@ -267,6 +272,15 @@ def search_rules(
 
 @router.get("/health", response_model=HealthResponse)
 def health(rag: RAGSystem = Depends(get_rag)) -> HealthResponse:
+    settings = get_settings()
+    verifier_enabled = getattr(settings, "verifier_enabled", False)
+    verifier_ready = getattr(rag, "verifier_ready", False)
+    verifier_provider = getattr(rag, "verifier_provider", None) or getattr(
+        settings, "verifier_provider", None
+    )
+    verifier_model = getattr(rag, "verifier_model", None) or getattr(
+        settings, "verifier_model", None
+    )
     return HealthResponse(
         status="ok" if (rag.embeddings_ready and rag.llm_ready) else "degraded",
         index_size=rag.index_size,
@@ -276,6 +290,10 @@ def health(rag: RAGSystem = Depends(get_rag)) -> HealthResponse:
         llm_model=getattr(rag, "llm_model", None),
         embedding_provider=getattr(rag, "embedding_provider", None),
         embedding_model=getattr(rag, "embedding_model", None),
+        verifier_enabled=verifier_enabled,
+        verifier_provider=verifier_provider,
+        verifier_model=verifier_model,
+        verifier_ready=verifier_ready,
     )
 
 

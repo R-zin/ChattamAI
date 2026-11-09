@@ -1,5 +1,5 @@
 {
-  "name": "chattamai-edge-gateway",
+  "name": "chattamai",
   "version": "1.0.0",
   "description": "Cloudflare Worker Edge API Gateway for ChattamAI",
   "private": true,

@@ -12,6 +12,8 @@ Cooperative cyclical workflow:
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypedDict
@@ -21,20 +23,31 @@ from app.pdf_intel.normalizer import build_plan_facts_from_pdf
 from app.rag.agents.classifier import classify_submission
 from app.rag.agents.remediation import generate_remediations
 from app.rag.agents.statutory_critic import critique_violations
+from app.rag.graph import _extract_json
+from app.rag.llm import get_verifier_client
+from app.rag.prompts import SYSTEM_DOUBLE_CHECK, build_verify_user
 from app.rules.evaluator import evaluate_plan_facts
 from app.rules.models import Jurisdiction, OccupancyGroup, PlanFacts, RuleViolation
+
+logger = logging.getLogger(__name__)
 
 
 class MultiAgentComplianceState(TypedDict, total=False):
     pdf_path: Optional[str]
     plan_text: Optional[str]
     plan_facts: Optional[PlanFacts]
+    drawing_facts: Optional[Any]
     classification: Optional[Dict[str, Any]]
     symbolic_result: Optional[Dict[str, Any]]
+    evaluation: Optional[Dict[str, Any]]
     critic_result: Optional[Dict[str, Any]]
+    verification: Optional[Dict[str, Any]]
     remediations: Optional[List[Dict[str, Any]]]
     executive_summary: Optional[str]
     telemetry: Optional[Dict[str, Any]]
+
+
+MultiAgentState = MultiAgentComplianceState
 
 
 async def node_intake_and_extract(state: MultiAgentComplianceState) -> Dict[str, Any]:
@@ -141,6 +154,125 @@ def node_statutory_critic(state: MultiAgentComplianceState) -> Dict[str, Any]:
     }
 
 
+def node_statutory_cross_checker(state: MultiAgentState) -> Dict[str, Any]:
+    """Audit symbolic violations & exonerations against statutory nuances with secondary LLM."""
+    t0 = time.perf_counter()
+    verifier_llm = get_verifier_client()
+
+    if verifier_llm is None:
+        elapsed = round((time.perf_counter() - t0) * 1000, 2)
+        return {
+            "verification": {"status": "skipped", "reason": "verifier_disabled"},
+            "telemetry": {**state.get("telemetry", {}), "verifier_ms": elapsed},
+        }
+
+    # Extract facts from drawing_facts or plan_facts
+    facts_obj = state.get("drawing_facts") or state.get("plan_facts")
+    eval_dict = state.get("evaluation") or state.get("symbolic_result") or {}
+    classification = state.get("classification") or {}
+    critic_result = state.get("critic_result") or {}
+
+    active_violations = (
+        critic_result.get("active_violations")
+        if critic_result.get("active_violations") is not None
+        else eval_dict.get("violations", [])
+    )
+    exonerated_violations = critic_result.get("exonerated_violations", [])
+    applied_concessions = critic_result.get("applied_concessions", [])
+
+    try:
+        # Format facts
+        if hasattr(facts_obj, "model_dump"):
+            facts_str = json.dumps(facts_obj.model_dump(), indent=2)
+        elif isinstance(facts_obj, dict):
+            facts_str = json.dumps(facts_obj, indent=2)
+        else:
+            facts_str = str(facts_obj or "")
+
+        if classification:
+            facts_str += f"\n\nClassification:\n{json.dumps(classification, indent=2)}"
+
+        # Format governing statutory rules and excerpts
+        rules_lines = [
+            "Kerala Municipality / Panchayat Building Rules (KMBR / KPBR 2019)"
+        ]
+        if eval_dict.get("rule_citations"):
+            rules_lines.append(f"Citations: {', '.join(eval_dict['rule_citations'])}")
+        if exonerated_violations:
+            rules_lines.append(
+                f"Exonerated Violations (via statutory concessions):\n{json.dumps(exonerated_violations, indent=2)}"
+            )
+        if applied_concessions:
+            rules_lines.append(
+                f"Applied Statutory Concessions: {', '.join(applied_concessions)}"
+            )
+        rules_str = "\n\n".join(rules_lines)
+
+        user_prompt = build_verify_user(facts_str, rules_str, active_violations)
+        raw = verifier_llm.complete(SYSTEM_DOUBLE_CHECK, user_prompt)
+        parsed = _extract_json(raw)
+
+        elapsed = round((time.perf_counter() - t0) * 1000, 2)
+
+        if parsed is None:
+            logger.warning(
+                "node_statutory_cross_checker: failed to parse JSON from verifier output: %r",
+                (raw or "")[:120],
+            )
+            return {
+                "verification": {
+                    "status": "error",
+                    "error": "Failed to extract valid JSON from verifier output",
+                    "primary_violations_count": len(active_violations),
+                    "final_violations_count": len(active_violations),
+                },
+                "telemetry": {**state.get("telemetry", {}), "verifier_ms": elapsed},
+            }
+
+        confidence = parsed.get("confidence_score", 1.0)
+        try:
+            confidence_score = float(confidence)
+        except (TypeError, ValueError):
+            confidence_score = 1.0
+
+        final_violations = parsed.get("final_violations")
+        final_count = (
+            len(final_violations)
+            if isinstance(final_violations, list)
+            else len(active_violations)
+        )
+
+        verification_dict = {
+            "status": parsed.get("status", "confirmed"),
+            "verified_by_model": getattr(verifier_llm, "model", "custom"),
+            "confidence_score": confidence_score,
+            "cross_check_notes": parsed.get("cross_check_notes"),
+            "discrepancies": parsed.get("discrepancies", []),
+            "primary_violations_count": len(active_violations),
+            "final_violations_count": final_count,
+        }
+        return {
+            "verification": verification_dict,
+            "telemetry": {**state.get("telemetry", {}), "verifier_ms": elapsed},
+        }
+    except Exception as exc:
+        elapsed = round((time.perf_counter() - t0) * 1000, 2)
+        logger.warning("node_statutory_cross_checker failed: %s", exc, exc_info=True)
+        return {
+            "verification": {
+                "status": "error",
+                "error": str(exc),
+                "primary_violations_count": len(active_violations)
+                if "active_violations" in locals()
+                else 0,
+                "final_violations_count": len(active_violations)
+                if "active_violations" in locals()
+                else 0,
+            },
+            "telemetry": {**state.get("telemetry", {}), "verifier_ms": elapsed},
+        }
+
+
 def node_remediation(state: MultiAgentComplianceState) -> Dict[str, Any]:
     """Generate architectural recommendations for any remaining violations."""
     t0 = time.perf_counter()
@@ -196,6 +328,7 @@ def build_multi_agent_graph():
     graph.add_node("classify", node_classify)
     graph.add_node("symbolic_eval", node_symbolic_evaluator)
     graph.add_node("critic", node_statutory_critic)
+    graph.add_node("statutory_cross_checker", node_statutory_cross_checker)
     graph.add_node("remediation", node_remediation)
     graph.add_node("synthesizer", node_synthesizer)
 
@@ -203,7 +336,8 @@ def build_multi_agent_graph():
     graph.add_edge("intake", "classify")
     graph.add_edge("classify", "symbolic_eval")
     graph.add_edge("symbolic_eval", "critic")
-    graph.add_edge("critic", "remediation")
+    graph.add_edge("critic", "statutory_cross_checker")
+    graph.add_edge("statutory_cross_checker", "remediation")
     graph.add_edge("remediation", "synthesizer")
     graph.add_edge("synthesizer", END)
 

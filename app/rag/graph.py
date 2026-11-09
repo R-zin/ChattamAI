@@ -299,7 +299,11 @@ def summarize(state: ComplianceState, ctx: Context) -> dict:
     violations = state.get("violations") or []
     user = f"EXTRACTED FACTS:\n{facts}\n\nPOTENTIAL VIOLATIONS:\n{json.dumps(violations, indent=2)}"
     verification = state.get("verification")
-    if verification and isinstance(verification, dict) and verification.get("cross_check_notes"):
+    if (
+        verification
+        and isinstance(verification, dict)
+        and verification.get("cross_check_notes")
+    ):
         user += f"\n\nVERIFICATION RECONCILIATION:\n{verification['cross_check_notes']}"
     span.measure_in(user)
     summary = ctx.llm.complete(SYSTEM_SUMMARY, user)

@@ -478,7 +478,13 @@ class OpenAICompatibleClient:
             not resolved_base_url
             or any(
                 domain in resolved_base_url.lower()
-                for domain in ("openai.com", "groq.com", "together.xyz", "together.ai", "deepseek.com")
+                for domain in (
+                    "openai.com",
+                    "groq.com",
+                    "together.xyz",
+                    "together.ai",
+                    "deepseek.com",
+                )
             )
             or provider_name.lower() in ("openai", "groq", "together")
         )
@@ -507,7 +513,9 @@ class OpenAICompatibleClient:
         self._client = OpenAI(**client_kwargs)
 
         chosen_model = model or os.getenv("LLM_MODEL") or settings.llm_model
-        if not chosen_model or chosen_model.startswith(("gemini-", "claude-", "nvidia/")):
+        if not chosen_model or chosen_model.startswith(
+            ("gemini-", "claude-", "nvidia/")
+        ):
             chosen_model = "gpt-4o-mini"
 
         self.model = chosen_model

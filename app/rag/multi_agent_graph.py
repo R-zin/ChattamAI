@@ -193,7 +193,9 @@ def node_statutory_cross_checker(state: MultiAgentState) -> Dict[str, Any]:
             facts_str += f"\n\nClassification:\n{json.dumps(classification, indent=2)}"
 
         # Format governing statutory rules and excerpts
-        rules_lines = ["Kerala Municipality / Panchayat Building Rules (KMBR / KPBR 2019)"]
+        rules_lines = [
+            "Kerala Municipality / Panchayat Building Rules (KMBR / KPBR 2019)"
+        ]
         if eval_dict.get("rule_citations"):
             rules_lines.append(f"Citations: {', '.join(eval_dict['rule_citations'])}")
         if exonerated_violations:

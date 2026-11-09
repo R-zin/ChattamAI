@@ -136,7 +136,9 @@ def test_verify_analysis_confirms_valid_violations():
 
 def test_verify_analysis_removes_false_positive_and_records_discrepancy():
     """Under Rule 27 small-plot concession, rear setback of 1.2m is permitted (not a violation)."""
-    vetted_violations = [SAMPLE_PRIMARY_VIOLATIONS[0]]  # Only Rule 24(1) front setback remains
+    vetted_violations = [
+        SAMPLE_PRIMARY_VIOLATIONS[0]
+    ]  # Only Rule 24(1) front setback remains
     verifier_payload = {
         "status": "adjusted",
         "confidence_score": 0.96,

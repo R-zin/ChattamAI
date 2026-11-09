@@ -45,13 +45,15 @@ class MockVerifierLLM:
             return "Non-JSON response: [Error: unparseable text]"
         if self.response_json is not None:
             return json.dumps(self.response_json)
-        return json.dumps({
-            "status": "confirmed",
-            "confidence_score": 0.99,
-            "cross_check_notes": "All symbolic evaluation findings verified against KBR 2019.",
-            "discrepancies": [],
-            "final_violations": [],
-        })
+        return json.dumps(
+            {
+                "status": "confirmed",
+                "confidence_score": 0.99,
+                "cross_check_notes": "All symbolic evaluation findings verified against KBR 2019.",
+                "discrepancies": [],
+                "final_violations": [],
+            }
+        )
 
 
 @pytest.fixture
@@ -144,7 +146,9 @@ def test_node_statutory_cross_checker_executes_and_emits_verified_status(
         "discrepancies": [],
         "final_violations": [],
     }
-    mock_verifier = MockVerifierLLM(response_json=verifier_payload, model="qwen-2.5-32b")
+    mock_verifier = MockVerifierLLM(
+        response_json=verifier_payload, model="qwen-2.5-32b"
+    )
     monkeypatch.setattr(
         "app.rag.multi_agent_graph.get_verifier_client", lambda: mock_verifier
     )
@@ -156,7 +160,10 @@ def test_node_statutory_cross_checker_executes_and_emits_verified_status(
     assert v["status"] == "confirmed"
     assert v["verified_by_model"] == "qwen-2.5-32b"
     assert v["confidence_score"] == 0.98
-    assert v["cross_check_notes"] == "Statutory cross-check confirms full compliance with KPBR 2019."
+    assert (
+        v["cross_check_notes"]
+        == "Statutory cross-check confirms full compliance with KPBR 2019."
+    )
     assert v["discrepancies"] == []
     assert len(mock_verifier.calls) == 1
 
@@ -182,7 +189,9 @@ def test_node_statutory_cross_checker_records_discrepancy(monkeypatch):
         ],
         "final_violations": [],
     }
-    mock_verifier = MockVerifierLLM(response_json=discrepancy_payload, model="llama-3.3-70b")
+    mock_verifier = MockVerifierLLM(
+        response_json=discrepancy_payload, model="llama-3.3-70b"
+    )
     monkeypatch.setattr(
         "app.rag.multi_agent_graph.get_verifier_client", lambda: mock_verifier
     )
@@ -260,7 +269,9 @@ async def test_multi_agent_graph_integration_with_verifier(
         "discrepancies": [],
         "final_violations": [],
     }
-    mock_verifier = MockVerifierLLM(response_json=verifier_payload, model="nim/meta-llama-3")
+    mock_verifier = MockVerifierLLM(
+        response_json=verifier_payload, model="nim/meta-llama-3"
+    )
     monkeypatch.setattr(
         "app.rag.multi_agent_graph.get_verifier_client", lambda: mock_verifier
     )
@@ -274,9 +285,7 @@ async def test_multi_agent_graph_integration_with_verifier(
     assert "verifier_ms" in result["telemetry"]
 
 
-def test_api_v2_check_pdf_response_includes_verification(
-    sample_pdf: Path, monkeypatch
-):
+def test_api_v2_check_pdf_response_includes_verification(sample_pdf: Path, monkeypatch):
     """Verify POST /api/v2/check/pdf response includes the verification audit block."""
     # Test 1: Verifier disabled (default passthrough)
     monkeypatch.setattr("app.rag.multi_agent_graph.get_verifier_client", lambda: None)
@@ -298,7 +307,9 @@ def test_api_v2_check_pdf_response_includes_verification(
         "discrepancies": [],
         "final_violations": [],
     }
-    mock_verifier = MockVerifierLLM(response_json=verifier_payload, model="groq/llama-3.3-70b-versatile")
+    mock_verifier = MockVerifierLLM(
+        response_json=verifier_payload, model="groq/llama-3.3-70b-versatile"
+    )
     monkeypatch.setattr(
         "app.rag.multi_agent_graph.get_verifier_client", lambda: mock_verifier
     )

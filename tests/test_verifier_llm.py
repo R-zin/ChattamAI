@@ -71,7 +71,9 @@ def test_openai_compatible_client_complete_standard():
         mock_instance = MagicMock()
         mock_resp = MagicMock()
         mock_resp.choices = [
-            MagicMock(message=MagicMock(content="- plot area: 450 sq.m\n- height: 8.5m"))
+            MagicMock(
+                message=MagicMock(content="- plot area: 450 sq.m\n- height: 8.5m")
+            )
         ]
         mock_instance.chat.completions.create.return_value = mock_resp
         mock_openai_cls.return_value = mock_instance
@@ -112,7 +114,9 @@ def test_openai_compatible_client_json_fallback_on_rejection():
         mock_resp.choices = [MagicMock(message=MagicMock(content='{"violations": []}'))]
         # First call fails on response_format, second succeeds without it
         mock_instance.chat.completions.create.side_effect = [
-            RuntimeError("400 BadRequest: response_format is not supported by this engine"),
+            RuntimeError(
+                "400 BadRequest: response_format is not supported by this engine"
+            ),
             mock_resp,
         ]
         mock_openai_cls.return_value = mock_instance
@@ -122,7 +126,9 @@ def test_openai_compatible_client_json_fallback_on_rejection():
 
         assert result == '{"violations": []}'
         assert mock_instance.chat.completions.create.call_count == 2
-        second_call_kwargs = mock_instance.chat.completions.create.call_args_list[1].kwargs
+        second_call_kwargs = mock_instance.chat.completions.create.call_args_list[
+            1
+        ].kwargs
         assert "response_format" not in second_call_kwargs
 
 
@@ -150,7 +156,9 @@ def test_openai_compatible_client_exhausts_retries():
     """Test failure raised when retry budget is exhausted."""
     with patch("openai.OpenAI") as mock_openai_cls, patch("time.sleep"):
         mock_instance = MagicMock()
-        mock_instance.chat.completions.create.side_effect = RuntimeError("Fatal network error")
+        mock_instance.chat.completions.create.side_effect = RuntimeError(
+            "Fatal network error"
+        )
         mock_openai_cls.return_value = mock_instance
 
         client = OpenAICompatibleClient(api_key="sk-test", max_retries=1)

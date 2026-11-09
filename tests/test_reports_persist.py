@@ -57,7 +57,11 @@ def test_persisted_report_fields_match_response(app_client):
 
 def test_persisted_report_stores_active_verification(app_client):
     from tests.test_double_check import MockVerifierLLM
-    from app.rag.graph import Context, build_compliance_graph, build_async_compliance_graph
+    from app.rag.graph import (
+        Context,
+        build_compliance_graph,
+        build_async_compliance_graph,
+    )
 
     verifier = MockVerifierLLM(
         response_json={

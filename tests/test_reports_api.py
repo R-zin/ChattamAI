@@ -69,7 +69,11 @@ def test_get_report_by_id_success(app_client):
 
 def test_get_report_by_id_includes_populated_verification(app_client):
     from tests.test_double_check import MockVerifierLLM
-    from app.rag.graph import Context, build_compliance_graph, build_async_compliance_graph
+    from app.rag.graph import (
+        Context,
+        build_compliance_graph,
+        build_async_compliance_graph,
+    )
 
     verifier = MockVerifierLLM(
         response_json={

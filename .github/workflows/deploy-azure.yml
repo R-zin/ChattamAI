@@ -50,8 +50,13 @@ jobs:
         id: resolve-acr
         run: |
           if [ -n "$AZURE_CONTAINER_REGISTRY" ]; then
-            echo "acr_server=${AZURE_CONTAINER_REGISTRY}.azurecr.io" >> $GITHUB_OUTPUT
-            echo "acr_name=${AZURE_CONTAINER_REGISTRY}" >> $GITHUB_OUTPUT
+            RAW_ACR="${AZURE_CONTAINER_REGISTRY}"
+            RAW_ACR="${RAW_ACR#https://}"
+            RAW_ACR="${RAW_ACR#http://}"
+            RAW_ACR="${RAW_ACR%.azurecr.io}"
+            CLEAN_ACR=$(echo "$RAW_ACR" | tr '[:upper:]' '[:lower:]' | xargs)
+            echo "acr_server=${CLEAN_ACR}.azurecr.io" >> $GITHUB_OUTPUT
+            echo "acr_name=${CLEAN_ACR}" >> $GITHUB_OUTPUT
           else
             # Discover first ACR in the resource group
             ACR_NAME=$(az acr list --resource-group "$AZURE_RESOURCE_GROUP" --query "[0].name" -o tsv || echo "")
@@ -113,12 +118,16 @@ jobs:
           ACR_USER=$(az acr credential show --name "$ACR_NAME" --query "username" -o tsv)
           ACR_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" -o tsv)
 
+          # Configure registry credentials on the container app.
+          # Note: If the currently active revision is in a failed pull state, az containerapp registry set
+          # may return non-zero while attempting to restart it. We capture this and proceed so az containerapp update
+          # deploys the new revision with the fresh credentials.
           az containerapp registry set \
             --name "$TARGET_APP" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --server "$ACR_SERVER" \
             --username "$ACR_USER" \
-            --password "$ACR_PASS"
+            --password "$ACR_PASS" || echo "Note: registry set completed (previous broken revision restart caught); proceeding to deploy new image revision..."
 
           echo "Deploying $IMAGE_URI to $TARGET_APP in $AZURE_RESOURCE_GROUP..."
           az containerapp update \

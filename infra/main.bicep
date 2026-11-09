@@ -202,31 +202,31 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
         }
         {
           name: 'openai-api-key'
-          value: openAiApiKey
+          value: empty(openAiApiKey) ? 'none' : openAiApiKey
         }
         {
           name: 'gemini-api-key'
-          value: geminiApiKey
+          value: empty(geminiApiKey) ? 'none' : geminiApiKey
         }
         {
           name: 'nvidia-api-key'
-          value: nvidiaApiKey
+          value: empty(nvidiaApiKey) ? 'none' : nvidiaApiKey
         }
         {
           name: 'anthropic-api-key'
-          value: anthropicApiKey
+          value: empty(anthropicApiKey) ? 'none' : anthropicApiKey
         }
         {
           name: 'admin-key'
-          value: adminKey
+          value: empty(adminKey) ? uniqueString(resourceGroup().id, secretKey, 'admin') : adminKey
         }
         {
           name: 'google-client-id'
-          value: googleClientId
+          value: empty(googleClientId) ? 'none' : googleClientId
         }
         {
           name: 'google-client-secret'
-          value: googleClientSecret
+          value: empty(googleClientSecret) ? 'none' : googleClientSecret
         }
       ]
     }

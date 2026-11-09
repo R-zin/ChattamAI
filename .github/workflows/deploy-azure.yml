@@ -83,19 +83,40 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Deploy Image Revision to Azure Container App
+        id: deploy-app
         run: |
           IMAGE_URI="${{ steps.resolve-acr.outputs.acr_server }}/chattamai:${{ github.sha }}"
-          echo "Deploying $IMAGE_URI to $AZURE_CONTAINER_APP_NAME in $AZURE_RESOURCE_GROUP..."
+          TARGET_APP="$AZURE_CONTAINER_APP_NAME"
+
+          echo "Checking for Container App '$TARGET_APP' in resource group '$AZURE_RESOURCE_GROUP'..."
+          if ! az containerapp show --name "$TARGET_APP" --resource-group "$AZURE_RESOURCE_GROUP" >/dev/null 2>&1; then
+            echo "Container app '$TARGET_APP' was not found directly. Querying container apps in '$AZURE_RESOURCE_GROUP'..."
+            DISCOVERED_APP=$(az containerapp list --resource-group "$AZURE_RESOURCE_GROUP" --query "[0].name" -o tsv || echo "")
+            if [ -n "$DISCOVERED_APP" ]; then
+              echo "Found Container App: '$DISCOVERED_APP'. Using it for deployment."
+              TARGET_APP="$DISCOVERED_APP"
+            else
+              echo "::error::No Container App found in resource group '$AZURE_RESOURCE_GROUP'."
+              echo "Listing existing resources in '$AZURE_RESOURCE_GROUP':"
+              az resource list --resource-group "$AZURE_RESOURCE_GROUP" --output table || true
+              echo "Action required: Run the initial Bicep deployment in Azure Cloud Shell to provision the container app before deploying code."
+              exit 1
+            fi
+          fi
+
+          echo "target_app=$TARGET_APP" >> $GITHUB_OUTPUT
+          echo "Deploying $IMAGE_URI to $TARGET_APP in $AZURE_RESOURCE_GROUP..."
           
           az containerapp update \
-            --name "$AZURE_CONTAINER_APP_NAME" \
+            --name "$TARGET_APP" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$IMAGE_URI"
 
       - name: Verify Deployment Health
         run: |
+          TARGET_APP="${{ steps.deploy-app.outputs.target_app || env.AZURE_CONTAINER_APP_NAME }}"
           APP_URL=$(az containerapp show \
-            --name "$AZURE_CONTAINER_APP_NAME" \
+            --name "$TARGET_APP" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --query "properties.configuration.ingress.fqdn" -o tsv)
           

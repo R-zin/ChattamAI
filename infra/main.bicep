@@ -24,6 +24,9 @@ param minReplicas int = 1
 @description('Maximum container replicas.')
 param maxReplicas int = 5
 
+@description('Enable persistent Azure File share for FAISS and SQLite (/app/data). Disable for Express/Student serverless environments.')
+param enablePersistentStorage bool = false
+
 // --- Secrets and API Keys ---
 @secure()
 @description('Secret key used for JWT signing and session validation.')
@@ -103,7 +106,7 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
 }
 
 // 3. Azure Storage Account & File Share for Persistent FAISS & SQLite Storage
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = if (enablePersistentStorage) {
   name: storageAccountName
   location: location
   sku: {
@@ -117,12 +120,12 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   }
 }
 
-resource fileService 'Microsoft.Storage/storageAccounts/fileServices@2023-01-01' = {
+resource fileService 'Microsoft.Storage/storageAccounts/fileServices@2023-01-01' = if (enablePersistentStorage) {
   parent: storageAccount
   name: 'default'
 }
 
-resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = {
+resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2023-01-01' = if (enablePersistentStorage) {
   parent: fileService
   name: fileShareName
   properties: {
@@ -135,6 +138,12 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
   name: appEnvName
   location: location
   properties: {
+    workloadProfiles: [
+      {
+        name: 'Consumption'
+        workloadProfileType: 'Consumption'
+      }
+    ]
     appLogsConfiguration: {
       destination: 'log-analytics'
       logAnalyticsConfiguration: {
@@ -146,7 +155,7 @@ resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' = {
 }
 
 // 5. Mount Azure File Share into ACA Managed Environment
-resource envStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = {
+resource envStorage 'Microsoft.App/managedEnvironments/storages@2024-03-01' = if (enablePersistentStorage) {
   parent: containerAppEnv
   name: 'chattam-storage-mount'
   properties: {
@@ -222,11 +231,16 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
       ]
     }
     template: {
-      volumes: [
+      volumes: enablePersistentStorage ? [
         {
           name: 'data-volume'
           storageType: 'AzureFile'
           storageName: 'chattam-storage-mount'
+        }
+      ] : [
+        {
+          name: 'data-volume'
+          storageType: 'EmptyDir'
         }
       ]
       containers: [
@@ -356,4 +370,4 @@ output fqdn string = containerApp.properties.configuration.ingress.fqdn
 output appUrl string = 'https://${containerApp.properties.configuration.ingress.fqdn}'
 output acrLoginServer string = acr.properties.loginServer
 output acrName string = acr.name
-output storageAccountName string = storageAccount.name
+output storageAccountName string = enablePersistentStorage ? storageAccount.name : 'none'

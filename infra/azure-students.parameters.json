@@ -8,6 +8,9 @@
     "environment": {
       "value": "student"
     },
+    "enablePersistentStorage": {
+      "value": false
+    },
     "cpu": {
       "value": "0.75"
     },

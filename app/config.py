@@ -88,7 +88,15 @@ def _clean_key(val: Optional[str]) -> Optional[str]:
     if not val:
         return None
     cleaned = val.strip()
-    if cleaned.lower() in ("none", "null", "undefined", "not-configured", "not-set", "dummy", ""):
+    if cleaned.lower() in (
+        "none",
+        "null",
+        "undefined",
+        "not-configured",
+        "not-set",
+        "dummy",
+        "",
+    ):
         return None
     return cleaned
 
@@ -165,7 +173,9 @@ class Settings(BaseModel):
 
     # --- Embeddings (OpenAI / NVIDIA NIM) ---
     embedding_provider: str = Field(default_factory=_default_embedding_provider)
-    openai_api_key: Optional[str] = Field(default_factory=lambda: _clean_key(os.getenv("OPENAI_API_KEY")))
+    openai_api_key: Optional[str] = Field(
+        default_factory=lambda: _clean_key(os.getenv("OPENAI_API_KEY"))
+    )
     openai_base_url: Optional[str] = os.getenv("OPENAI_BASE_URL")  # optional proxy
     embedding_model: str = Field(default_factory=_default_embedding_model)
     embedding_dim: int = Field(default_factory=_default_embedding_dim)
@@ -173,20 +183,22 @@ class Settings(BaseModel):
     # --- LLM (Google Gemini, Anthropic Claude, NVIDIA NIM Nemotron) ---
     llm_provider: str = Field(default_factory=_default_llm_provider)
     gemini_api_key: Optional[str] = Field(
-        default_factory=lambda: _clean_key(os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY")))
+        default_factory=lambda: _clean_key(
+            os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY"))
+        )
     )
     anthropic_api_key: Optional[str] = Field(
         default_factory=lambda: _clean_key(
-            os.getenv(
-                "ANTHROPIC_API_KEY", os.getenv("ANTHROPIC_AUTH_TOKEN")
-            )
+            os.getenv("ANTHROPIC_API_KEY", os.getenv("ANTHROPIC_AUTH_TOKEN"))
         )
     )
     anthropic_base_url: Optional[str] = Field(
         default_factory=lambda: os.getenv("ANTHROPIC_BASE_URL")
     )
     nvidia_api_key: Optional[str] = Field(
-        default_factory=lambda: _clean_key(os.getenv("NVIDIA_API_KEY", os.getenv("NIM_API_KEY")))
+        default_factory=lambda: _clean_key(
+            os.getenv("NVIDIA_API_KEY", os.getenv("NIM_API_KEY"))
+        )
     )
     nvidia_base_url: Optional[str] = Field(
         default_factory=lambda: os.getenv(

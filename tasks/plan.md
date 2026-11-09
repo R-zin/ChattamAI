@@ -46,13 +46,13 @@ This implementation plan adds a secondary LLM verification engine to ChattamAI t
 - [x] Audit trail persists to SQLite and shows in `GET /api/reports`.
 
 ### Phase 3: V2 Multi-Agent Pipeline & Frontend Experience
-- [ ] Task 5: Integrate Statutory Verifier Node into V2 Multi-Agent Graph
-- [ ] Task 6: Implement Frontend Dual-LLM Audit Badges & Discrepancy UI
+- [x] Task 5: Integrate Statutory Verifier Node into V2 Multi-Agent Graph
+- [x] Task 6: Implement Frontend Dual-LLM Audit Badges & Discrepancy UI
 
 ### Checkpoint: Complete Verification
-- [ ] All backend test suites pass (`pytest tests/`) with zero regressions.
-- [ ] Frontend builds cleanly (`npm run build`) and test suites pass.
-- [ ] Dual-LLM verification workflow verified end-to-end.
+- [x] All backend test suites pass (`pytest tests/`) with zero regressions.
+- [x] Frontend builds cleanly (`npm run build`) and test suites pass.
+- [x] Dual-LLM verification workflow verified end-to-end.
 
 ---
 

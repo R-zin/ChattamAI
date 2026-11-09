@@ -128,15 +128,15 @@
 **Description:** Extend the V2 Multi-Agent LangGraph workflow (`app/rag/multi_agent_graph.py`) by adding an LLM-powered statutory cross-checker agent node (`node_statutory_cross_checker`) positioned between `critic` and `remediation`. This agent audits the symbolic evaluation and concession findings against drawing facts, detecting unhandled statutory nuances before generating remediation notes.
 
 **Acceptance criteria:**
-- [ ] `node_statutory_cross_checker` node added to V2 Multi-Agent graph between `critic` and `remediation`.
-- [ ] If `verifier_llm` is not configured, the node seamlessly passes through the state without delaying execution.
-- [ ] When active, cross-checks active violations and exonerations against plan facts and statutory notes, enriching the state with verification telemetry and discrepancies.
-- [ ] V2 check responses (`POST /api/v2/check/pdf`) include the `verification` audit block in the response payload and report record.
+- [x] `node_statutory_cross_checker` node added to V2 Multi-Agent graph between `critic` and `remediation`.
+- [x] If `verifier_llm` is not configured, the node seamlessly passes through the state without delaying execution.
+- [x] When active, cross-checks active violations and exonerations against plan facts and statutory notes, enriching the state with verification telemetry and discrepancies.
+- [x] V2 check responses (`POST /api/v2/check/pdf`) include the `verification` audit block in the response payload and report record.
 
 **Verification:**
-- [ ] Tests pass: `.venv/bin/pytest tests/test_v2_double_check.py tests/test_symbolic_engine.py`
-- [ ] Build succeeds: `.venv/bin/python -c "from app.rag.multi_agent_graph import get_multi_agent_graph; g = get_multi_agent_graph(); print('V2 Graph compiled')"`
-- [ ] Manual check: Run a V2 blueprint check and confirm verification metadata in the returned JSON.
+- [x] Tests pass: `.venv/bin/pytest tests/test_v2_double_check.py tests/test_symbolic_engine.py`
+- [x] Build succeeds: `.venv/bin/python -c "from app.rag.multi_agent_graph import get_multi_agent_graph; g = get_multi_agent_graph(); print('V2 Graph compiled')"`
+- [x] Manual check: Run a V2 blueprint check and confirm verification metadata in the returned JSON.
 
 **Dependencies:** Task 3, Task 4
 
@@ -154,18 +154,18 @@
 **Description:** Update the frontend React application (`frontend/src/pages/Results.jsx` and `frontend/src/pages/VisualWorkbench.jsx`) to display a dedicated "Dual-LLM Verification" status card/badge. Provide an expandable audit drawer/accordion showing verified status, verifier model, confidence score, cross-check notes, and a side-by-side comparison of any discrepancies resolved between the primary and secondary models.
 
 **Acceptance criteria:**
-- [ ] `Results.jsx` displays a verification badge:
+- [x] `Results.jsx` displays a verification badge:
   - Green "Double-Checked & Confirmed by [Model]" when status is `confirmed`.
   - Amber "Discrepancies Resolved ([N] adjusted)" when discrepancies are flagged.
   - Informative badge when verifier is inactive or in error fallback.
-- [ ] An expandable drawer/card renders `cross_check_notes` and itemized `discrepancies` (rule reference, primary finding vs verifier finding, discrepancy type).
-- [ ] `VisualWorkbench.jsx` reflects the verification audit status for V2 blueprint checks.
-- [ ] Clean visual design matching existing Tailwind CSS color schemes and dark/light modes.
+- [x] An expandable drawer/card renders `cross_check_notes` and itemized `discrepancies` (rule reference, primary finding vs verifier finding, discrepancy type).
+- [x] `VisualWorkbench.jsx` reflects the verification audit status for V2 blueprint checks.
+- [x] Clean visual design matching existing Tailwind CSS color schemes and dark/light modes.
 
 **Verification:**
-- [ ] Tests pass: `cd frontend && npm test -- --run`
-- [ ] Build succeeds: `cd frontend && npm run build`
-- [ ] Manual check: Inspect the Results page with mock verification data to ensure smooth rendering and responsive UI.
+- [x] Tests pass: `cd frontend && npm test -- --run`
+- [x] Build succeeds: `cd frontend && npm run build`
+- [x] Manual check: Inspect the Results page with mock verification data to ensure smooth rendering and responsive UI.
 
 **Dependencies:** Task 4, Task 5
 
@@ -179,7 +179,7 @@
 ---
 
 ## Checkpoint: Final System Verification
-- [ ] All backend test suites pass (`.venv/bin/pytest tests/` - all 260+ tests passing)
-- [ ] Frontend builds cleanly with zero errors (`npm run build`)
-- [ ] V1 and V2 verification flows tested with mock OpenAI-compatible endpoints
-- [ ] Documentation updated with environment variable guidance (`.env.example`)
+- [x] All backend test suites pass (`.venv/bin/pytest tests/` - all 260+ tests passing)
+- [x] Frontend builds cleanly with zero errors (`npm run build`)
+- [x] V1 and V2 verification flows tested with mock OpenAI-compatible endpoints
+- [x] Documentation updated with environment variable guidance (`.env.example`)

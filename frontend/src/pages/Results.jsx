@@ -4,6 +4,7 @@ import { Header } from '../components/AppShell.jsx'
 import { AppFooter, ScoreRing, AnalysisTrace } from '../components/Shared.jsx'
 import Pill from '../components/Pill.jsx'
 import Icon from '../components/Icon.jsx'
+import VerificationAuditBadge from '../components/VerificationAuditBadge.jsx'
 import { toast } from '../components/Toast.jsx'
 import { demoResponse, demoFactGrid, SEVERITY_META, STATUS_META, deriveStatus, downloadReport } from '../data.js'
 
@@ -14,7 +15,15 @@ function useResult() {
       const raw = sessionStorage.getItem('chattam.result')
       if (raw) {
         const parsed = JSON.parse(raw)
-        if (parsed && Array.isArray(parsed.violations)) setResp({ ...demoResponse, ...parsed, trace: demoResponse.trace, score: demoResponse.score })
+        if (parsed && Array.isArray(parsed.violations)) {
+          setResp({
+            ...demoResponse,
+            ...parsed,
+            verification: parsed.verification || demoResponse.verification,
+            trace: demoResponse.trace,
+            score: demoResponse.score,
+          })
+        }
       }
     } catch {}
   }, [])
@@ -85,6 +94,8 @@ function EvidenceDrawer({ rule, onClose }) {
 
 export default function Results() {
   const resp = useResult()
+  const data = resp
+  const result = resp
   const status = STATUS_META[deriveStatus(resp)]
   const [drawer, setDrawer] = useState(null)
   const ruleByRef = (ref) => resp.retrieved_rules.find((r) => (r.rule_id && ref.includes(r.rule_id)) || ref.includes(r.rule_id || '::')) || resp.retrieved_rules[0]
@@ -124,9 +135,12 @@ export default function Results() {
       <div className="p-6 md:p-8 flex flex-col gap-6 bg-[#0a0a0a]">
         {/* Top Verdict Banner */}
         <div className="bg-[#121212] border border-[#262626] p-6 md:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="space-y-3">
+          <div className="space-y-3 flex-1">
             <div className="flex items-center gap-3 flex-wrap">
               <Pill kind={status.pill}>{status.label}</Pill>
+              <VerificationAuditBadge
+                verification={data.verification || result?.verification}
+              />
             </div>
             <h3 className="text-2xl md:text-3xl font-bold text-white uppercase tracking-tight font-sans">
               Structural & Zoning Compliance Results

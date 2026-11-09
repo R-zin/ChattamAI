@@ -86,6 +86,8 @@ jobs:
         id: deploy-app
         run: |
           IMAGE_URI="${{ steps.resolve-acr.outputs.acr_server }}/chattamai:${{ github.sha }}"
+          ACR_NAME="${{ steps.resolve-acr.outputs.acr_name }}"
+          ACR_SERVER="${{ steps.resolve-acr.outputs.acr_server }}"
           TARGET_APP="$AZURE_CONTAINER_APP_NAME"
 
           echo "Checking for Container App '$TARGET_APP' in resource group '$AZURE_RESOURCE_GROUP'..."
@@ -105,8 +107,20 @@ jobs:
           fi
 
           echo "target_app=$TARGET_APP" >> $GITHUB_OUTPUT
+
+          echo "Configuring ACR pull credentials for $TARGET_APP..."
+          az acr update --name "$ACR_NAME" --admin-enabled true >/dev/null 2>&1 || true
+          ACR_USER=$(az acr credential show --name "$ACR_NAME" --query "username" -o tsv)
+          ACR_PASS=$(az acr credential show --name "$ACR_NAME" --query "passwords[0].value" -o tsv)
+
+          az containerapp registry set \
+            --name "$TARGET_APP" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --server "$ACR_SERVER" \
+            --username "$ACR_USER" \
+            --password "$ACR_PASS"
+
           echo "Deploying $IMAGE_URI to $TARGET_APP in $AZURE_RESOURCE_GROUP..."
-          
           az containerapp update \
             --name "$TARGET_APP" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
@@ -123,7 +137,7 @@ jobs:
           echo "Application FQDN: https://$APP_URL"
           echo "Awaiting health check endpoint (https://$APP_URL/api/health)..."
           
-          for i in {1..30}; do
+          for i in {1..40}; do
             STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" "https://$APP_URL/api/health" || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "Health check succeeded with HTTP 200 on attempt $i."

@@ -44,6 +44,8 @@ def _default_llm_model() -> str:
         return "claude-3-5-sonnet-20241022"
     if provider in ("nim", "nvidia", "nemotron"):
         return "nvidia/nemotron-3.5-super-vl-120b-a12b"
+    if provider in ("openai", "openai_compatible"):
+        return "gpt-4o-mini"
     return "gemini-2.5-flash"
 
 
@@ -185,6 +187,52 @@ class Settings(BaseModel):
     llm_max_tokens: int = int(os.getenv("LLM_MAX_TOKENS", "2048"))
     llm_timeout: float = float(os.getenv("LLM_TIMEOUT", "60"))
     llm_max_retries: int = int(os.getenv("LLM_MAX_RETRIES", "2"))
+
+    # --- Secondary Verifier (Dual-LLM Cross-Checker) ---
+    verifier_enabled: bool = Field(
+        default_factory=lambda: os.getenv("VERIFIER_ENABLED", "").strip().lower()
+        in ("1", "true", "yes", "on")
+    )
+    verifier_provider: str = Field(
+        default_factory=lambda: (
+            os.getenv("VERIFIER_PROVIDER", "openai").strip().lower() or "openai"
+        )
+    )
+    verifier_base_url: Optional[str] = Field(
+        default_factory=lambda: (
+            os.getenv("VERIFIER_BASE_URL", "").strip()
+            or os.getenv("OPENAI_BASE_URL", "").strip()
+            or None
+        )
+    )
+    verifier_api_key: Optional[str] = Field(
+        default_factory=lambda: (
+            os.getenv("VERIFIER_API_KEY", "").strip()
+            or os.getenv("OPENAI_API_KEY", "").strip()
+            or None
+        )
+    )
+    verifier_model: str = Field(
+        default_factory=lambda: (
+            os.getenv("VERIFIER_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+        )
+    )
+    verifier_temperature: float = Field(
+        default_factory=lambda: float(os.getenv("VERIFIER_TEMPERATURE", "0.0"))
+    )
+    verifier_timeout: float = Field(
+        default_factory=lambda: float(os.getenv("VERIFIER_TIMEOUT", "45.0"))
+    )
+    verifier_max_retries: int = Field(
+        default_factory=lambda: int(os.getenv("VERIFIER_MAX_RETRIES", "2"))
+    )
+    verifier_max_tokens: int = Field(
+        default_factory=lambda: int(os.getenv("VERIFIER_MAX_TOKENS", "2048"))
+    )
+    verifier_strict_mode: bool = Field(
+        default_factory=lambda: os.getenv("VERIFIER_STRICT_MODE", "").strip().lower()
+        in ("1", "true", "yes", "on")
+    )
 
     # --- Auth (see app/services/dbmodel.py + app/routes/auth.py) ---
     # SECRET_KEY must be overridden in production (ephemeral random secret is generated in dev).

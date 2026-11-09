@@ -29,12 +29,12 @@ This implementation plan adds a secondary LLM verification engine to ChattamAI t
 ## Task List
 
 ### Phase 1: Core Provider & Verification Foundation
-- [ ] Task 1: Implement Configuration Settings and `OpenAICompatibleClient`
-- [ ] Task 2: Create Verification Prompts and Response Schemas
+- [x] Task 1: Implement Configuration Settings and `OpenAICompatibleClient`
+- [x] Task 2: Create Verification Prompts and Response Schemas
 
 ### Checkpoint: Foundation
-- [ ] Unit tests for `OpenAICompatibleClient` and config parsing pass cleanly.
-- [ ] Pydantic validation for `VerificationResult` and `DiscrepancyItem` verified.
+- [x] Unit tests for `OpenAICompatibleClient` and config parsing pass cleanly.
+- [x] Pydantic validation for `VerificationResult` and `DiscrepancyItem` verified.
 
 ### Phase 2: V1 Semantic RAG Pipeline Integration
 - [ ] Task 3: Integrate Verification Node into V1 LangGraph State Machine

@@ -5,16 +5,16 @@
 **Description:** Add configuration variables to `app/config.py` for configuring an independent OpenAI-compatible verification provider (base URL, API key, model, temperature, timeout, retries, strict mode). Implement `OpenAICompatibleClient` and factory function `get_verifier_client()` in `app/rag/llm.py` using the official `openai` Python SDK with automated JSON mode fallback and retry resilience. Wire `OpenAICompatibleClient` into `get_llm_client()` so both the primary LLM provider and the secondary verifier can run against any OpenAI-compatible API.
 
 **Acceptance criteria:**
-- [ ] `app/config.py` defines `verifier_enabled`, `verifier_provider`, `verifier_base_url`, `verifier_api_key`, `verifier_model`, `verifier_temperature`, `verifier_timeout`, `verifier_max_retries`, and `verifier_strict_mode` with sensible defaults.
-- [ ] `OpenAICompatibleClient` connects to any standard OpenAI-compatible API endpoint (e.g. OpenAI, Groq, Together, Ollama, vLLM, DeepSeek, local NIM).
-- [ ] `get_llm_client()` supports `provider in ("openai", "openai_compatible")` so both primary and secondary LLMs can be configured with OpenAI-compatible APIs.
-- [ ] If an endpoint rejects `response_format={"type": "json_object"}`, `OpenAICompatibleClient.complete()` automatically falls back to standard completions without crashing.
-- [ ] `get_verifier_client()` returns `None` cleanly when `VERIFIER_ENABLED` is `False`.
+- [x] `app/config.py` defines `verifier_enabled`, `verifier_provider`, `verifier_base_url`, `verifier_api_key`, `verifier_model`, `verifier_temperature`, `verifier_timeout`, `verifier_max_retries`, and `verifier_strict_mode` with sensible defaults.
+- [x] `OpenAICompatibleClient` connects to any standard OpenAI-compatible API endpoint (e.g. OpenAI, Groq, Together, Ollama, vLLM, DeepSeek, local NIM).
+- [x] `get_llm_client()` supports `provider in ("openai", "openai_compatible")` so both primary and secondary LLMs can be configured with OpenAI-compatible APIs.
+- [x] If an endpoint rejects `response_format={"type": "json_object"}`, `OpenAICompatibleClient.complete()` automatically falls back to standard completions without crashing.
+- [x] `get_verifier_client()` returns `None` cleanly when `VERIFIER_ENABLED` is `False`.
 
 **Verification:**
-- [ ] Tests pass: `.venv/bin/pytest tests/test_verifier_llm.py`
-- [ ] Build succeeds: `.venv/bin/python -c "from app.rag.llm import get_verifier_client; print(get_verifier_client())"`
-- [ ] Manual check: Verify client instantiation with custom mock `base_url` and mock API key.
+- [x] Tests pass: `.venv/bin/pytest tests/test_verifier_llm.py`
+- [x] Build succeeds: `.venv/bin/python -c "from app.rag.llm import get_verifier_client; print(get_verifier_client())"`
+- [x] Manual check: Verify client instantiation with custom mock `base_url` and mock API key.
 
 **Dependencies:** None
 
@@ -32,15 +32,15 @@
 **Description:** Define system and user prompt templates in `app/rag/prompts.py` instructing the secondary LLM to rigorously audit the primary model's findings for hallucinations, false positives (including Rule 27 small-plot concessions), missed violations, and value mismatches. Extend `app/schemas.py` with `DiscrepancyItem`, `VerificationResult`, and updated `ComplianceResponse` and `HealthResponse` models.
 
 **Acceptance criteria:**
-- [ ] `SYSTEM_DOUBLE_CHECK` and `build_verify_user(facts, rules, primary_violations)` in `app/rag/prompts.py` enforce strict JSON output with status, confidence score, cross-check notes, discrepancies, and final vetted violations.
-- [ ] `DiscrepancyItem` and `VerificationResult` models are defined in `app/schemas.py` with full Pydantic v2 validation.
-- [ ] `ComplianceResponse` includes optional `verification: Optional[VerificationResult] = None` while preserving complete backward compatibility with existing clients.
-- [ ] `HealthResponse` includes verifier status fields (`verifier_enabled`, `verifier_provider`, `verifier_model`, `verifier_ready`).
+- [x] `SYSTEM_DOUBLE_CHECK` and `build_verify_user(facts, rules, primary_violations)` in `app/rag/prompts.py` enforce strict JSON output with status, confidence score, cross-check notes, discrepancies, and final vetted violations.
+- [x] `DiscrepancyItem` and `VerificationResult` models are defined in `app/schemas.py` with full Pydantic v2 validation.
+- [x] `ComplianceResponse` includes optional `verification: Optional[VerificationResult] = None` while preserving complete backward compatibility with existing clients.
+- [x] `HealthResponse` includes verifier status fields (`verifier_enabled`, `verifier_provider`, `verifier_model`, `verifier_ready`).
 
 **Verification:**
-- [ ] Tests pass: `.venv/bin/pytest tests/test_verification_schemas.py`
-- [ ] Build succeeds: `.venv/bin/python -c "from app.schemas import ComplianceResponse, VerificationResult; print('Schemas valid')"`
-- [ ] Manual check: Verify that a sample JSON verification payload validates against `VerificationResult`.
+- [x] Tests pass: `.venv/bin/pytest tests/test_verification_schemas.py`
+- [x] Build succeeds: `.venv/bin/python -c "from app.schemas import ComplianceResponse, VerificationResult; print('Schemas valid')"`
+- [x] Manual check: Verify that a sample JSON verification payload validates against `VerificationResult`.
 
 **Dependencies:** Task 1
 
@@ -54,10 +54,10 @@
 ---
 
 ## Checkpoint: Foundation Verification
-- [ ] Unit tests for `OpenAICompatibleClient` pass
-- [ ] Verification prompt formatting and schema serialization tests pass
-- [ ] Configuration loads correctly with and without environment overrides
-- [ ] No regression in existing tests (`.venv/bin/pytest tests/test_gemini_llm.py tests/test_nim_llm.py`)
+- [x] Unit tests for `OpenAICompatibleClient` pass
+- [x] Verification prompt formatting and schema serialization tests pass
+- [x] Configuration loads correctly with and without environment overrides
+- [x] No regression in existing tests (`.venv/bin/pytest tests/test_gemini_llm.py tests/test_nim_llm.py`)
 
 ---
 

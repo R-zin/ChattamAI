@@ -26,6 +26,7 @@ coverage.xml
 
 # Env / secrets
 .env
+.env.*
 .env.local
 .vercel/
 frontend/.vercel/

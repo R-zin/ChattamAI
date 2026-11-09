@@ -102,6 +102,10 @@ export default function Login() {
 
   const handleGoogleSignIn = async () => {
     if (busy) return
+    if (!apiAvailable()) {
+      toast('Google OAuth is only enabled when connected to a live backend API.', 'info')
+      return
+    }
     setBusy(true)
     setError(null)
     try {

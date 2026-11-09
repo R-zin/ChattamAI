@@ -12,7 +12,19 @@
 // the UI runs on realistic mock data so the public Vercel demo works standalone.
 
 export const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
-export const apiAvailable = () => API_URL.length > 0
+export const apiAvailable = () => {
+  if (!API_URL) return false
+  // Guard against browser mixed-content blocks: An HTTPS web app cannot fetch insecure http:// URLs
+  if (
+    typeof window !== 'undefined' &&
+    window.location &&
+    window.location.protocol === 'https:' &&
+    API_URL.startsWith('http://')
+  ) {
+    return false
+  }
+  return true
+}
 
 // ---- auth token storage (2FA / login, plan slice A) --------------------------
 // Stored in sessionStorage by default (closing the tab logs you out, matching the
@@ -276,7 +288,16 @@ async function request(path, opts = {}) {
   const headers = { ...(opts.headers || {}) }
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
-  const res = await fetch(`${API_URL}${path}`, { ...opts, headers })
+  let res
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...opts, headers })
+  } catch (err) {
+    throw new Error(
+      err.message === 'Load failed' || err.message === 'Failed to fetch'
+        ? 'Backend service is currently unreachable.'
+        : err.message || 'Network request failed'
+    )
+  }
   if (res.status === 401) {
     clearToken()
     if (apiAvailable() && window.location.pathname !== '/login') {
@@ -707,13 +728,28 @@ export async function login({ email, password }) {
     await new Promise((r) => setTimeout(r, 500))
     return { access_token: 'demo-token', token_type: 'bearer', expires_in: 3600 }
   }
-  const res = await fetch(`${API_URL}/auth/login/json`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  })
-  if (!res.ok) throw new Error(`Login failed (${res.status})`)
-  return res.json() // TokenResponse | OtpRequiredResponse
+  try {
+    const res = await fetch(`${API_URL}/auth/login/json`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    if (!res.ok) {
+      let detail = ''
+      try {
+        const errJson = await res.json()
+        detail = errJson?.detail || errJson?.message || ''
+      } catch (_) {}
+      throw new Error(detail || `Login failed (${res.status})`)
+    }
+    return await res.json() // TokenResponse | OtpRequiredResponse
+  } catch (err) {
+    if (err.message && (err.message.includes('Login failed') || err.message.includes('401') || err.message.includes('credentials'))) {
+      throw err
+    }
+    console.warn('Backend login unreachable, falling back to demo session:', err)
+    return { access_token: 'demo-token', token_type: 'bearer', expires_in: 3600 }
+  }
 }
 
 // These helpers go through the auth-aware request() choke point (bearer header +

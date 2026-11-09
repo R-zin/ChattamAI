@@ -30,8 +30,12 @@ class ReportOut(BaseModel):
     retrieved_rules: Optional[List[Dict[str, Any]]] = None
     status: Optional[str] = None
     user_id: Optional[str] = None
+    verification: Optional[Dict[str, Any]] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
-__all__ = ["ReportOut"]
+ReportDetailResponse = ReportOut
+ReportItemResponse = ReportOut
+
+__all__ = ["ReportOut", "ReportDetailResponse", "ReportItemResponse"]

@@ -66,16 +66,16 @@
 **Description:** Add `primary_violations` and `verification` to `ComplianceState` in `app/rag/graph.py`. Create `verify_analysis` (sync) and `averify_analysis` (async) nodes placed between `analyze` and `summarize`. Wire `verifier_llm` through `Context` and `RAGSystem` (`app/rag/system.py`). When the verifier is disabled or encounters an error, gracefully fallback to primary violations without breaking the workflow.
 
 **Acceptance criteria:**
-- [ ] `verify_analysis` node executes between `analyze` and `summarize` in both synchronous and asynchronous compliance graphs.
-- [ ] If `verifier_llm` is not configured, `verify_analysis` returns `verification={"status": "skipped"}` with negligible overhead.
-- [ ] Validated verifier outputs update `state["violations"]` with vetted violations, while retaining original `state["primary_violations"]` and populating `state["verification"]`.
-- [ ] If the verifier call fails (e.g., timeout or network error), the node catches the exception, logs a warning, retains primary violations, and sets `verification={"status": "error"}`.
-- [ ] `summarize` node prompt incorporates verification reconciliation context so the executive summary reflects vetted results.
+- [x] `verify_analysis` node executes between `analyze` and `summarize` in both synchronous and asynchronous compliance graphs.
+- [x] If `verifier_llm` is not configured, `verify_analysis` returns `verification={"status": "skipped"}` with negligible overhead.
+- [x] Validated verifier outputs update `state["violations"]` with vetted violations, while retaining original `state["primary_violations"]` and populating `state["verification"]`.
+- [x] If the verifier call fails (e.g., timeout or network error), the node catches the exception, logs a warning, retains primary violations, and sets `verification={"status": "error"}`.
+- [x] `summarize` node prompt incorporates verification reconciliation context so the executive summary reflects vetted results.
 
 **Verification:**
-- [ ] Tests pass: `.venv/bin/pytest tests/test_double_check.py`
-- [ ] Build succeeds: `.venv/bin/python -c "from app.rag.graph import build_compliance_graph, Context; g = build_compliance_graph(Context(llm=None, store=None)); print('Graph compiled')"`
-- [ ] Manual check: Run a simulated compliance check with a mock verifier that flags a false positive; verify that the false positive is removed from final violations.
+- [x] Tests pass: `.venv/bin/pytest tests/test_double_check.py`
+- [x] Build succeeds: `.venv/bin/python -c "from app.rag.graph import build_compliance_graph, Context; g = build_compliance_graph(Context(llm=None, store=None)); print('Graph compiled')"`
+- [x] Manual check: Run a simulated compliance check with a mock verifier that flags a false positive; verify that the false positive is removed from final violations.
 
 **Dependencies:** Task 1, Task 2
 
@@ -93,15 +93,15 @@
 **Description:** Update report persistence in `app/routes/rag.py` and `app/services/report_model.py` so the `verification` audit block is stored in the SQLite database and returned in `GET /api/reports` and `GET /api/reports/{id}`. Update `GET /api/health` to report secondary verifier availability and diagnostic status.
 
 **Acceptance criteria:**
-- [ ] `_persist_report` stores `verification` dictionary in SQLite `report` table without schema breakage (using JSON column or serialized text).
-- [ ] `GET /api/reports` and `GET /api/reports/{id}` return the verification audit object in the report detail payload.
-- [ ] `GET /api/health` reports `verifier_enabled`, `verifier_provider`, `verifier_model`, and `verifier_ready`.
-- [ ] Existing report generation endpoints continue to function for historical reports created before the verifier was added.
+- [x] `_persist_report` stores `verification` dictionary in SQLite `report` table without schema breakage (using JSON column or serialized text).
+- [x] `GET /api/reports` and `GET /api/reports/{id}` return the verification audit object in the report detail payload.
+- [x] `GET /api/health` reports `verifier_enabled`, `verifier_provider`, `verifier_model`, and `verifier_ready`.
+- [x] Existing report generation endpoints continue to function for historical reports created before the verifier was added.
 
 **Verification:**
-- [ ] Tests pass: `.venv/bin/pytest tests/test_reports_api.py tests/test_reports_persist.py tests/test_api.py`
-- [ ] Build succeeds: `.venv/bin/python -c "from app.main import app; print('App initialized')"`
-- [ ] Manual check: Trigger a check with verification enabled, query `GET /api/reports/{id}`, and verify the presence of `verification` field.
+- [x] Tests pass: `.venv/bin/pytest tests/test_reports_api.py tests/test_reports_persist.py tests/test_api.py`
+- [x] Build succeeds: `.venv/bin/python -c "from app.main import app; print('App initialized')"`
+- [x] Manual check: Trigger a check with verification enabled, query `GET /api/reports/{id}`, and verify the presence of `verification` field.
 
 **Dependencies:** Task 3
 
@@ -116,10 +116,10 @@
 ---
 
 ## Checkpoint: V1 Compliance Pipeline & Persistence
-- [ ] `POST /api/check` successfully verifies candidate violations when secondary LLM is enabled
-- [ ] Passthrough verified when verifier is disabled
-- [ ] Full persistence and retrieval of verification audit logs verified in SQLite
-- [ ] All existing V1 tests pass without regression
+- [x] `POST /api/check` successfully verifies candidate violations when secondary LLM is enabled
+- [x] Passthrough verified when verifier is disabled
+- [x] Full persistence and retrieval of verification audit logs verified in SQLite
+- [x] All existing V1 tests pass without regression
 
 ---
 

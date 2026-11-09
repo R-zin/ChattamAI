@@ -35,6 +35,8 @@ class ComplianceState(TypedDict, total=False):
     retrieved: List[Tuple[str, dict, float]]
     analysis_json: str
     violations: List[dict]
+    primary_violations: List[dict]
+    verification: Optional[dict]
     summary: str
     error: Optional[str]
     # Per-node observability: {node: {"ms": float, "in_chars": int, "out_chars": int}}
@@ -49,6 +51,8 @@ class Context:
     # Optional analysis memo (RAGSystem owns it). Maps
     # (facts_hash, index_version) -> (analysis_json, violations). ``None`` = off.
     analysis_cache: object = None
+    # Secondary LLM used to double-check and audit candidate violations.
+    verifier_llm: Optional[object] = None
 
 
 # --------------------------------------------------------------------------
@@ -196,6 +200,97 @@ def analyze(state: ComplianceState, ctx: Context) -> dict:
     return {"analysis_json": raw, "violations": violations, "telemetry": span.finish()}
 
 
+def verify_analysis(state: ComplianceState, ctx: Context) -> dict:
+    from app.rag.prompts import (
+        SYSTEM_DOUBLE_CHECK,
+        build_verify_user,
+        format_rules_for_prompt,
+    )
+
+    span = _node_span(state, "verify_analysis")
+    primary_violations = state.get("violations", [])
+
+    if ctx.verifier_llm is None:
+        verification = {
+            "status": "skipped",
+            "reason": "verifier_disabled",
+            "primary_violations_count": len(primary_violations),
+            "final_violations_count": len(primary_violations),
+        }
+        return {
+            "primary_violations": primary_violations,
+            "verification": verification,
+            "telemetry": span.finish(),
+        }
+
+    facts = state.get("facts", "")
+    rules_text = format_rules_for_prompt(state.get("retrieved", []))
+    user_prompt = build_verify_user(facts, rules_text, primary_violations)
+    span.measure_in(user_prompt)
+
+    try:
+        raw = ctx.verifier_llm.complete(SYSTEM_DOUBLE_CHECK, user_prompt)
+        span.measure_out(raw)
+        parsed = _extract_json(raw)
+
+        if parsed is None:
+            logger.warning(
+                "verify_analysis: failed to parse JSON from verifier output: %r",
+                (raw or "")[:120],
+            )
+            return {
+                "primary_violations": primary_violations,
+                "violations": primary_violations,
+                "verification": {
+                    "status": "error",
+                    "error": "Failed to extract valid JSON from verifier output",
+                    "primary_violations_count": len(primary_violations),
+                    "final_violations_count": len(primary_violations),
+                },
+                "telemetry": span.finish(),
+            }
+
+        final_violations = parsed.get("final_violations")
+        if not isinstance(final_violations, list):
+            final_violations = primary_violations
+
+        confidence = parsed.get("confidence_score", 1.0)
+        try:
+            confidence_score = float(confidence)
+        except (TypeError, ValueError):
+            confidence_score = 1.0
+
+        verification = {
+            "status": parsed.get("status", "confirmed"),
+            "verified_by_model": getattr(ctx.verifier_llm, "model", "custom"),
+            "confidence_score": confidence_score,
+            "cross_check_notes": parsed.get("cross_check_notes"),
+            "discrepancies": parsed.get("discrepancies", []),
+            "primary_violations_count": len(primary_violations),
+            "final_violations_count": len(final_violations),
+        }
+
+        return {
+            "primary_violations": primary_violations,
+            "violations": final_violations,
+            "verification": verification,
+            "telemetry": span.finish(),
+        }
+    except Exception as exc:
+        logger.warning("verify_analysis failed: %s", exc, exc_info=True)
+        return {
+            "primary_violations": primary_violations,
+            "violations": primary_violations,
+            "verification": {
+                "status": "error",
+                "error": str(exc),
+                "primary_violations_count": len(primary_violations),
+                "final_violations_count": len(primary_violations),
+            },
+            "telemetry": span.finish(),
+        }
+
+
 def summarize(state: ComplianceState, ctx: Context) -> dict:
     from app.rag.prompts import SYSTEM_SUMMARY
 
@@ -203,6 +298,9 @@ def summarize(state: ComplianceState, ctx: Context) -> dict:
     facts = state.get("facts", "")
     violations = state.get("violations") or []
     user = f"EXTRACTED FACTS:\n{facts}\n\nPOTENTIAL VIOLATIONS:\n{json.dumps(violations, indent=2)}"
+    verification = state.get("verification")
+    if verification and isinstance(verification, dict) and verification.get("cross_check_notes"):
+        user += f"\n\nVERIFICATION RECONCILIATION:\n{verification['cross_check_notes']}"
     span.measure_in(user)
     summary = ctx.llm.complete(SYSTEM_SUMMARY, user)
     span.measure_out(summary)
@@ -272,6 +370,10 @@ async def aanalyze(state: ComplianceState, ctx: Context) -> dict:
     # run the synchronous analyze body on a worker thread (it owns its own
     # span + repair-retry logic) so we stay DRY.
     return await asyncio.to_thread(analyze, state, ctx)
+
+
+async def averify_analysis(state: ComplianceState, ctx: Context) -> dict:
+    return await asyncio.to_thread(verify_analysis, state, ctx)
 
 
 async def asummarize(state: ComplianceState, ctx: Context) -> dict:
@@ -396,6 +498,7 @@ def build_compliance_graph(ctx: Context):
     builder.add_node("extract_facts", partial(extract_facts, ctx=ctx))
     builder.add_node("retrieve", partial(retrieve, ctx=ctx))
     builder.add_node("analyze", partial(analyze, ctx=ctx))
+    builder.add_node("verify_analysis", partial(verify_analysis, ctx=ctx))
     builder.add_node("summarize", partial(summarize, ctx=ctx))
     builder.add_node("insufficient", partial(insufficient, ctx=ctx))
 
@@ -406,7 +509,8 @@ def build_compliance_graph(ctx: Context):
         route_retrieve,
         {"analyze": "analyze", "insufficient": "insufficient"},
     )
-    builder.add_edge("analyze", "summarize")
+    builder.add_edge("analyze", "verify_analysis")
+    builder.add_edge("verify_analysis", "summarize")
     builder.add_edge("insufficient", END)
     builder.add_edge("summarize", END)
     return builder.compile()
@@ -425,6 +529,7 @@ def build_async_compliance_graph(ctx: Context):
     builder.add_node("extract_facts", partial(aextract_facts, ctx=ctx))
     builder.add_node("retrieve", partial(aretrieve, ctx=ctx))
     builder.add_node("analyze", partial(aanalyze, ctx=ctx))
+    builder.add_node("verify_analysis", partial(averify_analysis, ctx=ctx))
     builder.add_node("summarize", partial(asummarize, ctx=ctx))
     builder.add_node("insufficient", partial(ainsufficient, ctx=ctx))
 
@@ -435,7 +540,8 @@ def build_async_compliance_graph(ctx: Context):
         route_retrieve,
         {"analyze": "analyze", "insufficient": "insufficient"},
     )
-    builder.add_edge("analyze", "summarize")
+    builder.add_edge("analyze", "verify_analysis")
+    builder.add_edge("verify_analysis", "summarize")
     builder.add_edge("insufficient", END)
     builder.add_edge("summarize", END)
     return builder.compile()

@@ -37,13 +37,13 @@ This implementation plan adds a secondary LLM verification engine to ChattamAI t
 - [x] Pydantic validation for `VerificationResult` and `DiscrepancyItem` verified.
 
 ### Phase 2: V1 Semantic RAG Pipeline Integration
-- [ ] Task 3: Integrate Verification Node into V1 LangGraph State Machine
-- [ ] Task 4: Report Persistence, API Contract & Diagnostics Integration
+- [x] Task 3: Integrate Verification Node into V1 LangGraph State Machine
+- [x] Task 4: Report Persistence, API Contract & Diagnostics Integration
 
 ### Checkpoint: V1 Compliance Pipeline
-- [ ] `POST /api/check` successfully cross-examines findings when verifier is enabled.
-- [ ] When verifier is disabled, pipeline executes zero-overhead passthrough.
-- [ ] Audit trail persists to SQLite and shows in `GET /api/reports`.
+- [x] `POST /api/check` successfully cross-examines findings when verifier is enabled.
+- [x] When verifier is disabled, pipeline executes zero-overhead passthrough.
+- [x] Audit trail persists to SQLite and shows in `GET /api/reports`.
 
 ### Phase 3: V2 Multi-Agent Pipeline & Frontend Experience
 - [ ] Task 5: Integrate Statutory Verifier Node into V2 Multi-Agent Graph

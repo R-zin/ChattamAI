@@ -73,6 +73,7 @@ class Report(Base):
     violations = Column(JSON, nullable=True)
     retrieved_rules = Column(JSON, nullable=True)
     status = Column(String, nullable=False, default="pass")
+    verification = Column(JSON, nullable=True)
     # Nullable so unauthenticated checks (AUTH_REQUIRED off) still persist.
     user_id = Column(String, ForeignKey("user.user_id"), nullable=True, index=True)
 

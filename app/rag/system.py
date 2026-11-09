@@ -122,6 +122,7 @@ class RAGSystem:
         provider=None,
         llm=None,
         index_dir: Optional[str] = None,
+        verifier_llm: Optional[object] = None,
     ) -> None:
         """Build the system.
 
@@ -206,6 +207,30 @@ class RAGSystem:
             except Exception as exc:
                 self._llm_error = str(exc)
 
+        # Secondary verifier LLM (for double-checking and verification)
+        if verifier_llm is None:
+            try:
+                from app.rag.llm import get_verifier_client
+
+                self.verifier_llm = get_verifier_client()
+            except Exception as exc:
+                logger.warning("Failed to initialize verifier client: %s", exc)
+                self.verifier_llm = None
+        else:
+            self.verifier_llm = verifier_llm
+
+        self.verifier_ready = self.verifier_llm is not None
+        self.verifier_provider = (
+            getattr(self.verifier_llm, "provider", self.settings.verifier_provider)
+            if self.verifier_llm
+            else self.settings.verifier_provider
+        )
+        self.verifier_model = (
+            getattr(self.verifier_llm, "model", self.settings.verifier_model)
+            if self.verifier_llm
+            else self.settings.verifier_model
+        )
+
         if self._provider is not None:
             self._store = RuleVectorStore(
                 self._provider,
@@ -220,6 +245,7 @@ class RAGSystem:
                 store=self._store,
                 default_top_k=self.settings.top_k,
                 analysis_cache=self._analysis_memo,
+                verifier_llm=self.verifier_llm,
             )
             self._graph = build_compliance_graph(ctx)
             self._agraph = build_async_compliance_graph(ctx)
@@ -306,6 +332,16 @@ class RAGSystem:
         }
         if error:
             shaped["error"] = error
+        verification_data = result.get("verification")
+        if verification_data and isinstance(verification_data, dict):
+            try:
+                from app.schemas import VerificationResult
+
+                shaped["verification"] = VerificationResult(
+                    **verification_data
+                ).model_dump()
+            except Exception:
+                shaped["verification"] = verification_data
         return shaped
 
     def _log_check(self, result: dict, elapsed_ms: float) -> None:
@@ -322,7 +358,7 @@ class RAGSystem:
         violations_n = len(result.get("violations") or [])
         logger.info(
             "check: facts=%d retrieved=%d violations=%d elapsed_ms=%.1f "
-            "(extract=%.1f retrieve=%.1f analyze=%.1f summarize=%.1f)%s",
+            "(extract=%.1f retrieve=%.1f analyze=%.1f verify=%.1f summarize=%.1f)%s",
             facts_n,
             retrieved_n,
             violations_n,
@@ -330,6 +366,7 @@ class RAGSystem:
             _ms("extract_facts"),
             _ms("retrieve"),
             _ms("analyze"),
+            _ms("verify_analysis"),
             _ms("summarize"),
             f" error={result.get('error')}" if result.get("error") else "",
         )

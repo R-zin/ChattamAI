@@ -18,6 +18,19 @@ logger = logging.getLogger(__name__)
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
+def _ensure_report_verification_column() -> None:
+    """Additively ALTER an existing ``report`` table for the verification column."""
+    from sqlalchemy import inspect, text
+
+    try:
+        cols = {c["name"] for c in inspect(engine).get_columns("report")}
+        if "verification" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE report ADD COLUMN verification JSON"))
+    except Exception as exc:
+        logger.debug("ALTER TABLE report ADD COLUMN verification skipped: %s", exc)
+
+
 def _ensure_user_totp_columns() -> None:
     """Additively ALTER an existing ``user`` table for the 2FA and OAuth columns.
 
@@ -91,6 +104,7 @@ def init_db() -> None:
     if not _run_alembic_upgrade():
         Base.metadata.create_all(bind=engine)
     _ensure_user_totp_columns()
+    _ensure_report_verification_column()
 
 
 def init_db_safe() -> bool:

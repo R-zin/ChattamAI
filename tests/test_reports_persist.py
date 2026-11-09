@@ -51,6 +51,58 @@ def test_persisted_report_fields_match_response(app_client):
     assert row.extracted_facts == body["extracted_facts"]
     assert row.violations == body["violations"]
     assert isinstance(row.retrieved_rules, list)
+    if body.get("verification") is not None:
+        assert row.verification == body["verification"]
+
+
+def test_persisted_report_stores_active_verification(app_client):
+    from tests.test_double_check import MockVerifierLLM
+    from app.rag.graph import Context, build_compliance_graph, build_async_compliance_graph
+
+    verifier = MockVerifierLLM(
+        response_json={
+            "status": "confirmed",
+            "confidence_score": 0.99,
+            "cross_check_notes": "All candidate violations double-checked.",
+            "discrepancies": [],
+            "final_violations": [
+                {
+                    "rule_reference": "Rule 5",
+                    "severity": "high",
+                    "description": "Front setback below the permitted minimum.",
+                    "plan_value": "1m",
+                    "required_value": "1.8m",
+                }
+            ],
+        },
+        model="mock-gpt4",
+    )
+    rag = app_client.app.state.rag
+    rag.verifier_llm = verifier
+    rag.verifier_ready = True
+    rag.verifier_model = "mock-gpt4"
+    ctx = Context(
+        llm=rag._llm,
+        store=rag._store,
+        default_top_k=rag.settings.top_k,
+        analysis_cache=rag._analysis_memo,
+        verifier_llm=verifier,
+    )
+    rag._graph = build_compliance_graph(ctx)
+    rag._agraph = build_async_compliance_graph(ctx)
+
+    resp = app_client.post("/api/check", json={"plan_text": PLAN})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body.get("verification") is not None
+    assert body["verification"]["status"] == "confirmed"
+
+    row = _latest_report()
+    assert row is not None
+    assert row.verification is not None
+    assert row.verification["status"] == "confirmed"
+    assert row.verification["verified_by_model"] == "mock-gpt4"
+    assert row.verification["confidence_score"] == 0.99
 
 
 def test_status_derivation_rule():

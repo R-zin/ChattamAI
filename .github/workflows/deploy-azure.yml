@@ -144,16 +144,20 @@ jobs:
       - name: Verify Deployment Health
         run: |
           TARGET_APP="${{ steps.deploy-app.outputs.target_app || env.AZURE_CONTAINER_APP_NAME }}"
-          APP_URL=$(az containerapp show \
+          APP_INFO=$(az containerapp show \
             --name "$TARGET_APP" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --query "properties.configuration.ingress.fqdn" -o tsv)
+            --query "{fqdn:properties.configuration.ingress.fqdn, latestRev:properties.latestRevisionName}" -o json)
+          
+          APP_URL=$(echo "$APP_INFO" | jq -r '.fqdn // empty')
+          LATEST_REV=$(echo "$APP_INFO" | jq -r '.latestRev // empty')
           
           echo "Application FQDN: https://$APP_URL"
+          echo "Target Revision: $LATEST_REV"
           echo "Awaiting health check endpoint (https://$APP_URL/api/health)..."
           
           SUCCESS=0
-          for i in {1..30}; do
+          for i in {1..20}; do
             STATUS=$(curl -k -s --connect-timeout 5 --max-time 10 -o /tmp/health_resp.json -w "%{http_code}" "https://$APP_URL/api/health" || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "Health check succeeded with HTTP 200 on attempt $i."
@@ -161,12 +165,24 @@ jobs:
               SUCCESS=1
               break
             fi
-            echo "Attempt $i: Received HTTP $STATUS. Retrying in 10s..."
-            sleep 10
+            
+            # Check if revision provision state is already marked Failed
+            REV_STATE=$(az containerapp revision show \
+              --name "$LATEST_REV" \
+              --app "$TARGET_APP" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --query "properties.provisioningState" -o tsv 2>/dev/null || echo "")
+            
+            echo "Attempt $i: Received HTTP $STATUS (Revision state: ${REV_STATE:-unknown}). Retrying in 5s..."
+            if [ "$REV_STATE" = "Failed" ] && [ $i -ge 3 ]; then
+              echo "::warning::Revision '$LATEST_REV' has failed provisioning. Aborting poll early."
+              break
+            fi
+            sleep 5
           done
           
           if [ "$SUCCESS" -ne 1 ]; then
-            echo "::error::Health check timed out or failed with status $STATUS."
+            echo "::error::Health check failed with final status $STATUS."
             echo "=== Target App Ingress & State ==="
             az containerapp show \
               --name "$TARGET_APP" \
@@ -177,10 +193,23 @@ jobs:
               --name "$TARGET_APP" \
               --resource-group "$AZURE_RESOURCE_GROUP" \
               --query "[].{name:name, active:properties.active, healthState:properties.healthState, provisionStatus:properties.provisioningState}" -o table || true
-            echo "=== Container App System/Console Logs ==="
+            echo "=== Detailed Revision Info ==="
+            az containerapp revision show \
+              --name "$LATEST_REV" \
+              --app "$TARGET_APP" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --query "{provisioningError:properties.provisioningError, volumes:properties.template.volumes, volumeMounts:properties.template.containers[0].volumeMounts, probes:properties.template.containers[0].probes, resources:properties.template.containers[0].resources}" -o json || true
+            echo "=== System Event Logs ==="
             az containerapp logs show \
               --name "$TARGET_APP" \
               --resource-group "$AZURE_RESOURCE_GROUP" \
-              --tail 100 || true
+              --type system \
+              --tail 50 || true
+            echo "=== Console Logs ==="
+            az containerapp logs show \
+              --name "$TARGET_APP" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --type console \
+              --tail 50 || true
             exit 1
           fi

@@ -99,6 +99,14 @@ class VerificationResult(BaseModel):
     final_violations_count: int = Field(
         default=0, description="Count of violations accepted after verification"
     )
+    reason: Optional[str] = Field(
+        default=None,
+        description="Reason why verification was skipped or adjusted",
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Error details if verification encountered an error",
+    )
 
 
 class ComplianceResponse(BaseModel):

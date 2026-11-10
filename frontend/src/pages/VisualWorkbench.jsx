@@ -15,6 +15,8 @@ import {
   Modal,
   Slider,
   EmptyState,
+  SkeletonCard,
+  SkeletonTable,
 } from '../components/ui/index.js'
 import {
   checkPdfV2,
@@ -30,6 +32,8 @@ export default function VisualWorkbench() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [auditResult, setAuditResult] = useState(null)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
+  const [exportingKsmart, setExportingKsmart] = useState(false)
   const assessment = auditResult
   const result = auditResult
   const [ksmartModal, setKsmartModal] = useState(null)
@@ -42,21 +46,33 @@ export default function VisualWorkbench() {
   const handleFileDrop = (e) => {
     e.preventDefault()
     setDrag(false)
+    if (loading) return
     const f = e.dataTransfer.files?.[0]
-    if (f && /\.pdf$/i.test(f.name)) {
-      setFile(f)
-      setError(null)
-    } else {
-      setError('Please upload a valid architectural drawing PDF.')
+    if (f) {
+      if (/\.pdf$/i.test(f.name)) {
+        setFile(f)
+        setError(null)
+      } else {
+        const msg = 'Please upload a valid architectural drawing PDF.'
+        setError(msg)
+        toast(msg, 'warn')
+      }
     }
   }
 
   const handleFileSelect = (e) => {
     const f = e.target.files?.[0]
-    if (f && /\.pdf$/i.test(f.name)) {
-      setFile(f)
-      setError(null)
+    if (f) {
+      if (/\.pdf$/i.test(f.name)) {
+        setFile(f)
+        setError(null)
+      } else {
+        const msg = 'Please upload a valid architectural drawing PDF.'
+        setError(msg)
+        toast(msg, 'warn')
+      }
     }
+    e.target.value = ''
   }
 
   const runAudit = async () => {
@@ -87,18 +103,22 @@ export default function VisualWorkbench() {
   }
 
   const handleDownloadPdf = async () => {
-    if (!file) return
+    if (!file || downloadingPdf) return
+    setDownloadingPdf(true)
     try {
       toast('Generating signed LSGD PDF certificate…', 'ok')
       await exportPdfReportV2(file)
       toast('PDF certificate downloaded.', 'ok')
     } catch (err) {
       toast(err.message || 'Export error', 'danger')
+    } finally {
+      setDownloadingPdf(false)
     }
   }
 
   const handleExportKSmart = async () => {
-    if (!auditResult) return
+    if (!auditResult || exportingKsmart) return
+    setExportingKsmart(true)
     try {
       const payload = {
         facts: auditResult.plan_facts,
@@ -133,6 +153,8 @@ export default function VisualWorkbench() {
       toast('Generated K-Smart LSGD submission payload.', 'ok')
     } catch (err) {
       toast(err.message || 'K-Smart generation failed', 'danger')
+    } finally {
+      setExportingKsmart(false)
     }
   }
 
@@ -202,25 +224,30 @@ export default function VisualWorkbench() {
               {/* Accessible Drop Area */}
               <div
                 role="button"
-                tabIndex={0}
+                tabIndex={loading ? -1 : 0}
                 aria-label="Upload Architectural Drawing PDF"
+                aria-disabled={loading}
                 onDragOver={(e) => {
                   e.preventDefault()
-                  setDrag(true)
+                  if (!loading) setDrag(true)
                 }}
                 onDragLeave={() => setDrag(false)}
                 onDrop={handleFileDrop}
-                onClick={() => fileRef.current?.click()}
+                onClick={() => {
+                  if (!loading) fileRef.current?.click()
+                }}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
+                  if (!loading && (e.key === 'Enter' || e.key === ' ')) {
                     e.preventDefault()
                     fileRef.current?.click()
                   }
                 }}
-                className={`flex-1 w-full border-2 border-dashed p-6 flex flex-col items-center justify-center cursor-pointer transition-all focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none relative overflow-hidden ${
-                  drag
-                    ? 'border-white bg-[#181818]'
-                    : 'border-[#333333] hover:border-white bg-[#0e0e0e]'
+                className={`flex-1 w-full border-2 border-dashed p-6 flex flex-col items-center justify-center transition-all relative overflow-hidden ${
+                  loading
+                    ? 'opacity-50 cursor-not-allowed border-[#262626] bg-[#0c0c0c]'
+                    : drag
+                    ? 'border-white bg-[#181818] cursor-pointer'
+                    : 'border-[#333333] hover:border-white bg-[#0e0e0e] cursor-pointer focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none'
                 }`}
               >
                 <div className="blueprint-grid absolute inset-0 opacity-20 pointer-events-none" />
@@ -228,6 +255,7 @@ export default function VisualWorkbench() {
                   ref={fileRef}
                   type="file"
                   accept=".pdf"
+                  disabled={loading}
                   className="hidden"
                   onChange={handleFileSelect}
                 />
@@ -274,6 +302,7 @@ export default function VisualWorkbench() {
                     variant="outline"
                     size="sm"
                     fullWidth
+                    disabled={loading}
                     onClick={() => {
                       setFile(null)
                       setAuditResult(null)
@@ -299,6 +328,14 @@ export default function VisualWorkbench() {
             )}
           </CardContent>
         </Card>
+
+        {/* Loading Skeleton during audit */}
+        {loading && !auditResult && (
+          <div className="space-y-6" role="status" aria-label="Auditing drawing">
+            <SkeletonCard rows={3} />
+            <SkeletonTable rows={4} cols={4} />
+          </div>
+        )}
 
         {/* Empty State before audit */}
         {!auditResult && !loading && (
@@ -371,6 +408,8 @@ export default function VisualWorkbench() {
                 <Button
                   variant="secondary"
                   size="sm"
+                  loading={downloadingPdf}
+                  disabled={downloadingPdf}
                   onClick={handleDownloadPdf}
                   icon="download"
                 >
@@ -379,6 +418,8 @@ export default function VisualWorkbench() {
                 <Button
                   variant="primary"
                   size="sm"
+                  loading={exportingKsmart}
+                  disabled={exportingKsmart}
                   onClick={handleExportKSmart}
                   icon="share-2"
                 >

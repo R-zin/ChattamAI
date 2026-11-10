@@ -8,9 +8,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
-
-if TYPE_CHECKING:
-    from app.services.dbmodel import User
+import httpx
 from pydantic import BaseModel
 
 from app.config import get_settings
@@ -25,6 +23,18 @@ from app.schemas import (
     SetModelResponse,
 )
 from app.schemas_reports import ReportOut
+
+try:
+    import openai
+
+    _OPENAI_TIMEOUT_EXC = (openai.APITimeoutError,)
+except (ImportError, AttributeError):
+    _OPENAI_TIMEOUT_EXC = ()
+
+_TIMEOUT_EXCEPTIONS = (httpx.TimeoutException, *_OPENAI_TIMEOUT_EXC)
+
+if TYPE_CHECKING:
+    from app.services.dbmodel import User
 
 router = APIRouter(prefix="/api", tags=["rag"])
 
@@ -212,6 +222,8 @@ def upload_kbr_document(file: UploadFile = File(...)) -> Dict[str, Any]:
             detail="Unsupported file type. Upload a .pdf, .txt, or .md rule document.",
         )
     content = file.file.read(MAX_UPLOAD_SIZE + 1)
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
     if len(content) > MAX_UPLOAD_SIZE:
         raise HTTPException(
             status_code=413,
@@ -255,7 +267,14 @@ def search_rules(
     store = getattr(rag, "_store", None)
     if not store or store.size == 0:
         return []
-    results = store.similarity_search(q, k=limit)
+    try:
+        results = store.similarity_search(q, k=limit)
+    except Exception as exc:
+        logger.warning("Vectorstore similarity search failed: %s", exc)
+        raise HTTPException(
+            status_code=503,
+            detail="Vectorstore or search service is currently unavailable.",
+        ) from exc
     out = []
     for text, meta, score in results:
         out.append(
@@ -341,8 +360,23 @@ def check(
 ) -> ComplianceResponse:
     try:
         result = rag.check(body.plan_text, top_k=body.top_k)
+    except _TIMEOUT_EXCEPTIONS as exc:
+        logger.warning("Upstream timeout during compliance check: %s", exc)
+        raise HTTPException(
+            status_code=504,
+            detail="Upstream AI model or service timed out. Please try again.",
+        ) from exc
     except (RuntimeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        logger.warning("Compliance check error: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Unexpected error during compliance check: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Compliance check failed: {exc}",
+        ) from exc
     _persist_report(
         plan_text=body.plan_text,
         source="check",
@@ -366,6 +400,8 @@ def check_upload(
             detail="Unsupported file type. Upload a .txt, .md, or .pdf plan.",
         )
     content = file.file.read(MAX_UPLOAD_SIZE + 1)
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
     if len(content) > MAX_UPLOAD_SIZE:
         raise HTTPException(
             status_code=413,
@@ -381,8 +417,23 @@ def check_upload(
         tmp_path = Path(tmp.name)
     try:
         result = rag.check_plan_file(tmp_path, top_k=top_k)
+    except _TIMEOUT_EXCEPTIONS as exc:
+        logger.warning("Upstream timeout during check_upload: %s", exc)
+        raise HTTPException(
+            status_code=504,
+            detail="Upstream AI model or service timed out. Please try again.",
+        ) from exc
     except (RuntimeError, ValueError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        logger.warning("Compliance check_upload error: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Unexpected error during check_upload: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Compliance check failed: {exc}",
+        ) from exc
     finally:
         tmp_path.unlink(missing_ok=True)
     _persist_report(
@@ -453,6 +504,8 @@ def check_plan_ocr(
         )
 
     content = file.file.read(MAX_UPLOAD_SIZE + 1)
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
     if len(content) > MAX_UPLOAD_SIZE:
         raise HTTPException(
             status_code=413,

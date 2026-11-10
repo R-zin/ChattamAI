@@ -11,6 +11,44 @@ const STAGES = [
 ]
 const TOTAL = pipelineScript[pipelineScript.length - 1].t // seconds
 
+function categorizeError(errMsg = '') {
+  const lower = (errMsg || '').toLowerCase()
+  const isServerOrNetwork =
+    lower.includes('unreachable') ||
+    lower.includes('failed to fetch') ||
+    lower.includes('load failed') ||
+    lower.includes('network') ||
+    lower.includes('500') ||
+    lower.includes('502') ||
+    lower.includes('503') ||
+    lower.includes('504') ||
+    lower.includes('server error') ||
+    lower.includes('internal error')
+
+  if (isServerOrNetwork) {
+    return {
+      type: 'server',
+      tag: 'SERVER FAULT // HTTP 500 / UNREACHABLE',
+      badge: 'BACKEND SYSTEM ERROR',
+      title: 'Backend Service Error',
+      statusEyebrow: 'SYSTEM ERROR',
+      explanation:
+        'The compliance reasoning service or vector retrieval pipeline encountered an internal error or could not be reached. Please check the backend server status or network connection and retry.',
+    }
+  }
+
+  const is422 = lower.includes('422') || lower.includes('unprocessable')
+  return {
+    type: 'validation',
+    tag: is422 ? 'VALIDATION FAILURE // HTTP 422' : 'VALIDATION FAILURE // HTTP 400',
+    badge: 'NON-ARCHITECTURAL DOCUMENT',
+    title: 'Document Verification Failed',
+    statusEyebrow: 'VALIDATION FAILED',
+    explanation:
+      'The submitted file does not contain recognizable architectural parameters, zoning classifications, or dimensional specifications required for Kerala Building Rules (KBR 2019) compliance verification.',
+  }
+}
+
 export default function Analysis() {
   const nav = useNavigate()
   const { state } = useLocation()
@@ -35,27 +73,31 @@ export default function Analysis() {
         if (cancelledRef.current) return
         setError(err?.message || 'The content of the file is not a building plan.')
       })
+    return () => {
+      cancelledRef.current = true
+    }
   }, [])
 
   useEffect(() => {
     if (error) return
-    startRef.current = Date.now()
+    if (!startRef.current) startRef.current = Date.now()
     let raf
+    let active = true
     const tick = () => {
-      if (cancelledRef.current) return
+      if (!active || cancelledRef.current) return
       const t = (Date.now() - startRef.current) / 1000
-      setElapsed(Math.min(t, TOTAL))
+      setElapsed(t)
       setLogCount(pipelineScript.filter((s) => s.t <= t).length)
-      if (t < TOTAL) {
+      if (t < TOTAL || !apiDone) {
         raf = requestAnimationFrame(tick)
       }
     }
     raf = requestAnimationFrame(tick)
     return () => {
-      cancelledRef.current = true
+      active = false
       cancelAnimationFrame(raf)
     }
-  }, [error])
+  }, [error, apiDone])
 
   // Synchronize navigation: only navigate once animation has finished AND api promise has resolved
   useEffect(() => {
@@ -85,7 +127,22 @@ export default function Analysis() {
   const ss = String(Math.floor(elapsed % 60)).padStart(2, '0')
   const ds = String(Math.floor((elapsed % 1) * 100)).padStart(2, '0')
 
-  const LOGS = pipelineScript.slice(0, logCount)
+  const WAITING_LOG =
+    'Reasoning model is finalizing compliance synthesis... (this can take up to 30s)'
+
+  const LOGS = [
+    ...pipelineScript.slice(0, logCount),
+    ...(elapsed >= TOTAL && !apiDone
+      ? [
+          {
+            t: elapsed,
+            log: WAITING_LOG,
+          },
+        ]
+      : []),
+  ]
+
+  const errorCat = categorizeError(error)
 
   return (
     <div className="flex-1 flex flex-col relative bg-[#0a0a0a] text-[#f5f5f5]">
@@ -96,10 +153,10 @@ export default function Analysis() {
         <div className="min-w-0">
           <div className="text-[9px] mono text-[#a3a3a3] uppercase tracking-[0.15em] mb-0.5 flex items-center gap-2 font-semibold">
             <span className={`w-1.5 h-1.5 rounded-full ${error ? 'bg-white' : 'bg-white animate-pulse'}`} />
-            {error ? 'VALIDATION FAILED' : 'REAL-TIME VERIFICATION'}
+            {error ? errorCat.statusEyebrow : 'REAL-TIME VERIFICATION'}
           </div>
           <h2 className="text-lg md:text-xl font-bold tracking-tight text-white uppercase font-sans truncate">
-            {error ? 'Document Verification Failed' : 'Auditing Building Plan'}
+            {error ? errorCat.title : 'Auditing Building Plan'}
           </h2>
           <p className="text-xs text-[#a3a3a3] truncate font-mono">
             TARGET: <span className="text-white">{state?.meta?.fileName || 'plan_014.pdf'}</span>
@@ -131,11 +188,11 @@ export default function Analysis() {
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 bg-white inline-block" />
                 <span className="text-[10px] mono text-white font-bold uppercase tracking-widest">
-                  VALIDATION FAILURE // HTTP 400
+                  {errorCat.tag}
                 </span>
               </div>
               <span className="text-[10px] mono text-[#a3a3a3] border border-[#333333] px-2 py-0.5">
-                NON-ARCHITECTURAL DOCUMENT
+                {errorCat.badge}
               </span>
             </div>
 
@@ -147,21 +204,35 @@ export default function Analysis() {
                 {error}
               </h3>
               <p className="text-xs mono text-[#a3a3a3] leading-relaxed">
-                The submitted file does not contain recognizable architectural parameters, zoning classifications, or dimensional specifications required for Kerala Building Rules (KBR 2019) compliance verification.
+                {errorCat.explanation}
               </p>
             </div>
 
-            <div className="border border-[#262626] bg-[#121212] p-4 mb-8 space-y-2">
-              <div className="text-[10px] mono text-[#737373] uppercase tracking-wider font-semibold">
-                MINIMUM REQUIRED CONTENT SPECIFICATIONS:
+            {errorCat.type === 'server' ? (
+              <div className="border border-[#262626] bg-[#121212] p-4 mb-8 space-y-2">
+                <div className="text-[10px] mono text-[#737373] uppercase tracking-wider font-semibold">
+                  TROUBLESHOOTING ACTIONS:
+                </div>
+                <ul className="text-xs mono text-[#d4d4d4] space-y-1.5 list-disc list-inside">
+                  <li>Verify the backend API server is running at the configured URL</li>
+                  <li>Check backend server logs for uncaught exceptions or inference timeouts</li>
+                  <li>Ensure vector store indexes are ingested and embeddings are online</li>
+                  <li>Retry the assessment or test connection via system health check</li>
+                </ul>
               </div>
-              <ul className="text-xs mono text-[#d4d4d4] space-y-1.5 list-disc list-inside">
-                <li>Occupancy Type (e.g. Group A1 Residential, Group F Commercial)</li>
-                <li>Spatial Metrics (e.g. Total built-up area in sq.m, plot area)</li>
-                <li>Zoning Clearances (e.g. Front/rear/side setback distances in metres)</li>
-                <li>Physical Dimensions (e.g. Building height, number of storeys)</li>
-              </ul>
-            </div>
+            ) : (
+              <div className="border border-[#262626] bg-[#121212] p-4 mb-8 space-y-2">
+                <div className="text-[10px] mono text-[#737373] uppercase tracking-wider font-semibold">
+                  MINIMUM REQUIRED CONTENT SPECIFICATIONS:
+                </div>
+                <ul className="text-xs mono text-[#d4d4d4] space-y-1.5 list-disc list-inside">
+                  <li>Occupancy Type (e.g. Group A1 Residential, Group F Commercial)</li>
+                  <li>Spatial Metrics (e.g. Total built-up area in sq.m, plot area)</li>
+                  <li>Zoning Clearances (e.g. Front/rear/side setback distances in metres)</li>
+                  <li>Physical Dimensions (e.g. Building height, number of storeys)</li>
+                </ul>
+              </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-4">
               <button
@@ -213,7 +284,9 @@ export default function Analysis() {
                       {state === 'active' && (
                         <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-48 text-center">
                           <span className="text-[9px] mono text-white bg-[#181818] border border-white px-2 py-0.5 whitespace-nowrap">
-                            {pipelineScript[logCount - 1]?.log?.replace('…','') || 'PROCESSING'}…
+                            {elapsed >= TOTAL && !apiDone
+                              ? 'FINALIZING SYNTHESIS…'
+                              : (pipelineScript[logCount - 1]?.log?.replace('…','') || 'PROCESSING') + '…'}
                           </span>
                         </div>
                       )}
@@ -272,7 +345,7 @@ export default function Analysis() {
         </div>
         <div className="flex items-center gap-2 text-[#a3a3a3]">
           <span className={`w-1.5 h-1.5 rounded-full ${error ? 'bg-white' : 'bg-white animate-pulse'}`} />
-          <span>{error ? 'Validation Failed' : 'Facts Extraction → Rule Retrieval → Compliance Reasoning'}</span>
+          <span>{error ? errorCat.title : 'Facts Extraction → Rule Retrieval → Compliance Reasoning'}</span>
         </div>
       </footer>
     </div>

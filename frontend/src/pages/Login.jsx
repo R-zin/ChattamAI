@@ -11,14 +11,20 @@ import {
   googleCallbackLogin,
 } from '../data.js'
 
-function Field({ label, helper, ...props }) {
+function Field({ label, helper, id, disabled, ...props }) {
+  const inputId = id || (label ? `field-${label.toLowerCase().replace(/[^a-z0-9]/g, '-')}` : undefined)
   return (
     <div>
-      <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">
+      <label
+        htmlFor={inputId}
+        className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold"
+      >
         {label}
       </label>
       <input
-        className="w-full mono text-xs bg-[#0e0e0e] border border-[#333333] px-3 py-2.5 text-white outline-none focus:border-white transition-colors"
+        id={inputId}
+        disabled={disabled}
+        className="w-full mono text-xs bg-[#0e0e0e] border border-[#333333] px-3 py-2.5 text-white outline-none focus:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         {...props}
       />
       {helper && <p className="text-[10px] mono text-[#737373] mt-1">{helper}</p>}
@@ -205,6 +211,7 @@ export default function Login() {
               type="email"
               required
               autoFocus
+              disabled={busy}
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value)
@@ -216,6 +223,7 @@ export default function Login() {
               label="Password"
               type="password"
               required
+              disabled={busy}
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value)
@@ -228,16 +236,18 @@ export default function Login() {
               <label className="flex items-center gap-2 text-[#a3a3a3] cursor-pointer select-none">
                 <input
                   type="checkbox"
+                  disabled={busy}
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="accent-white"
+                  className="accent-white disabled:opacity-50"
                 />
                 Remember me
               </label>
               <button
                 type="button"
+                disabled={busy}
                 onClick={fillDemoCredentials}
-                className="text-[#a3a3a3] hover:text-white underline cursor-pointer transition-colors"
+                className="text-[#a3a3a3] hover:text-white underline cursor-pointer transition-colors disabled:opacity-40"
               >
                 Fill Demo Credentials
               </button>
@@ -290,8 +300,9 @@ export default function Login() {
             <div className="pt-2 border-t border-[#262626]">
               <button
                 type="button"
+                disabled={busy}
                 onClick={continueAsGuest}
-                className="w-full text-xs mono text-[#737373] hover:text-white py-2.5 border border-[#262626] hover:border-[#404040] bg-[#0e0e0e] transition-colors cursor-pointer text-center block"
+                className="w-full text-xs mono text-[#737373] hover:text-white py-2.5 border border-[#262626] hover:border-[#404040] bg-[#0e0e0e] transition-colors cursor-pointer text-center block disabled:opacity-40"
               >
                 CONTINUE AS GUEST / DEMO →
               </button>
@@ -310,6 +321,7 @@ export default function Login() {
                 type="text"
                 required
                 autoFocus
+                disabled={busy}
                 value={code}
                 onChange={(e) => {
                   setCode(e.target.value)
@@ -320,22 +332,27 @@ export default function Login() {
               />
             ) : (
               <div>
-                <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">
+                <label
+                  htmlFor="totp-auth-code"
+                  className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold"
+                >
                   Authenticator Code
                 </label>
                 <input
+                  id="totp-auth-code"
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   maxLength={8}
                   required
                   autoFocus
+                  disabled={busy}
                   value={code}
                   onChange={(e) => {
                     setCode(e.target.value)
                     setError(null)
                   }}
-                  className="w-full mono text-center text-2xl tracking-[0.4em] bg-[#0e0e0e] border border-[#333333] px-3 py-2.5 text-white outline-none focus:border-white transition-colors"
+                  className="w-full mono text-center text-2xl tracking-[0.4em] bg-[#0e0e0e] border border-[#333333] px-3 py-2.5 text-white outline-none focus:border-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="000000"
                 />
               </div>
@@ -353,16 +370,31 @@ export default function Login() {
             </button>
             <button
               type="button"
+              disabled={busy}
               onClick={() => {
                 setUseRecovery(!useRecovery)
                 setCode('')
                 setError(null)
               }}
-              className="w-full text-xs mono text-[#737373] hover:text-white transition-colors"
+              className="w-full text-xs mono text-[#737373] hover:text-white transition-colors disabled:opacity-40"
             >
               {useRecovery
                 ? '← Use standard authenticator'
                 : 'Lost device? Use recovery code'}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setStage('credentials')
+                setOtpToken(null)
+                setCode('')
+                setError(null)
+                setUseRecovery(false)
+              }}
+              className="w-full text-xs mono text-[#737373] hover:text-white transition-colors pt-1 border-t border-[#262626] disabled:opacity-40"
+            >
+              ← Back to Sign In
             </button>
           </form>
         )}

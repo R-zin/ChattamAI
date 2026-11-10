@@ -22,6 +22,7 @@ from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from jose import jwt
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -379,6 +380,16 @@ def get_current_user(
         raise credentials_exc
     try:
         payload = decode_access_token(token)
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired. Please log in again.",
+            headers={
+                "WWW-Authenticate": (
+                    'Bearer error="invalid_token", error_description="The access token expired"'
+                )
+            },
+        )
     except Exception:  # jose.JWTError and friends
         raise credentials_exc
     # A TOTP challenge token is pre-auth and single-purpose: it must never act

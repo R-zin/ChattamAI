@@ -7,11 +7,10 @@ import re
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
-from pydantic import BaseModel, Field
 
-if TYPE_CHECKING:
-    from app.services.dbmodel import User
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
+import httpx
+from pydantic import BaseModel, Field
 
 from app.rag.multi_agent_graph import get_multi_agent_graph
 from app.routes.auth import require_auth
@@ -26,6 +25,25 @@ from app.rules.models import (
 from app.rules.tables_far import TABLE_4_SPECS
 from app.rules.tables_setbacks import calculate_required_setbacks
 from app.services.pdf_report_v2 import generate_compliance_pdf_report_v2
+
+try:
+    import fitz
+
+    _FITZ_ERRORS = (fitz.FileDataError,)
+except (ImportError, AttributeError):
+    _FITZ_ERRORS = ()
+
+try:
+    import openai
+
+    _OPENAI_TIMEOUT_EXC = (openai.APITimeoutError,)
+except (ImportError, AttributeError):
+    _OPENAI_TIMEOUT_EXC = ()
+
+_TIMEOUT_EXCEPTIONS = (httpx.TimeoutException, *_OPENAI_TIMEOUT_EXC)
+
+if TYPE_CHECKING:
+    from app.services.dbmodel import User
 
 router = APIRouter(prefix="/api/v2", tags=["symbolic-compliance-v2"])
 logger = logging.getLogger(__name__)
@@ -50,7 +68,20 @@ def evaluate_compliance(
     Calculates exact coverage, FAR/FSI, setbacks, parking, and small-plot concessions
     per KMBR/KPBR 2019 without LLM hallucinations.
     """
-    ev = evaluate_plan_facts(facts)
+    try:
+        ev = evaluate_plan_facts(facts)
+    except (
+        ZeroDivisionError,
+        OverflowError,
+        FloatingPointError,
+        ArithmeticError,
+        ValueError,
+    ) as exc:
+        logger.warning("Invalid numeric parameters in evaluate_compliance: %s", exc)
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid numeric parameters for compliance calculation: {exc}",
+        ) from exc
     persist_payload = {
         "summary": ev.summary_verdict,
         "extracted_facts": [
@@ -195,10 +226,31 @@ async def check_architectural_pdf(
             "telemetry": result.get("telemetry", {}),
             "report_id": persist_payload.get("report_id"),
         }
+    except _FITZ_ERRORS as exc:
+        logger.warning("Corrupted architectural PDF: %s", exc)
+        raise HTTPException(
+            status_code=400,
+            detail="Corrupted or unreadable architectural drawing PDF.",
+        ) from exc
+    except _TIMEOUT_EXCEPTIONS as exc:
+        logger.warning("Upstream timeout during PDF check: %s", exc)
+        raise HTTPException(
+            status_code=504,
+            detail="Upstream AI model or service timed out. Please try again.",
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        logger.warning("Validation error during PDF check: %s", exc)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Unexpected error processing architectural PDF: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process architectural PDF: {exc}",
+        ) from exc
     finally:
-        if tmp_path.exists():
+        if tmp_path is not None and tmp_path.exists():
             tmp_path.unlink()
 
 
@@ -262,10 +314,31 @@ async def check_pdf_and_export_report(
                 "Content-Type": "application/pdf",
             },
         )
+    except _FITZ_ERRORS as exc:
+        logger.warning("Corrupted architectural PDF: %s", exc)
+        raise HTTPException(
+            status_code=400,
+            detail="Corrupted or unreadable architectural drawing PDF.",
+        ) from exc
+    except _TIMEOUT_EXCEPTIONS as exc:
+        logger.warning("Upstream timeout during PDF check: %s", exc)
+        raise HTTPException(
+            status_code=504,
+            detail="Upstream AI model or service timed out. Please try again.",
+        ) from exc
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        logger.warning("Validation error during PDF check: %s", exc)
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Unexpected error processing architectural PDF: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process architectural PDF: {exc}",
+        ) from exc
     finally:
-        if tmp_path.exists():
+        if tmp_path is not None and tmp_path.exists():
             tmp_path.unlink()
 
 

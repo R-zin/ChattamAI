@@ -1,5 +1,43 @@
 import { describe, it, expect } from 'vitest'
-import { deriveStatus, STATUS_META, SEVERITY_META, isBuildingPlanText } from '../data'
+import { deriveStatus, STATUS_META, SEVERITY_META, isBuildingPlanText, formatErrorDetail, reports } from '../data'
+
+describe('formatErrorDetail', () => {
+  it('formats string errors directly', () => {
+    expect(formatErrorDetail('Invalid credentials')).toBe('Invalid credentials')
+  })
+
+  it('formats array of validation detail objects into human-readable strings', () => {
+    const err = [
+      { loc: ['body', 'email'], msg: 'value is not a valid email address' },
+      { loc: ['body', 'password'], msg: 'field required' },
+    ]
+    expect(formatErrorDetail(err)).toBe(
+      'email: value is not a valid email address; password: field required'
+    )
+  })
+
+  it('formats object detail gracefully without [object Object]', () => {
+    expect(formatErrorDetail({ message: 'Custom error occurred' })).toBe('Custom error occurred')
+    expect(formatErrorDetail({ error: 'Auth failed' })).toBe('Auth failed')
+    expect(formatErrorDetail({ custom: 123 })).toBe('{"custom":123}')
+  })
+
+  it('returns fallback for falsy values', () => {
+    expect(formatErrorDetail(null, 'Default failure')).toBe('Default failure')
+    expect(formatErrorDetail(undefined, 'Fallback')).toBe('Fallback')
+  })
+})
+
+describe('reports mock data', () => {
+  it('every mock report item has a defined unique id', () => {
+    expect(reports.length).toBeGreaterThan(0)
+    for (const r of reports) {
+      expect(r.id).toBeDefined()
+      expect(typeof r.id).toBe('string')
+      expect(r.id.length).toBeGreaterThan(0)
+    }
+  })
+})
 
 describe('deriveStatus', () => {
   it('returns insufficient when there are no rules and no violations', () => {

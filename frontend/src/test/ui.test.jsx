@@ -16,6 +16,10 @@ import {
   Slider,
 } from '../components/ui/index.js'
 import VerificationAuditBadge from '../components/VerificationAuditBadge.jsx'
+import Icon from '../components/Icon.jsx'
+import ErrorBoundary from '../components/ErrorBoundary.jsx'
+import { ToastHost, toast } from '../components/Toast.jsx'
+import { act } from 'react'
 
 describe('UI Primitives', () => {
   describe('Button', () => {
@@ -254,6 +258,75 @@ describe('UI Primitives', () => {
       // Click again to collapse
       fireEvent.click(badgeBtn)
       expect(screen.queryByTestId('verification-details-card')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Icon set', () => {
+    it('renders the 10 newly added icons without crashing', () => {
+      const addedIcons = [
+        'eye',
+        'zap',
+        'alert-circle',
+        'file',
+        'check-square',
+        'tool',
+        'target',
+        'sliders',
+        'copy',
+        'rotate-ccw',
+      ]
+      for (const name of addedIcons) {
+        const { container } = render(<Icon name={name} />)
+        const svg = container.querySelector('svg')
+        expect(svg).toBeInTheDocument()
+        expect(svg.innerHTML.length).toBeGreaterThan(0)
+      }
+    })
+  })
+
+  describe('ErrorBoundary', () => {
+    it('catches render errors and displays Swiss modernist error screen with action buttons', () => {
+      const BadComponent = () => {
+        throw new Error('Explosive runtime fault')
+      }
+
+      // Suppress console.error in this test
+      const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      render(
+        <ErrorBoundary>
+          <BadComponent />
+        </ErrorBoundary>
+      )
+
+      expect(screen.getByRole('alert')).toBeInTheDocument()
+      expect(screen.getByText('Something went wrong')).toBeInTheDocument()
+      expect(screen.getByText('Explosive runtime fault')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /reload application/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /return to dashboard/i })).toBeInTheDocument()
+
+      spy.mockRestore()
+    })
+  })
+
+  describe('ToastHost & tones', () => {
+    it('renders host with role="status" and aria-live="polite"', () => {
+      render(<ToastHost />)
+      const host = screen.getByRole('status')
+      expect(host).toHaveAttribute('aria-live', 'polite')
+    })
+
+    it('renders toasts with danger, warn, and ok tones', () => {
+      render(<ToastHost />)
+      act(() => {
+        toast('Operation critical danger', 'danger')
+        toast('Warning issued', 'warn')
+        toast('Action successful', 'ok')
+      })
+
+      expect(screen.getByText('Operation critical danger')).toBeInTheDocument()
+      expect(screen.getByText('Warning issued')).toBeInTheDocument()
+      expect(screen.getByText('Action successful')).toBeInTheDocument()
     })
   })
 })

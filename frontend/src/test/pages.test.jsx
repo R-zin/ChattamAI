@@ -8,11 +8,13 @@ import Projects from '../pages/Projects.jsx'
 import Dashboard from '../pages/Dashboard.jsx'
 import Login from '../pages/Login.jsx'
 
+const routerFuture = { v7_startTransition: true, v7_relativeSplatPath: true }
+
 describe('Application Pages', () => {
   describe('Login', () => {
     it('renders login form and Google OAuth button', () => {
       render(
-        <BrowserRouter>
+        <BrowserRouter future={routerFuture}>
           <Login />
         </BrowserRouter>
       )
@@ -20,11 +22,23 @@ describe('Application Pages', () => {
       expect(screen.getByRole('button', { name: /sign in with password/i })).toBeInTheDocument()
       expect(screen.getByPlaceholderText(/admin@chattamai.com/i)).toBeInTheDocument()
     })
+
+    it('renders accessible labels linked to input fields with htmlFor and id', () => {
+      render(
+        <BrowserRouter future={routerFuture}>
+          <Login />
+        </BrowserRouter>
+      )
+      const emailLabel = screen.getByText('Email')
+      expect(emailLabel).toHaveAttribute('for', 'field-email')
+      const emailInput = screen.getByPlaceholderText(/admin@chattamai.com/i)
+      expect(emailInput).toHaveAttribute('id', 'field-email')
+    })
   })
   describe('VisualWorkbench', () => {
     it('renders header, drop zone, and empty state initially', () => {
       render(
-        <BrowserRouter>
+        <BrowserRouter future={routerFuture}>
           <VisualWorkbench />
         </BrowserRouter>
       )
@@ -35,9 +49,23 @@ describe('Application Pages', () => {
       expect(screen.getByText(/awaiting architectural blueprint/i)).toBeInTheDocument()
     })
 
+    it('validates non-PDF file selection and displays error', async () => {
+      render(
+        <BrowserRouter future={routerFuture}>
+          <VisualWorkbench />
+        </BrowserRouter>
+      )
+      const input = screen.getByLabelText(/upload architectural drawing pdf/i).querySelector('input[type="file"]')
+      const invalidFile = new File(['hello'], 'document.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
+
+      fireEvent.change(input, { target: { files: [invalidFile] } })
+
+      expect(screen.getByText(/please upload a valid architectural drawing pdf/i)).toBeInTheDocument()
+    })
+
     it('loads sample file when clicking sample action button and enables audit', async () => {
       render(
-        <BrowserRouter>
+        <BrowserRouter future={routerFuture}>
           <VisualWorkbench />
         </BrowserRouter>
       )
@@ -65,7 +93,7 @@ describe('Application Pages', () => {
   describe('Reports', () => {
     it('renders reports table after loading', async () => {
       render(
-        <BrowserRouter>
+        <BrowserRouter future={routerFuture}>
           <Reports />
         </BrowserRouter>
       )
@@ -79,7 +107,7 @@ describe('Application Pages', () => {
   describe('Projects', () => {
     it('filters projects by category tab', () => {
       render(
-        <BrowserRouter>
+        <BrowserRouter future={routerFuture}>
           <Projects />
         </BrowserRouter>
       )
@@ -96,7 +124,7 @@ describe('Application Pages', () => {
   describe('Dashboard', () => {
     it('renders metric cards and recent assessments', () => {
       render(
-        <BrowserRouter>
+        <BrowserRouter future={routerFuture}>
           <Dashboard />
         </BrowserRouter>
       )

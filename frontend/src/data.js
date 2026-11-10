@@ -209,10 +209,10 @@ export const kbrStats = [
 ]
 
 export const reports = [
-  { project: 'Residential Building — Kakkanad', date: '2026-08-12', status: 'review', violations: 3, reviewer: 'Pending' },
-  { project: 'Commercial Complex — Kochi', date: '2026-08-11', status: 'violation', violations: 5, reviewer: 'Reviewed · E. Nair' },
-  { project: 'Apartment Block — Thiruvananthapuram', date: '2026-08-08', status: 'compliant', violations: 0, reviewer: 'Signed off · E. Nair' },
-  { project: 'Villa Extension — Kozhikode', date: '2026-08-05', status: 'insufficient', violations: null, reviewer: 'Pending' },
+  { id: 'kak-01', project: 'Residential Building — Kakkanad', date: '2026-08-12', status: 'review', violations: 3, reviewer: 'Pending' },
+  { id: 'kochi-02', project: 'Commercial Complex — Kochi', date: '2026-08-11', status: 'violation', violations: 5, reviewer: 'Reviewed · E. Nair' },
+  { id: 'tvm-03', project: 'Apartment Block — Thiruvananthapuram', date: '2026-08-08', status: 'compliant', violations: 0, reviewer: 'Signed off · E. Nair' },
+  { id: 'villa-04', project: 'Villa Extension — Kozhikode', date: '2026-08-05', status: 'insufficient', violations: null, reviewer: 'Pending' },
 ]
 
 // Sequential script for the animated pipeline (Precision direction).
@@ -283,6 +283,31 @@ export function isBuildingPlanText(text) {
   return (entityHits >= 1 && paramHits >= 1) || paramHits >= 2
 }
 
+export function formatErrorDetail(detail, fallback = '') {
+  if (!detail) return fallback
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const msgs = detail
+      .map((item) => {
+        if (typeof item === 'string') return item
+        if (item && typeof item === 'object') {
+          const loc = Array.isArray(item.loc)
+            ? item.loc.filter((x) => x !== 'body').join('.')
+            : ''
+          const msg = item.msg || item.message || JSON.stringify(item)
+          return loc ? `${loc}: ${msg}` : msg
+        }
+        return String(item)
+      })
+      .filter(Boolean)
+    return msgs.join('; ') || fallback
+  }
+  if (typeof detail === 'object') {
+    return detail.message || detail.error || JSON.stringify(detail)
+  }
+  return String(detail)
+}
+
 // ---- live API (optional) ----------------------------------------------------
 async function request(path, opts = {}) {
   const headers = { ...(opts.headers || {}) }
@@ -309,7 +334,7 @@ async function request(path, opts = {}) {
     let detail = ''
     try {
       const errJson = await res.json()
-      detail = errJson?.detail || errJson?.message || ''
+      detail = formatErrorDetail(errJson?.detail || errJson?.message)
     } catch (_) {}
     throw new Error(detail || `API ${res.status}`)
   }
@@ -383,12 +408,7 @@ export async function checkPdfV2(file) {
 
   const fd = new FormData()
   fd.append('file', file)
-  try {
-    return await request('/api/v2/check/pdf', { method: 'POST', body: fd })
-  } catch (err) {
-    console.warn('checkPdfV2 request failed, falling back to mock assessment:', err)
-    return MOCK_PDF_ASSESSMENT
-  }
+  return await request('/api/v2/check/pdf', { method: 'POST', body: fd })
 }
 
 export async function exportPdfReportV2(file) {
@@ -397,11 +417,29 @@ export async function exportPdfReportV2(file) {
   }
   const fd = new FormData()
   fd.append('file', file)
+  const token = getToken()
+  const headers = {}
+  if (token) headers.Authorization = `Bearer ${token}`
   const res = await fetch(`${API_URL}/api/v2/check/pdf/export-report`, {
     method: 'POST',
+    headers,
     body: fd,
   })
-  if (!res.ok) throw new Error('Failed to export PDF report')
+  if (res.status === 401) {
+    clearToken()
+    if (apiAvailable() && window.location.pathname !== '/login') {
+      window.location.assign('/login')
+    }
+    throw new Error('Session expired. Please log in again.')
+  }
+  if (!res.ok) {
+    let detail = ''
+    try {
+      const errJson = await res.json()
+      detail = formatErrorDetail(errJson?.detail || errJson?.message)
+    } catch (_) {}
+    throw new Error(detail || `Failed to export PDF report (${res.status})`)
+  }
   const blob = await res.blob()
   const url = window.URL.createObjectURL(blob)
   try {
@@ -652,7 +690,21 @@ export async function downloadReport(id, format = 'pdf') {
   const token = getToken()
   const headers = token ? { Authorization: `Bearer ${token}` } : {}
   const res = await fetch(`${API_URL}/api/reports/${id}/export?format=${format}`, { headers })
-  if (!res.ok) throw new Error(`Export failed (${res.status})`)
+  if (res.status === 401) {
+    clearToken()
+    if (apiAvailable() && window.location.pathname !== '/login') {
+      window.location.assign('/login')
+    }
+    throw new Error('Session expired. Please log in again.')
+  }
+  if (!res.ok) {
+    let detail = ''
+    try {
+      const errJson = await res.json()
+      detail = formatErrorDetail(errJson?.detail || errJson?.message)
+    } catch (_) {}
+    throw new Error(detail || `Export failed (${res.status})`)
+  }
   const blob = await res.blob()
   const ext = format === 'html' ? 'html' : 'pdf'
   const url = URL.createObjectURL(blob)
@@ -801,7 +853,14 @@ export async function totpVerify({ otpToken, code }) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ otp_token: otpToken, code }),
   })
-  if (!res.ok) throw new Error(`Verification failed (${res.status})`)
+  if (!res.ok) {
+    let detail = ''
+    try {
+      const errJson = await res.json()
+      detail = formatErrorDetail(errJson?.detail || errJson?.message)
+    } catch (_) {}
+    throw new Error(detail || `Verification failed (${res.status})`)
+  }
   return res.json()
 }
 
@@ -813,7 +872,14 @@ export async function totpRecover({ otpToken, recoveryCode }) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ otp_token: otpToken, recovery_code: recoveryCode }),
   })
-  if (!res.ok) throw new Error(`Recovery failed (${res.status})`)
+  if (!res.ok) {
+    let detail = ''
+    try {
+      const errJson = await res.json()
+      detail = formatErrorDetail(errJson?.detail || errJson?.message)
+    } catch (_) {}
+    throw new Error(detail || `Recovery failed (${res.status})`)
+  }
   return res.json()
 }
 

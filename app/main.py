@@ -7,10 +7,13 @@ from __future__ import annotations
 
 from collections import defaultdict
 from contextlib import asynccontextmanager
+import logging
 from pathlib import Path
 import time
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -20,6 +23,8 @@ from app.config import get_settings
 from app.routes import auth as auth_routes
 from app.routes import rag as rag_routes
 from app.routes import rag_v2 as rag_v2_routes
+
+logger = logging.getLogger(__name__)
 
 _DIST_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
@@ -49,6 +54,39 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    messages = [
+        f"{'.'.join(str(part) for part in err['loc'] if part != 'body')}: {err['msg']}"
+        if [part for part in err.get("loc", ()) if part != "body"]
+        else err.get("msg", "Validation error")
+        for err in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "; ".join(messages),
+            "code": "VALIDATION_ERROR",
+            "errors": jsonable_encoder(exc.errors()),
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Unhandled server exception: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "An internal server error occurred. Please retry later.",
+            "code": "INTERNAL_SERVER_ERROR",
+        },
+    )
+
 
 cors_setting = get_settings().cors_origins
 origins = [o.strip() for o in cors_setting.split(",") if o.strip()]
@@ -140,9 +178,13 @@ async def rate_limit_middleware(request: Request, call_next):
         # Keep only timestamps within window
         history = [t for t in history if now - t < window]
         if len(history) >= max_requests:
+            remaining_seconds = (
+                max(1, int(window - (now - history[0]))) if history else 60
+            )
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests. Please slow down."},
+                headers={"Retry-After": str(remaining_seconds)},
             )
         history.append(now)
         _RATE_LIMIT_BUCKETS[client_ip] = history
@@ -180,6 +222,10 @@ def root(request: Request):
 
 @app.get("/{full_path:path}")
 def spa_fallback(request: Request, full_path: str):
+    clean_path = full_path.lstrip("/")
+    if clean_path in ("api", "auth") or clean_path.startswith(("api/", "auth/")):
+        raise HTTPException(status_code=404, detail="Endpoint not found")
+
     # Serve static root files if present and strictly contained within _DIST_DIR
     try:
         resolved_dist = _DIST_DIR.resolve()

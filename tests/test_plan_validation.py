@@ -68,9 +68,13 @@ def test_api_check_upload_rejects_non_building_plan_file(app_client):
         }
         resp = app_client.post("/api/check/upload", files=files)
         assert resp.status_code == 400
-        assert (
-            resp.json()["detail"] == "The content of the file is not a building plan."
-        )
+        if not text:
+            assert resp.json()["detail"] == "Uploaded file is empty."
+        else:
+            assert (
+                resp.json()["detail"]
+                == "The content of the file is not a building plan."
+            )
 
 
 def test_api_check_upload_accepts_valid_building_plan_file(app_client):

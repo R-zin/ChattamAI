@@ -61,8 +61,9 @@ COPY --from=frontend-builder /build/dist ./frontend/dist
 
 # Create non-root appuser and configure ownership for data directories
 RUN useradd -u 1000 -m -s /bin/bash appuser && \
-    mkdir -p /app/data && \
-    chown -R appuser:appuser /app
+    mkdir -p /app/data /tmp/chattamai && \
+    chmod 777 /app/data /tmp/chattamai && \
+    chown -R appuser:appuser /app /tmp/chattamai
 
 USER appuser
 

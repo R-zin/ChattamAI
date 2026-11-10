@@ -168,8 +168,8 @@ jobs:
             
             # Check if revision provision state is already marked Failed
             REV_STATE=$(az containerapp revision show \
-              --name "$LATEST_REV" \
-              --app "$TARGET_APP" \
+              --name "$TARGET_APP" \
+              --revision "$LATEST_REV" \
               --resource-group "$AZURE_RESOURCE_GROUP" \
               --query "properties.provisioningState" -o tsv 2>/dev/null || echo "")
             
@@ -195,8 +195,8 @@ jobs:
               --query "[].{name:name, active:properties.active, healthState:properties.healthState, provisionStatus:properties.provisioningState}" -o table || true
             echo "=== Detailed Revision Info ==="
             az containerapp revision show \
-              --name "$LATEST_REV" \
-              --app "$TARGET_APP" \
+              --name "$TARGET_APP" \
+              --revision "$LATEST_REV" \
               --resource-group "$AZURE_RESOURCE_GROUP" \
               --query "{provisioningError:properties.provisioningError, volumes:properties.template.volumes, volumeMounts:properties.template.containers[0].volumeMounts, probes:properties.template.containers[0].probes, resources:properties.template.containers[0].resources}" -o json || true
             echo "=== System Event Logs ==="

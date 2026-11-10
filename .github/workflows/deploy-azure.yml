@@ -135,6 +135,12 @@ jobs:
             --resource-group "$AZURE_RESOURCE_GROUP" \
             --image "$IMAGE_URI"
 
+          echo "Ensuring ingress targetPort is 8000..."
+          az containerapp ingress update \
+            --name "$TARGET_APP" \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --target-port 8000 >/dev/null 2>&1 || true
+
       - name: Verify Deployment Health
         run: |
           TARGET_APP="${{ steps.deploy-app.outputs.target_app || env.AZURE_CONTAINER_APP_NAME }}"
@@ -146,16 +152,35 @@ jobs:
           echo "Application FQDN: https://$APP_URL"
           echo "Awaiting health check endpoint (https://$APP_URL/api/health)..."
           
-          for i in {1..40}; do
-            STATUS=$(curl -k -s -o /dev/null -w "%{http_code}" "https://$APP_URL/api/health" || echo "000")
+          SUCCESS=0
+          for i in {1..30}; do
+            STATUS=$(curl -k -s --connect-timeout 5 --max-time 10 -o /tmp/health_resp.json -w "%{http_code}" "https://$APP_URL/api/health" || echo "000")
             if [ "$STATUS" = "200" ]; then
               echo "Health check succeeded with HTTP 200 on attempt $i."
-              curl -k -s "https://$APP_URL/api/health"
-              exit 0
+              cat /tmp/health_resp.json
+              SUCCESS=1
+              break
             fi
-            echo "Attempt $i: Received HTTP $STATUS. Retrying in 5s..."
-            sleep 5
+            echo "Attempt $i: Received HTTP $STATUS. Retrying in 10s..."
+            sleep 10
           done
           
-          echo "Error: Health check timed out or failed."
-          exit 1
+          if [ "$SUCCESS" -ne 1 ]; then
+            echo "::error::Health check timed out or failed with status $STATUS."
+            echo "=== Target App Ingress & State ==="
+            az containerapp show \
+              --name "$TARGET_APP" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --query "{ingress:properties.configuration.ingress, provisioningState:properties.provisioningState, runningStatus:properties.runningStatus, latestRevision:properties.latestRevisionName}" -o json || true
+            echo "=== Revisions Table ==="
+            az containerapp revision list \
+              --name "$TARGET_APP" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --query "[].{name:name, active:properties.active, healthState:properties.healthState, provisionStatus:properties.provisioningState}" -o table || true
+            echo "=== Container App System/Console Logs ==="
+            az containerapp logs show \
+              --name "$TARGET_APP" \
+              --resource-group "$AZURE_RESOURCE_GROUP" \
+              --tail 100 || true
+            exit 1
+          fi

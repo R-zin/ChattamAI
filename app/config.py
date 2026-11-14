@@ -307,6 +307,12 @@ class Settings(BaseModel):
         "http://localhost:5173,http://127.0.0.1:5173,http://localhost:8000,http://127.0.0.1:8000",
     )
     rate_limit_per_minute: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
+    # Number of reverse proxies in front of the app that append to
+    # X-Forwarded-For (e.g. 1 for Azure Container Apps ingress, 2 with a
+    # Cloudflare Worker in front). 0 = no proxy: X-Forwarded-For is ignored,
+    # because a client can forge it. The client IP is the entry this many hops
+    # from the right, which only trusted proxies could have written.
+    trusted_proxy_count: int = int(os.getenv("TRUSTED_PROXY_COUNT", "0"))
 
     model_config = {"arbitrary_types_allowed": True}
 

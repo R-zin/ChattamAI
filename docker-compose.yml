@@ -10,6 +10,8 @@ services:
       - "${PORT:-8000}:8000"
     environment:
       - PORT=8000
+      # No reverse proxy in this setup: ignore client-supplied X-Forwarded-For.
+      - TRUSTED_PROXY_COUNT=${TRUSTED_PROXY_COUNT:-0}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL}
       - GEMINI_API_KEY=${GEMINI_API_KEY}

@@ -21,8 +21,8 @@ param memory string = '2.0Gi'
 @description('Minimum container replicas (0 for scale-to-zero, 1+ for high availability).')
 param minReplicas int = 1
 
-@description('Maximum container replicas.')
-param maxReplicas int = 5
+@description('Maximum container replicas. Keep at 1 unless the SQLite database, FAISS index and in-memory rate limiter are moved to shared services: each replica holds its own copy of that state.')
+param maxReplicas int = 1
 
 @description('Enable persistent Azure File share for FAISS and SQLite (/app/data). Disable for Express/Student serverless environments.')
 param enablePersistentStorage bool = false
@@ -63,6 +63,27 @@ param googleClientSecret string = ''
 @description('Redirect URI for Google OAuth callback.')
 param googleRedirectUri string = ''
 
+@description('LLM provider for analysis. Leave empty to pick from the supplied keys (Gemini, then Anthropic, then NVIDIA NIM). The matching API key must be supplied.')
+@allowed([
+  ''
+  'gemini'
+  'anthropic'
+  'nim'
+  'openai'
+])
+param llmProvider string = ''
+
+@description('Embedding provider for the rule index. Leave empty to pick from the supplied keys (NVIDIA NIM if its key is set, otherwise OpenAI). Changing it rebuilds the index (embedding dimensions differ).')
+@allowed([
+  ''
+  'nim'
+  'openai'
+])
+param embeddingProvider string = ''
+
+@description('Number of reverse proxies in front of the app that append to X-Forwarded-For (Container Apps ingress = 1; add 1 if a Cloudflare Worker proxies to it).')
+param trustedProxyCount int = 1
+
 @description('Comma-delimited CORS allowed origins.')
 param corsOrigins string = 'http://localhost:5173,http://localhost:8000'
 
@@ -71,6 +92,10 @@ param authRequired bool = true
 
 @description('Enforce mandatory TOTP 2FA step-up authentication.')
 param totpRequired bool = false
+
+// --- Providers: always passed to the app explicitly, never auto-detected there ---
+var resolvedLlmProvider = !empty(llmProvider) ? llmProvider : (!empty(geminiApiKey) ? 'gemini' : (!empty(anthropicApiKey) ? 'anthropic' : (!empty(nvidiaApiKey) ? 'nim' : 'gemini')))
+var resolvedEmbeddingProvider = !empty(embeddingProvider) ? embeddingProvider : (!empty(nvidiaApiKey) ? 'nim' : 'openai')
 
 // --- Resource Unique Names ---
 var uniqueSuffix = uniqueString(resourceGroup().id)
@@ -263,6 +288,18 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: '8000'
             }
             {
+              name: 'LLM_PROVIDER'
+              value: resolvedLlmProvider
+            }
+            {
+              name: 'EMBEDDING_PROVIDER'
+              value: resolvedEmbeddingProvider
+            }
+            {
+              name: 'TRUSTED_PROXY_COUNT'
+              value: string(trustedProxyCount)
+            }
+            {
               name: 'DATABASE_URL'
               value: 'sqlite:////app/data/chattamai.db'
             }
@@ -325,9 +362,11 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           ]
           probes: [
             {
+              // Process is up. Never depends on providers or the index, so a
+              // missing API key cannot make Container Apps restart-loop the app.
               type: 'Liveness'
               httpGet: {
-                path: '/api/health'
+                path: '/api/health/live'
                 port: 8000
               }
               initialDelaySeconds: 20
@@ -335,9 +374,11 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               failureThreshold: 3
             }
             {
+              // 503 until LLM, embeddings, a non-empty index and the DB are
+              // ready (the index is built in the background on first boot).
               type: 'Readiness'
               httpGet: {
-                path: '/api/health'
+                path: '/api/health/ready'
                 port: 8000
               }
               initialDelaySeconds: 10

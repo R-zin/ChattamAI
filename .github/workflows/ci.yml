@@ -192,6 +192,28 @@ jobs:
             sleep 1
           done
 
-          HEALTH_RESP=$(curl --fail -s http://127.0.0.1:8000/api/health)
+          fail() { echo "::error::$1"; kill $SERVER_PID; exit 1; }
+
+          # Liveness never depends on credentials.
+          curl --fail -s http://127.0.0.1:8000/api/health/live > /dev/null \
+            || fail "/api/health/live must return 200"
+
+          # With no credentials the app must boot AND say honestly that it is
+          # not ready: 200 from /api/health but status degraded with reasons,
+          # and 503 from /api/health/ready.
+          HEALTH_RESP=$(curl --fail -s http://127.0.0.1:8000/api/health) \
+            || fail "/api/health must return 200"
           echo "Health response: $HEALTH_RESP"
+          [ "$(echo "$HEALTH_RESP" | jq -r .status)" = "degraded" ] \
+            || fail "credential-less boot must report status=degraded"
+          [ "$(echo "$HEALTH_RESP" | jq '.issues | length')" -gt 0 ] \
+            || fail "degraded health must explain why (issues)"
+          READY_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/api/health/ready)
+          [ "$READY_CODE" = "503" ] || fail "/api/health/ready must be 503 when not ready (got $READY_CODE)"
+
+          # Unknown API paths are a JSON 404, not the SPA shell.
+          NOPE_CODE=$(curl -s -o /tmp/nope.json -w "%{http_code}" -H "Accept: text/html" http://127.0.0.1:8000/api/does-not-exist)
+          [ "$NOPE_CODE" = "404" ] && jq -e .detail /tmp/nope.json > /dev/null \
+            || fail "unknown /api path must be a JSON 404 (got $NOPE_CODE)"
+
           kill $SERVER_PID

@@ -15,26 +15,25 @@ export default function EmptyState({
   return (
     <div
       role="status"
-      className={`border border-[#262626] bg-[#121212] p-8 md:p-12 text-center flex flex-col items-center justify-center relative overflow-hidden ${className}`}
+      className={`border border-line bg-surface p-8 md:p-12 text-center flex flex-col items-center justify-center relative overflow-hidden ${className}`}
     >
-      <div className="blueprint-grid absolute inset-0 opacity-30 pointer-events-none" />
 
       <div className="relative z-10 flex flex-col items-center max-w-md">
-        <div className="w-12 h-12 border border-[#404040] bg-[#181818] flex items-center justify-center mb-4">
-          <Icon name={icon} className="text-xl text-white" />
+        <div className="w-12 h-12 border border-line-strong bg-surface-2 flex items-center justify-center mb-4">
+          <Icon name={icon} className="text-xl text-ink" />
         </div>
 
         {eyebrow && (
-          <span className="text-[9px] mono font-bold text-[#737373] tracking-widest uppercase mb-1">
+          <span className="text-[9px] mono font-bold text-ink-3 tracking-widest uppercase mb-1">
             {eyebrow}
           </span>
         )}
 
-        <h3 className="text-sm mono font-bold text-white tracking-wide uppercase mb-2">
+        <h3 className="text-sm mono font-bold text-ink tracking-wide uppercase mb-2">
           {title}
         </h3>
 
-        <p className="text-xs text-[#a3a3a3] leading-relaxed mb-6">
+        <p className="text-xs text-ink-2 leading-relaxed mb-6">
           {description}
         </p>
 

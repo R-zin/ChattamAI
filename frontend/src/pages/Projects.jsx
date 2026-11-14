@@ -87,7 +87,7 @@ export default function Projects() {
         action={
           <Link
             to="/new-check"
-            className="bg-white text-black font-mono text-xs font-bold px-4 py-2 border border-white hover:bg-[#e5e5e5] flex items-center gap-2 transition-colors focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none"
+            className="bg-accent text-on-accent font-mono text-xs font-bold px-4 py-2 border border-ink hover:bg-accent-strong flex items-center gap-2 transition-colors focus-visible:ring-1 focus-visible:ring-accent focus-visible:outline-none"
           >
             <Icon name="plus" />
             <span>+ NEW COMPLIANCE CHECK</span>
@@ -95,7 +95,7 @@ export default function Projects() {
         }
       />
 
-      <div className="p-6 md:p-8 space-y-6 bg-[#0a0a0a]">
+      <div className="p-6 md:p-8 space-y-6 bg-bg">
         {/* Filters */}
         <div className="flex gap-2 flex-wrap" role="tablist" aria-label="Project filters">
           {FILTERS.map((x) => (
@@ -104,10 +104,10 @@ export default function Projects() {
               role="tab"
               aria-selected={f === x}
               onClick={() => setF(x)}
-              className={`px-3 py-1.5 text-xs mono border transition-all cursor-pointer focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none ${
+              className={`px-3 py-1.5 text-xs mono border transition-all cursor-pointer focus-visible:ring-1 focus-visible:ring-accent focus-visible:outline-none ${
                 f === x
-                  ? 'border-white text-black bg-white font-bold'
-                  : 'border-[#262626] text-[#a3a3a3] hover:text-white hover:border-[#404040] bg-[#121212]'
+                  ? 'border-ink text-on-accent bg-accent font-bold'
+                  : 'border-line text-ink-2 hover:text-ink hover:border-line-strong bg-surface'
               }`}
             >
               {x.toUpperCase()}
@@ -133,40 +133,40 @@ export default function Projects() {
                 to="/results/demo"
                 key={p.name}
                 aria-label={`Open project details for ${p.name}`}
-                className="bg-[#121212] border border-[#262626] p-5 hover:border-white transition-colors group flex flex-col justify-between focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none"
+                className="bg-surface border border-line p-5 hover:border-ink transition-colors group flex flex-col justify-between focus-visible:ring-1 focus-visible:ring-accent focus-visible:outline-none"
               >
                 <div>
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <h3 className="text-sm font-bold text-white group-hover:underline leading-snug">
+                    <h3 className="text-sm font-bold text-ink group-hover:underline leading-snug">
                       {p.name}
                     </h3>
                     <Icon
                       name="external-link"
-                      className="text-[#737373] group-hover:text-white flex-shrink-0 text-sm mt-0.5 transition-colors"
+                      className="text-ink-3 group-hover:text-ink flex-shrink-0 text-sm mt-0.5 transition-colors"
                     />
                   </div>
-                  <div className="text-[9px] mono text-[#737373] uppercase tracking-wider mb-4">
+                  <div className="text-[9px] mono text-ink-3 uppercase tracking-wider mb-4">
                     {p.loc}
                   </div>
-                  <div className="flex items-center gap-4 text-xs mono text-[#a3a3a3] mb-4">
+                  <div className="flex items-center gap-4 text-xs mono text-ink-2 mb-4">
                     <span>{p.checks} CHECKS</span>
                     <span>•</span>
                     <span>{p.last}</span>
                   </div>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-[#262626] flex items-center justify-between gap-2 flex-wrap">
+                <div className="mt-4 pt-3 border-t border-line flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex gap-1.5 flex-wrap">
                     {p.tags.map((t) => (
                       <span
                         key={t}
-                        className="text-[9px] mono border border-[#262626] px-1.5 py-0.5 bg-[#0e0e0e] text-white"
+                        className="text-[9px] mono border border-line px-1.5 py-0.5 bg-inset text-ink"
                       >
                         {t}
                       </span>
                     ))}
                   </div>
-                  <span className="text-[10px] mono text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                  <span className="text-[10px] mono text-ink opacity-0 group-hover:opacity-100 transition-opacity">
                     INSPECT →
                   </span>
                 </div>

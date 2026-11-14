@@ -73,14 +73,14 @@ export default function Reports() {
         }
       />
 
-      <div className="p-6 md:p-8 space-y-6 bg-[#0a0a0a]">
+      <div className="p-6 md:p-8 space-y-6 bg-bg">
         <Card>
           <CardHeader>
             <CardTitle>
               <Icon name="archive" />
               <span>Assessment Archive & Review Records</span>
             </CardTitle>
-            <span className="text-[10px] mono text-[#737373]">
+            <span className="text-[10px] mono text-ink-3">
               {reportList.length} REPORTS
             </span>
           </CardHeader>
@@ -101,7 +101,7 @@ export default function Reports() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-left border-collapse" role="table">
                 <thead>
-                  <tr className="border-b border-[#262626] bg-[#0e0e0e]">
+                  <tr className="border-b border-line bg-inset">
                     {[
                       'Project Ref',
                       'Timestamp',
@@ -113,7 +113,7 @@ export default function Reports() {
                       <th
                         key={h}
                         scope="col"
-                        className={`px-4 py-3 text-[10px] mono text-[#737373] uppercase tracking-wider font-semibold ${
+                        className={`px-4 py-3 text-[10px] mono text-ink-3 uppercase tracking-wider font-semibold ${
                           i === 5 ? 'text-right' : 'text-left'
                         }`}
                       >
@@ -122,40 +122,40 @@ export default function Reports() {
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#262626]">
+                <tbody className="divide-y divide-line">
                   {reportList.map((r, idx) => {
                     const s = STATUS_META[r.status] || STATUS_META.review
                     return (
                       <tr
                         key={r.id || r.project || idx}
-                        className="hover:bg-[#181818] transition-colors group"
+                        className="hover:bg-surface-2 transition-colors group"
                       >
                         <td className="px-4 py-3.5">
-                          <div className="text-xs font-semibold text-white">
+                          <div className="text-xs font-semibold text-ink">
                             {r.project}
                           </div>
-                          <div className="text-[9px] mono text-[#737373]">
+                          <div className="text-[9px] mono text-ink-3">
                             AUDIT #{r.id || idx + 1}
                           </div>
                         </td>
-                        <td className="px-4 py-3.5 text-xs mono text-[#a3a3a3]">
+                        <td className="px-4 py-3.5 text-xs mono text-ink-2">
                           {r.date}
                         </td>
                         <td className="px-4 py-3.5">
                           <Pill kind={s.pill}>{s.label}</Pill>
                         </td>
-                        <td className="px-4 py-3.5 text-xs mono text-white">
+                        <td className="px-4 py-3.5 text-xs mono text-ink">
                           {r.violations === null ? (
                             '—'
                           ) : r.violations > 0 ? (
-                            <span className="text-[#fca5a5] font-semibold">
+                            <span className="text-danger font-semibold">
                               {r.violations} FLAGGED
                             </span>
                           ) : (
-                            <span className="text-[#a3a3a3]">0 FLAGGED</span>
+                            <span className="text-ink-2">0 FLAGGED</span>
                           )}
                         </td>
-                        <td className="px-4 py-3.5 text-xs mono text-[#a3a3a3]">
+                        <td className="px-4 py-3.5 text-xs mono text-ink-2">
                           {r.reviewer}
                         </td>
                         <td className="px-4 py-3.5 text-right">
@@ -170,7 +170,7 @@ export default function Reports() {
                               }
                             }}
                             aria-label={`Download PDF report for ${r.project}`}
-                            className="text-[10px] mono font-bold text-white hover:underline border border-[#333333] hover:border-white px-2.5 py-1 bg-[#0e0e0e] inline-flex items-center gap-1 cursor-pointer focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none transition-colors"
+                            className="text-[10px] mono font-bold text-ink hover:underline border border-line hover:border-ink px-2.5 py-1 bg-inset inline-flex items-center gap-1 cursor-pointer focus-visible:ring-1 focus-visible:ring-accent focus-visible:outline-none transition-colors"
                           >
                             <Icon name="file-down" />
                             <span>PDF ↓</span>
@@ -185,8 +185,8 @@ export default function Reports() {
           )}
         </Card>
 
-        <div className="flex items-start gap-2.5 text-[10px] mono text-[#737373]">
-          <span className="text-white font-bold">[NOTE]</span>
+        <div className="flex items-start gap-2.5 text-[10px] mono text-ink-3">
+          <span className="text-ink font-bold">[NOTE]</span>
           <span>
             Reports are formal advisory outputs; final building permits are granted by the municipal corporation / village panchayat secretary.
           </span>

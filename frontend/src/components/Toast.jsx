@@ -22,10 +22,10 @@ export function ToastHost() {
       {items.map((t) => (
         <div
           key={t.id}
-          className="fade-rise bg-[#121212] border border-[#404040] border-l-2 border-l-white px-4 py-3 shadow-2xl flex items-center gap-3 max-w-sm"
+          className="fade-rise bg-surface border border-line-strong border-l-2 border-l-white px-4 py-3 shadow-2xl flex items-center gap-3 max-w-sm"
         >
-          <Icon name={t.tone === 'ok' ? 'check-circle' : 'info'} className="text-white shrink-0" />
-          <span className="text-xs mono text-[#f5f5f5] leading-snug">{t.msg}</span>
+          <Icon name={t.tone === 'ok' ? 'check-circle' : 'info'} className="text-ink shrink-0" />
+          <span className="text-xs mono text-ink leading-snug">{t.msg}</span>
         </div>
       ))}
     </div>,

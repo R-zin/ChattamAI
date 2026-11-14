@@ -1,9 +1,11 @@
 import React from 'react'
 
-export default function Pill({ kind = 'info', children, mono = true, dot = true }) {
+// Status chip: a square glyph plus a text label (never colour alone). The colour
+// comes from the pill-* class (see index.css).
+export default function Pill({ kind = 'info', children, dot = true }) {
   return (
-    <span className={`status-pill ${kind} ${mono ? 'mono' : ''}`}>
-      {dot && <span className="w-1 h-1 bg-current shrink-0" />}
+    <span className={`status-pill ${kind}`}>
+      {dot && <span aria-hidden="true" />}
       {children}
     </span>
   )

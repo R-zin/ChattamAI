@@ -2,169 +2,184 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * ChattamAI — Swiss Modernism 2.0 design tokens.
+ *
+ * Colours are space-separated RGB triplets (--c-*) so Tailwind can apply opacity
+ * (see tailwind.config.js). The legacy hex-style variables below (--bg, --text,
+ * --ok ...) are derived from them for inline styles and older code.
+ *
+ * Accent (international blue) is reserved for actions, links, focus and the
+ * active navigation item. Status colours are reserved for compliance results and
+ * are always paired with a label and a shape glyph, never colour alone.
+ */
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+  --c-bg: 249 249 247;
+  --c-surface: 255 255 255;
+  --c-surface-2: 242 244 242;
+  --c-surface-3: 229 233 230;
+  --c-inset: 244 244 242;
+  --c-line: 214 217 213;
+  --c-line-strong: 118 124 121;
+  --c-ink: 17 20 19;
+  --c-ink-2: 63 69 66;
+  --c-ink-3: 90 96 94;
+  --c-accent: 11 61 219;
+  --c-accent-strong: 0 45 176;
+  --c-on-accent: 255 255 255;
+  --c-ok: 7 108 54;
+  --c-warn: 150 80 0;
+  --c-danger: 187 13 41;
+  --c-info: 90 90 90;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --c-bg: 11 11 12;
+  --c-surface: 20 20 22;
+  --c-surface-2: 26 26 29;
+  --c-surface-3: 35 35 39;
+  --c-inset: 15 15 17;
+  --c-line: 58 58 62;
+  --c-line-strong: 130 130 136;
+  --c-ink: 242 242 240;
+  --c-ink-2: 196 196 192;
+  --c-ink-3: 168 168 168;
+  --c-accent: 108 140 255;
+  --c-accent-strong: 142 166 255;
+  --c-on-accent: 11 11 12;
+  --c-ok: 61 214 140;
+  --c-warn: 242 163 58;
+  --c-danger: 255 107 122;
+  --c-info: 168 168 168;
+}
+
 :root {
-  /* Ultra-minimalist black and white palette (Swiss Modernist / Architectural Drafting) */
-  --bg: #0a0a0a;
-  --surface: #121212;
-  --surface-2: #181818;
-  --surface-3: #222222;
-  --border: #262626;
-  --border-strong: #404040;
-  --text: #f5f5f5;
-  --text-2: #a3a3a3;
-  --text-3: #737373;
-  --accent: #ffffff;
-  --accent-strong: #e5e5e5;
-  --ok: #ffffff;
-  --warn: #d4d4d4;
-  --danger: #ffffff;
-  --info: #a3a3a3;
+  --bg: rgb(var(--c-bg));
+  --surface: rgb(var(--c-surface));
+  --surface-2: rgb(var(--c-surface-2));
+  --surface-3: rgb(var(--c-surface-3));
+  --border: rgb(var(--c-line));
+  --border-strong: rgb(var(--c-line-strong));
+  --text: rgb(var(--c-ink));
+  --text-2: rgb(var(--c-ink-2));
+  --text-3: rgb(var(--c-ink-3));
+  --accent: rgb(var(--c-accent));
+  --accent-strong: rgb(var(--c-accent-strong));
+  --ok: rgb(var(--c-ok));
+  --warn: rgb(var(--c-warn));
+  --danger: rgb(var(--c-danger));
+  --info: rgb(var(--c-info));
 }
 
 html {
   background-color: var(--bg);
-  color-scheme: dark;
 }
 
 body {
-  font-family: 'Geist', 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   color: var(--text);
   background-color: var(--bg);
   margin: 0;
   -webkit-font-smoothing: antialiased;
 }
 
-.mono {
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+/* Visible, consistent keyboard focus everywhere (accent, 2px). */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-/* Subtle architectural drafting grid */
-.blueprint-grid {
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 24px 24px;
-  pointer-events: none;
+::selection {
+  background: rgb(var(--c-accent) / 0.25);
 }
 
-.blueprint-crosshair {
-  background-image:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.15) 1px, transparent 1px);
-  background-size: 32px 32px;
+/* Numbers and labels use tabular figures; there is no monospace UI type. */
+.mono,
+.font-mono {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
 }
 
-/* High-contrast inverted primary button styling */
-.accent-gradient {
-  background: #ffffff;
-  color: #000000;
-  border: 1px solid #ffffff;
-  transition: all 0.15s ease;
-}
-.accent-gradient:hover {
-  background: #e5e5e5;
-  border-color: #e5e5e5;
-}
-
-/* Minimalist high-contrast status pills */
+/* Status chips: a square glyph + a label, never colour alone. */
 .status-pill {
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  padding: 3px 8px;
-  border-radius: 2px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  padding: 2px 0;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  border-width: 1px;
+  gap: 8px;
   white-space: nowrap;
-  font-family: 'JetBrains Mono', monospace;
   text-transform: uppercase;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
-
-/* Compliant: High contrast stark white on black or black with white hairline */
+.status-pill > span:first-child {
+  width: 8px;
+  height: 8px;
+  background: currentColor;
+  flex-shrink: 0;
+}
 .pill-ok {
-  background: #000000;
-  color: #ffffff;
-  border-color: #ffffff;
+  color: rgb(var(--c-ok));
 }
-
-/* Violation: Solid inverted white badge with black text */
 .pill-danger {
-  background: #ffffff;
-  color: #000000;
-  border-color: #ffffff;
+  color: rgb(var(--c-danger));
 }
-
-/* Review: Medium contrast charcoal with crisp white/silver text */
 .pill-warn {
-  background: #181818;
-  color: #e5e5e5;
-  border-color: #525252;
+  color: rgb(var(--c-warn));
 }
-
-/* Info: Subdued minimalist gray border */
 .pill-info {
-  background: #121212;
-  color: #a3a3a3;
-  border-color: #333333;
+  color: rgb(var(--c-info));
 }
-
-/* Insufficient: Dashed hairline border */
 .pill-insufficient {
-  background: #121212;
-  color: #a3a3a3;
-  border: 1px dashed #737373;
+  color: rgb(var(--c-info));
+}
+.pill-insufficient > span:first-child {
+  background: transparent;
+  border: 1px dashed currentColor;
 }
 
-/* Sidebar active rail */
-.sidebar-rail {
-  width: 2px;
-  background-color: #ffffff;
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
-}
-
-/* Subtle monochrome pulse */
+/* Subtle pulse for the live-engine indicator. */
 .pulse-accent {
   animation: pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
 }
 @keyframes pulse-ring {
-  0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.4); }
-  70% { box-shadow: 0 0 0 8px rgba(255, 255, 255, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
+  0% { box-shadow: 0 0 0 0 rgb(var(--c-ok) / 0.4); }
+  70% { box-shadow: 0 0 0 6px rgb(var(--c-ok) / 0); }
+  100% { box-shadow: 0 0 0 0 rgb(var(--c-ok) / 0); }
 }
 
-/* Traveling signal along a connector in clean monochrome */
-.flow-line-active {
-  background: linear-gradient(90deg, #ffffff 0%, transparent 100%);
-  background-size: 200% 100%;
-  animation: flow 1.5s linear infinite;
-}
-@keyframes flow {
-  from { background-position: 200% 0; }
-  to { background-position: -200% 0; }
-}
-
-/* Monospaced code scrollbars */
+/* Slim, square scrollbars. */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: #0a0a0a;
+  background: var(--bg);
 }
 ::-webkit-scrollbar-thumb {
-  background: #262626;
-  border-radius: 0px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #404040;
+  background: rgb(var(--c-line-strong) / 0.6);
+  border-radius: 0;
 }
 
-/* Subtle fade rise */
 .fade-rise {
   animation: fadeRise 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 @keyframes fadeRise {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-rise,
+  .pulse-accent {
+    animation: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
 }

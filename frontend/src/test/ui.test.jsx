@@ -37,10 +37,10 @@ describe('UI Primitives', () => {
 
     it('applies variant classes correctly', () => {
       const { rerender } = render(<Button variant="primary">Primary</Button>)
-      expect(screen.getByRole('button')).toHaveClass('bg-white text-black')
+      expect(screen.getByRole('button')).toHaveClass('bg-accent text-on-accent')
 
       rerender(<Button variant="danger">Danger</Button>)
-      expect(screen.getByRole('button')).toHaveClass('text-[#fca5a5]')
+      expect(screen.getByRole('button')).toHaveClass('text-danger')
     })
   })
 

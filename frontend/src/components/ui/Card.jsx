@@ -3,7 +3,7 @@ import React from 'react'
 export function Card({ children, className = '', ...props }) {
   return (
     <div
-      className={`border border-[#262626] bg-[#121212] overflow-hidden flex flex-col ${className}`}
+      className={`border border-line bg-surface overflow-hidden flex flex-col ${className}`}
       {...props}
     >
       {children}
@@ -14,7 +14,7 @@ export function Card({ children, className = '', ...props }) {
 export function CardHeader({ children, className = '', ...props }) {
   return (
     <div
-      className={`px-5 py-3.5 border-b border-[#262626] bg-[#181818] flex items-center justify-between ${className}`}
+      className={`px-5 py-3.5 border-b border-line bg-surface-2 flex items-center justify-between ${className}`}
       {...props}
     >
       {children}
@@ -25,7 +25,7 @@ export function CardHeader({ children, className = '', ...props }) {
 export function CardTitle({ children, className = '', ...props }) {
   return (
     <h3
-      className={`text-xs mono font-bold text-white tracking-widest uppercase flex items-center gap-2 ${className}`}
+      className={`text-xs mono font-bold text-ink tracking-widest uppercase flex items-center gap-2 ${className}`}
       {...props}
     >
       {children}
@@ -35,7 +35,7 @@ export function CardTitle({ children, className = '', ...props }) {
 
 export function CardDescription({ children, className = '', ...props }) {
   return (
-    <p className={`text-[10px] mono text-[#737373] mt-0.5 ${className}`} {...props}>
+    <p className={`text-[10px] mono text-ink-3 mt-0.5 ${className}`} {...props}>
       {children}
     </p>
   )
@@ -52,7 +52,7 @@ export function CardContent({ children, className = '', ...props }) {
 export function CardFooter({ children, className = '', ...props }) {
   return (
     <div
-      className={`px-5 py-3 border-t border-[#262626] bg-[#0e0e0e] flex items-center justify-between ${className}`}
+      className={`px-5 py-3 border-t border-line bg-inset flex items-center justify-between ${className}`}
       {...props}
     >
       {children}

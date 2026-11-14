@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from '../components/Toast.jsx'
 import Field from '../components/Field.jsx'
+import AuthLayout from '../components/AuthLayout.jsx'
 import {
   apiAvailable,
   fetchAuthConfig,
@@ -176,34 +177,26 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen blueprint-grid flex items-center justify-center p-6 bg-[#0a0a0a]">
-      <div className="w-full max-w-md bg-[#121212] border border-[#262626] p-8 space-y-6 shadow-2xl">
-        <div className="border-b border-[#262626] pb-4">
-          <div className="text-[10px] mono uppercase tracking-widest text-[#737373] mb-1">
-            CHATTAM.AI
-          </div>
-          <h1 className="text-xl font-bold text-white uppercase font-sans">
-            {stage === 'totp' ? 'Two-Factor Verification' : 'Sign In'}
-          </h1>
-          <p className="text-xs text-[#a3a3a3] mt-1 mono">
-            {stage === 'totp'
-              ? 'Enter authentication code'
-              : 'Kerala Building Rules Compliance Platform'}
-          </p>
-        </div>
-
+    <AuthLayout
+      title={stage === 'totp' ? 'Two-Factor Verification' : 'Sign In'}
+      subtitle={
+        stage === 'totp'
+          ? 'Enter authentication code'
+          : 'Kerala Building Rules Compliance Platform'
+      }
+    >
         {registeredEmail && stage === 'credentials' && !error && (
           <div
             role="status"
-            className="border border-[#404040] bg-[#0e0e0e] p-3 text-xs mono text-white"
+            className="border border-line-strong bg-inset p-3 text-xs mono text-ink"
           >
             Account created for {registeredEmail}. Sign in to continue.
           </div>
         )}
 
         {error && (
-          <div className="border border-white bg-[#1a0a0a] p-3 text-xs mono text-white flex items-center gap-2.5">
-            <span className="w-4 h-4 flex-shrink-0 border border-white flex items-center justify-center font-bold bg-white text-black text-[10px]">
+          <div className="border border-ink bg-danger/10 p-3 text-xs mono text-ink flex items-center gap-2.5">
+            <span className="w-4 h-4 flex-shrink-0 border border-ink flex items-center justify-center font-bold bg-accent text-on-accent text-[10px]">
               !
             </span>
             <span className="flex-1">{error}</span>
@@ -237,12 +230,12 @@ export default function Login() {
             />
 
             <div className="flex items-center justify-between text-xs mono">
-              <label className="flex items-center gap-2 text-[#a3a3a3] cursor-pointer select-none">
+              <label className="flex items-center gap-2 text-ink-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="accent-white"
+                  className="accent-accent"
                 />
                 Remember me
               </label>
@@ -250,7 +243,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={fillDemoCredentials}
-                  className="text-[#a3a3a3] hover:text-white underline cursor-pointer transition-colors"
+                  className="text-ink-2 hover:text-ink underline cursor-pointer transition-colors"
                 >
                   Fill Demo Credentials
                 </button>
@@ -260,17 +253,17 @@ export default function Login() {
             <button
               type="submit"
               disabled={busy}
-              className="w-full bg-white text-black font-mono font-bold text-xs py-3 border border-white hover:bg-[#e5e5e5] transition-colors cursor-pointer disabled:opacity-40"
+              className="w-full bg-accent text-on-accent font-mono font-bold text-xs py-3 border border-ink hover:bg-accent-strong transition-colors cursor-pointer disabled:opacity-40"
             >
               {busy ? 'AUTHENTICATING…' : 'SIGN IN WITH PASSWORD →'}
             </button>
 
             <div className="flex items-center gap-3 my-4">
-              <div className="h-px bg-[#262626] flex-1" />
-              <span className="text-[10px] mono text-[#737373] uppercase tracking-wider">
+              <div className="h-px bg-surface-3 flex-1" />
+              <span className="text-[10px] mono text-ink-3 uppercase tracking-wider">
                 OR
               </span>
-              <div className="h-px bg-[#262626] flex-1" />
+              <div className="h-px bg-surface-3 flex-1" />
             </div>
 
             {/* Google OAuth Sign-in Button */}
@@ -278,7 +271,7 @@ export default function Login() {
               type="button"
               disabled={busy}
               onClick={handleGoogleSignIn}
-              className="w-full bg-[#181818] text-white font-mono font-bold text-xs py-3 border border-[#333333] hover:border-white hover:bg-[#222222] transition-colors cursor-pointer flex items-center justify-center gap-2.5 disabled:opacity-40 select-none focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none"
+              className="w-full bg-surface-2 text-ink font-mono font-bold text-xs py-3 border border-line hover:border-ink hover:bg-surface-3 transition-colors cursor-pointer flex items-center justify-center gap-2.5 disabled:opacity-40 select-none focus-visible:ring-1 focus-visible:ring-accent focus-visible:outline-none"
             >
               <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                 <path
@@ -302,11 +295,11 @@ export default function Login() {
             </button>
 
             {!live && (
-              <div className="pt-2 border-t border-[#262626]">
+              <div className="pt-2 border-t border-line">
                 <button
                   type="button"
                   onClick={continueAsGuest}
-                  className="w-full text-xs mono text-[#737373] hover:text-white py-2.5 border border-[#262626] hover:border-[#404040] bg-[#0e0e0e] transition-colors cursor-pointer text-center block"
+                  className="w-full text-xs mono text-ink-3 hover:text-ink py-2.5 border border-line hover:border-line-strong bg-inset transition-colors cursor-pointer text-center block"
                 >
                   CONTINUE AS GUEST / DEMO →
                 </button>
@@ -314,9 +307,9 @@ export default function Login() {
             )}
 
             {registrationOpen !== false && (
-              <div className="pt-2 border-t border-[#262626] text-center text-xs mono text-[#737373]">
+              <div className="pt-2 border-t border-line text-center text-xs mono text-ink-3">
                 New here?{' '}
-                <Link to="/register" className="text-white underline hover:text-[#e5e5e5]">
+                <Link to="/register" className="text-ink underline hover:text-ink">
                   Create an account
                 </Link>
               </div>
@@ -325,7 +318,7 @@ export default function Login() {
         ) : (
           <form onSubmit={submitCode} className="space-y-4">
             {setupRequired && (
-              <div className="border border-white bg-[#0e0e0e] p-3 text-xs mono text-white">
+              <div className="border border-ink bg-inset p-3 text-xs mono text-ink">
                 Two-factor authentication is required. Enter code to proceed.
               </div>
             )}
@@ -345,7 +338,7 @@ export default function Login() {
               />
             ) : (
               <div>
-                <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">
+                <label className="block text-[10px] mono uppercase text-ink-3 mb-1.5 font-semibold">
                   Authenticator Code
                 </label>
                 <input
@@ -360,7 +353,7 @@ export default function Login() {
                     setCode(e.target.value)
                     setError(null)
                   }}
-                  className="w-full mono text-center text-2xl tracking-[0.4em] bg-[#0e0e0e] border border-[#333333] px-3 py-2.5 text-white outline-none focus:border-white transition-colors"
+                  className="w-full mono text-center text-2xl tracking-[0.4em] bg-inset border border-line px-3 py-2.5 text-ink outline-none focus:border-ink transition-colors"
                   placeholder="000000"
                 />
               </div>
@@ -368,7 +361,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={busy}
-              className="w-full bg-white text-black font-mono font-bold text-xs py-3 border border-white hover:bg-[#e5e5e5] transition-colors cursor-pointer disabled:opacity-40"
+              className="w-full bg-accent text-on-accent font-mono font-bold text-xs py-3 border border-ink hover:bg-accent-strong transition-colors cursor-pointer disabled:opacity-40"
             >
               {busy
                 ? 'VERIFYING…'
@@ -383,7 +376,7 @@ export default function Login() {
                 setCode('')
                 setError(null)
               }}
-              className="w-full text-xs mono text-[#737373] hover:text-white transition-colors"
+              className="w-full text-xs mono text-ink-3 hover:text-ink transition-colors"
             >
               {useRecovery
                 ? '← Use standard authenticator'
@@ -391,7 +384,6 @@ export default function Login() {
             </button>
           </form>
         )}
-      </div>
-    </div>
+    </AuthLayout>
   )
 }

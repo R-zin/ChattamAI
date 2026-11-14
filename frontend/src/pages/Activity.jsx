@@ -61,7 +61,7 @@ export default function Activity() {
         subtitle="Chronological log of compliance assessments, vector ingestions, and system events"
       />
 
-      <div className="p-6 md:p-8 space-y-6 bg-[#0a0a0a]">
+      <div className="p-6 md:p-8 space-y-6 bg-bg">
         {/* Filter pills */}
         <div className="flex gap-2 flex-wrap" role="tablist" aria-label="Activity categories">
           {FILTERS.map((x) => (
@@ -70,10 +70,10 @@ export default function Activity() {
               role="tab"
               aria-selected={f === x}
               onClick={() => setF(x)}
-              className={`px-3 py-1.5 text-xs mono border transition-all cursor-pointer focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none ${
+              className={`px-3 py-1.5 text-xs mono border transition-all cursor-pointer focus-visible:ring-1 focus-visible:ring-accent focus-visible:outline-none ${
                 f === x
-                  ? 'border-white text-black bg-white font-bold'
-                  : 'border-[#262626] text-[#a3a3a3] hover:text-white hover:border-[#404040] bg-[#121212]'
+                  ? 'border-ink text-on-accent bg-accent font-bold'
+                  : 'border-line text-ink-2 hover:text-ink hover:border-line-strong bg-surface'
               }`}
             >
               {x.toUpperCase()}
@@ -93,25 +93,25 @@ export default function Activity() {
             onAction={() => setF('All')}
           />
         ) : (
-          <div className="max-w-3xl bg-[#121212] border border-[#262626] p-6 relative">
-            <div className="absolute left-[34px] top-8 bottom-8 w-px bg-[#262626]" />
+          <div className="max-w-3xl bg-surface border border-line p-6 relative">
+            <div className="absolute left-[34px] top-8 bottom-8 w-px bg-surface-3" />
             <div className="space-y-6">
               {shown.map((e, i) => (
                 <div
                   key={i}
                   className="flex gap-4 items-start relative z-10 fade-rise"
                 >
-                  <div className="w-2.5 h-2.5 bg-[#0a0a0a] border border-white flex-shrink-0 mt-1" />
+                  <div className="w-2.5 h-2.5 bg-bg border border-ink flex-shrink-0 mt-1" />
                   <div className="min-w-0">
                     <div className="flex items-baseline gap-3 flex-wrap">
-                      <span className="text-xs font-bold text-white uppercase mono">
+                      <span className="text-xs font-bold text-ink uppercase mono">
                         {e.label}
                       </span>
-                      <span className="text-[10px] mono text-[#737373]">
+                      <span className="text-[10px] mono text-ink-3">
                         {e.ts}
                       </span>
                     </div>
-                    <div className="text-xs mono text-[#a3a3a3] mt-0.5 break-words">
+                    <div className="text-xs mono text-ink-2 mt-0.5 break-words">
                       {e.detail}
                     </div>
                   </div>

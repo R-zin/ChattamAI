@@ -6,16 +6,18 @@ import Icon from '../components/Icon.jsx'
 import { analysisModel, apiAvailable, embeddingModel, totpDisable, totpEnable, totpSetup, totpStatus } from '../data.js'
 
 function Field({ label, value, onChange, type = 'text', helper }) {
+  const id = `setting-${String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
   return (
     <div>
-      <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">{label}</label>
+      <label htmlFor={id} className="block text-[10px] mono uppercase text-ink-3 mb-1.5 font-semibold">{label}</label>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full mono text-xs bg-[#0e0e0e] border border-[#333333] px-3 py-2 text-white outline-none focus:border-white transition-colors"
+        className="w-full mono text-xs bg-inset border border-line px-3 py-2 text-ink outline-none focus:border-ink transition-colors"
       />
-      {helper && <div className="text-[9px] mono text-[#525252] mt-1">{helper}</div>}
+      {helper && <div className="text-[9px] mono text-ink-3 mt-1">{helper}</div>}
     </div>
   )
 }
@@ -92,13 +94,13 @@ export default function Settings() {
         subtitle="Manage NVIDIA NIM inference endpoints, vector retrieval parameters, and account security"
       />
 
-      <div className="p-6 md:p-8 space-y-6 max-w-4xl bg-[#0a0a0a]">
+      <div className="p-6 md:p-8 space-y-6 max-w-4xl bg-bg">
 
         {/* Retrieval Settings */}
-        <section className="bg-[#121212] border border-[#262626] p-6 space-y-4">
-          <div className="flex items-center gap-2 border-b border-[#262626] pb-3">
-            <span className="w-1.5 h-1.5 bg-white inline-block" />
-            <h3 className="text-xs font-bold text-white uppercase tracking-widest mono">Vector Retrieval Parameters</h3>
+        <section className="bg-surface border border-line p-6 space-y-4">
+          <div className="flex items-center gap-2 border-b border-line pb-3">
+            <span className="w-1.5 h-1.5 bg-accent inline-block" />
+            <h3 className="text-xs font-bold text-ink uppercase tracking-widest mono">Vector Retrieval Parameters</h3>
           </div>
           <div className="grid sm:grid-cols-3 gap-4">
             <Field label="TOP_K CHUNKS" value={topK} onChange={setTopK} type="number" helper="Max KBR rule chunks passed to LLM reasoning" />
@@ -108,87 +110,87 @@ export default function Settings() {
         </section>
 
         {/* Model Inference Settings */}
-        <section className="bg-[#121212] border border-[#262626] p-6 space-y-4">
-          <div className="flex items-center gap-2 border-b border-[#262626] pb-3">
-            <span className="w-1.5 h-1.5 bg-white inline-block" />
-            <h3 className="text-xs font-bold text-white uppercase tracking-widest mono">AI Model Inference Configuration</h3>
+        <section className="bg-surface border border-line p-6 space-y-4">
+          <div className="flex items-center gap-2 border-b border-line pb-3">
+            <span className="w-1.5 h-1.5 bg-accent inline-block" />
+            <h3 className="text-xs font-bold text-ink uppercase tracking-widest mono">AI Model Inference Configuration</h3>
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">Active LLM Model</label>
-              <div className="mono text-xs bg-[#0e0e0e] border border-[#333333] px-3 py-2 text-white">
+              <label className="block text-[10px] mono uppercase text-ink-3 mb-1.5 font-semibold">Active LLM Model</label>
+              <div className="mono text-xs bg-inset border border-line px-3 py-2 text-ink">
                 {provider === 'NVIDIA NIM' ? 'nvidia/nemotron-3.5-super-vl-120b-a12b' : analysisModel}
               </div>
             </div>
             <div>
-              <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">Dense Embedding Model</label>
-              <div className="mono text-xs bg-[#0e0e0e] border border-[#333333] px-3 py-2 text-white">{embeddingModel}</div>
+              <label className="block text-[10px] mono uppercase text-ink-3 mb-1.5 font-semibold">Dense Embedding Model</label>
+              <div className="mono text-xs bg-inset border border-line px-3 py-2 text-ink">{embeddingModel}</div>
             </div>
           </div>
           <div>
-            <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">Provider Endpoint</label>
-            <div className="inline-flex border border-[#333333] bg-[#0e0e0e]">
+            <label className="block text-[10px] mono uppercase text-ink-3 mb-1.5 font-semibold">Provider Endpoint</label>
+            <div className="inline-flex border border-line bg-inset">
               {['NVIDIA NIM', 'Anthropic', 'OpenRouter'].map((p) => (
                 <button
                   key={p}
                   onClick={() => setProvider(p)}
                   className={`px-4 py-2 text-xs mono transition-colors ${
-                    provider === p ? 'bg-white text-black font-bold' : 'text-[#737373] hover:text-white'
+                    provider === p ? 'bg-accent text-on-accent font-bold' : 'text-ink-3 hover:text-ink'
                   }`}
                 >
                   {p}
                 </button>
               ))}
             </div>
-            <div className="text-[9px] mono text-[#525252] mt-1">Configured for active compliance reasoning</div>
+            <div className="text-[9px] mono text-ink-3 mt-1">Configured for active compliance reasoning</div>
           </div>
         </section>
 
         {/* Security / 2FA Section */}
-        <section className="bg-[#121212] border border-[#262626] p-6 space-y-4">
-          <div className="flex items-center gap-2 border-b border-[#262626] pb-3">
-            <span className="w-1.5 h-1.5 bg-white inline-block" />
-            <h3 className="text-xs font-bold text-white uppercase tracking-widest mono">Security & Authentication (TOTP 2FA)</h3>
+        <section className="bg-surface border border-line p-6 space-y-4">
+          <div className="flex items-center gap-2 border-b border-line pb-3">
+            <span className="w-1.5 h-1.5 bg-accent inline-block" />
+            <h3 className="text-xs font-bold text-ink uppercase tracking-widest mono">Security & Authentication (TOTP 2FA)</h3>
           </div>
 
           {!apiAvailable() ? (
-            <div className="text-xs mono text-[#737373]">API not configured — running on local mock security state.</div>
+            <div className="text-xs mono text-ink-3">API not configured — running on local mock security state.</div>
           ) : !totp ? (
-            <div className="text-xs mono text-[#737373]">Checking 2FA configuration…</div>
+            <div className="text-xs mono text-ink-3">Checking 2FA configuration…</div>
           ) : (
             <div className="space-y-4">
               {totp.totp_required && !totp.totp_enabled && (
-                <div className="border border-white p-3 bg-[#0e0e0e] text-xs mono text-white">
+                <div className="border border-ink p-3 bg-inset text-xs mono text-ink">
                   [!] This auditor terminal requires two-factor authentication. Enroll below.
                 </div>
               )}
 
               {codesShown ? (
-                <div className="border border-white bg-[#0e0e0e] p-4 space-y-3">
-                  <div className="text-xs mono text-white font-bold">RECOVERY CODES — STORE SECURELY:</div>
-                  <div className="grid grid-cols-2 gap-2 mono text-xs text-white bg-[#121212] p-3 border border-[#262626]">
+                <div className="border border-ink bg-inset p-4 space-y-3">
+                  <div className="text-xs mono text-ink font-bold">RECOVERY CODES — STORE SECURELY:</div>
+                  <div className="grid grid-cols-2 gap-2 mono text-xs text-ink bg-surface p-3 border border-line">
                     {codesShown.map((c) => (<div key={c}>{c}</div>))}
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={downloadCodes} className="px-3 py-1.5 bg-white text-black mono text-xs font-bold hover:bg-[#e5e5e5] flex items-center gap-1">
+                    <button onClick={downloadCodes} className="px-3 py-1.5 bg-accent text-on-accent mono text-xs font-bold hover:bg-accent-strong flex items-center gap-1">
                       <Icon name="download" /> DOWNLOAD
                     </button>
-                    <button onClick={() => { navigator.clipboard?.writeText(codesShown.join('\n')); toast('Codes copied.', 'ok') }} className="px-3 py-1.5 border border-[#333333] hover:border-white text-white mono text-xs bg-[#121212]">
+                    <button onClick={() => { navigator.clipboard?.writeText(codesShown.join('\n')); toast('Codes copied.', 'ok') }} className="px-3 py-1.5 border border-line hover:border-ink text-ink mono text-xs bg-surface">
                       COPY
                     </button>
-                    <button onClick={() => setCodesShown(null)} className="px-3 py-1.5 text-xs mono text-[#a3a3a3] hover:text-white ml-auto">
+                    <button onClick={() => setCodesShown(null)} className="px-3 py-1.5 text-xs mono text-ink-2 hover:text-ink ml-auto">
                       DONE
                     </button>
                   </div>
                 </div>
               ) : enroll ? (
                 <div className="space-y-4">
-                  <div className="text-xs mono text-[#a3a3a3]">Scan QR with authenticator or enter key:</div>
+                  <div className="text-xs mono text-ink-2">Scan QR with authenticator or enter key:</div>
                   <div className="flex flex-col sm:flex-row gap-5 items-start">
                     {enroll.qr_png_data_uri ? (
-                      <div className="bg-white p-2 border border-white"><img src={enroll.qr_png_data_uri} alt="TOTP QR code" className="w-36 h-36" /></div>
+                      <div className="bg-accent p-2 border border-ink"><img src={enroll.qr_png_data_uri} alt="TOTP QR code" className="w-36 h-36" /></div>
                     ) : (
-                      <div className="w-36 h-36 bg-[#0e0e0e] border border-[#262626] flex items-center justify-center text-white text-2xl"><Icon name="qrcode" /></div>
+                      <div className="w-36 h-36 bg-inset border border-line flex items-center justify-center text-ink text-2xl"><Icon name="qrcode" /></div>
                     )}
                     <div className="flex-1 w-full space-y-3">
                       <Field label="MANUAL ENTRY SECRET" value={enroll.secret} onChange={() => {}} helper="Base32 Key" />
@@ -200,11 +202,11 @@ export default function Settings() {
                     <button
                       onClick={confirmEnroll}
                       disabled={secBusy || code.length < 6 || !enrollPw}
-                      className="px-4 py-2 bg-white text-black font-mono text-xs font-bold border border-white hover:bg-[#e5e5e5] disabled:opacity-40"
+                      className="px-4 py-2 bg-accent text-on-accent font-mono text-xs font-bold border border-ink hover:bg-accent-strong disabled:opacity-40"
                     >
                       CONFIRM &amp; ENABLE
                     </button>
-                    <button onClick={() => setEnroll(null)} className="px-4 py-2 text-xs mono text-[#a3a3a3] hover:text-white border border-[#333333] bg-[#0e0e0e]">
+                    <button onClick={() => setEnroll(null)} className="px-4 py-2 text-xs mono text-ink-2 hover:text-ink border border-line bg-inset">
                       CANCEL
                     </button>
                   </div>
@@ -212,8 +214,8 @@ export default function Settings() {
               ) : totp.totp_enabled ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <span className="text-[10px] mono bg-white text-black font-bold px-2 py-0.5">2FA ACTIVE</span>
-                    <span className="text-xs mono text-[#a3a3a3]">{totp.recovery_codes_remaining} codes remaining</span>
+                    <span className="text-[10px] mono bg-accent text-on-accent font-bold px-2 py-0.5">2FA ACTIVE</span>
+                    <span className="text-xs mono text-ink-2">{totp.recovery_codes_remaining} codes remaining</span>
                   </div>
                   {disarm ? (
                     <div className="space-y-3 pt-2">
@@ -222,19 +224,19 @@ export default function Settings() {
                         <Field label="AUTHENTICATOR CODE" value={disarmCode} onChange={setDisarmCode} />
                       </div>
                       <div className="flex gap-3">
-                        <button onClick={confirmDisable} disabled={secBusy} className="px-4 py-2 text-xs mono bg-white text-black font-bold hover:bg-[#e5e5e5]">CONFIRM DISABLE</button>
-                        <button onClick={() => setDisarm(false)} className="px-4 py-2 text-xs mono text-[#a3a3a3] hover:text-white border border-[#333333] bg-[#0e0e0e]">CANCEL</button>
+                        <button onClick={confirmDisable} disabled={secBusy} className="px-4 py-2 text-xs mono bg-accent text-on-accent font-bold hover:bg-accent-strong">CONFIRM DISABLE</button>
+                        <button onClick={() => setDisarm(false)} className="px-4 py-2 text-xs mono text-ink-2 hover:text-ink border border-line bg-inset">CANCEL</button>
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => setDisarm(true)} className="px-3 py-1.5 text-xs mono text-[#a3a3a3] hover:text-white border border-[#333333] hover:border-white bg-[#0e0e0e]">
+                    <button onClick={() => setDisarm(true)} className="px-3 py-1.5 text-xs mono text-ink-2 hover:text-ink border border-line hover:border-ink bg-inset">
                       DISABLE 2FA
                     </button>
                   )}
                 </div>
               ) : (
                 <div>
-                  <button onClick={startEnroll} disabled={secBusy} className="px-4 py-2 bg-white text-black font-mono text-xs font-bold border border-white hover:bg-[#e5e5e5]">
+                  <button onClick={startEnroll} disabled={secBusy} className="px-4 py-2 bg-accent text-on-accent font-mono text-xs font-bold border border-ink hover:bg-accent-strong">
                     + ENABLE TWO-FACTOR AUTHENTICATION
                   </button>
                 </div>
@@ -246,7 +248,7 @@ export default function Settings() {
         {/* Save button */}
         <button
           onClick={() => toast('System configuration saved.', 'ok')}
-          className="bg-white text-black font-mono text-xs font-bold px-6 py-3 border border-white hover:bg-[#e5e5e5] transition-colors cursor-pointer"
+          className="bg-accent text-on-accent font-mono text-xs font-bold px-6 py-3 border border-ink hover:bg-accent-strong transition-colors cursor-pointer"
         >
           SAVE CONFIGURATION CHANGES
         </button>

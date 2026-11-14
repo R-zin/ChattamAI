@@ -282,6 +282,12 @@ def app_client(tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def _disable_startup_ingest(monkeypatch):
+    """Keep app startup from ingesting (and calling real providers) in tests."""
+    monkeypatch.setenv("AUTO_INGEST", "0")
+
+
+@pytest.fixture(autouse=True)
 def _reset_global_rate_limits():
     """Reset the in-memory rate limiter before and after each test to prevent test bleed."""
     try:

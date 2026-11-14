@@ -121,6 +121,22 @@ uvicorn app.main:app --reload
    ```
 4. **Health**: `GET /api/health`
 
+### Sign-up form
+
+The web app has a `/register` page (linked from the sign-in screen). It creates an
+account with an email and a password (8+ characters, a letter and a number), then
+sends the user to sign in. Whether it is offered depends on the backend:
+
+- `ADMIN_KEY` unset: registration is open.
+- `ADMIN_KEY` set (the Azure template always sets one): registration needs the
+  `X-Admin-Key` header, so the form shows "by invitation only" and the link is hidden.
+  Set `ALLOW_SELF_REGISTRATION=true` (Bicep: `allowSelfRegistration`) to open public
+  sign-up. Think first: every account can trigger LLM and embedding calls, and the
+  rate limit is per IP only.
+
+Emails are trimmed and lower-cased, so `A@x.com` and `a@x.com` are one account.
+`GET /auth/config` exposes `registration_open`, `totp_required` and `google_enabled`.
+
 ### Auth (optional)
 
 Registration/login are available out of the box; protecting the RAG routes is

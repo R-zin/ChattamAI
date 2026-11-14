@@ -1,7 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from '../components/Toast.jsx'
+import Field from '../components/Field.jsx'
 import {
+  apiAvailable,
+  fetchAuthConfig,
   isAuthed,
   login,
   setToken,
@@ -11,26 +14,16 @@ import {
   googleCallbackLogin,
 } from '../data.js'
 
-function Field({ label, helper, ...props }) {
-  return (
-    <div>
-      <label className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold">
-        {label}
-      </label>
-      <input
-        className="w-full mono text-xs bg-[#0e0e0e] border border-[#333333] px-3 py-2.5 text-white outline-none focus:border-white transition-colors"
-        {...props}
-      />
-      {helper && <p className="text-[10px] mono text-[#737373] mt-1">{helper}</p>}
-    </div>
-  )
-}
-
 export default function Login() {
   const nav = useNavigate()
+  const location = useLocation()
+  const registeredEmail = location.state?.registeredEmail || ''
+  const live = apiAvailable()
   const [stage, setStage] = useState('credentials')
   const [busy, setBusy] = useState(false)
-  const [email, setEmail] = useState('')
+  // null = unknown (older/unreachable backend): offer sign-up, server decides.
+  const [registrationOpen, setRegistrationOpen] = useState(null)
+  const [email, setEmail] = useState(registeredEmail)
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
   const [otpToken, setOtpToken] = useState(null)
@@ -43,6 +36,16 @@ export default function Login() {
   useEffect(() => {
     if (isAuthed()) nav('/', { replace: true })
   }, [nav])
+
+  useEffect(() => {
+    let active = true
+    fetchAuthConfig().then((cfg) => {
+      if (active && cfg) setRegistrationOpen(!!cfg.registration_open)
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   // Handle incoming OAuth callback redirect (?code=...&state=...)
   useEffect(() => {
@@ -189,6 +192,15 @@ export default function Login() {
           </p>
         </div>
 
+        {registeredEmail && stage === 'credentials' && !error && (
+          <div
+            role="status"
+            className="border border-[#404040] bg-[#0e0e0e] p-3 text-xs mono text-white"
+          >
+            Account created for {registeredEmail}. Sign in to continue.
+          </div>
+        )}
+
         {error && (
           <div className="border border-white bg-[#1a0a0a] p-3 text-xs mono text-white flex items-center gap-2.5">
             <span className="w-4 h-4 flex-shrink-0 border border-white flex items-center justify-center font-bold bg-white text-black text-[10px]">
@@ -210,7 +222,7 @@ export default function Login() {
                 setEmail(e.target.value)
                 setError(null)
               }}
-              placeholder="admin@chattamai.com"
+              placeholder={live ? 'you@example.com' : 'admin@chattamai.com'}
             />
             <Field
               label="Password"
@@ -234,13 +246,15 @@ export default function Login() {
                 />
                 Remember me
               </label>
-              <button
-                type="button"
-                onClick={fillDemoCredentials}
-                className="text-[#a3a3a3] hover:text-white underline cursor-pointer transition-colors"
-              >
-                Fill Demo Credentials
-              </button>
+              {!live && (
+                <button
+                  type="button"
+                  onClick={fillDemoCredentials}
+                  className="text-[#a3a3a3] hover:text-white underline cursor-pointer transition-colors"
+                >
+                  Fill Demo Credentials
+                </button>
+              )}
             </div>
 
             <button
@@ -287,15 +301,26 @@ export default function Login() {
               <span>SIGN IN WITH GOOGLE</span>
             </button>
 
-            <div className="pt-2 border-t border-[#262626]">
-              <button
-                type="button"
-                onClick={continueAsGuest}
-                className="w-full text-xs mono text-[#737373] hover:text-white py-2.5 border border-[#262626] hover:border-[#404040] bg-[#0e0e0e] transition-colors cursor-pointer text-center block"
-              >
-                CONTINUE AS GUEST / DEMO →
-              </button>
-            </div>
+            {!live && (
+              <div className="pt-2 border-t border-[#262626]">
+                <button
+                  type="button"
+                  onClick={continueAsGuest}
+                  className="w-full text-xs mono text-[#737373] hover:text-white py-2.5 border border-[#262626] hover:border-[#404040] bg-[#0e0e0e] transition-colors cursor-pointer text-center block"
+                >
+                  CONTINUE AS GUEST / DEMO →
+                </button>
+              </div>
+            )}
+
+            {registrationOpen !== false && (
+              <div className="pt-2 border-t border-[#262626] text-center text-xs mono text-[#737373]">
+                New here?{' '}
+                <Link to="/register" className="text-white underline hover:text-[#e5e5e5]">
+                  Create an account
+                </Link>
+              </div>
+            )}
           </form>
         ) : (
           <form onSubmit={submitCode} className="space-y-4">

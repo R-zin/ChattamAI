@@ -114,21 +114,21 @@ export default function Knowledge() {
           <button
             onClick={handleIngest}
             disabled={ingesting}
-            className="bg-white text-black font-mono text-xs font-bold px-4 py-2 border border-white hover:bg-[#e5e5e5] flex items-center gap-2 cursor-pointer transition-colors disabled:opacity-40"
+            className="bg-accent text-on-accent font-mono text-xs font-bold px-4 py-2 border border-ink hover:bg-accent-strong flex items-center gap-2 cursor-pointer transition-colors disabled:opacity-40"
           >
             <Icon name="upload-cloud" /> {ingesting ? 'INGESTING…' : 'RE-INDEX RULES'}
           </button>
         }
       />
 
-      <div className="p-6 md:p-8 space-y-6 bg-[#0a0a0a]">
+      <div className="p-6 md:p-8 space-y-6 bg-bg">
         {/* Metric Strip */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-px border border-[#262626] bg-[#121212] divide-x divide-[#262626]">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-px border border-line bg-surface divide-x divide-line">
           {kbrStats.map((s) => (
-            <div key={s.label} className="bg-[#121212] p-4 hover:bg-[#181818] transition-colors">
-              <div className="text-[10px] mono text-[#737373] uppercase tracking-wider mb-1 font-semibold">{s.label}</div>
-              <div className="text-sm mono text-white font-bold flex items-center gap-2">
-                {s.ok && <span className="w-1.5 h-1.5 bg-white inline-block" />}
+            <div key={s.label} className="bg-surface p-4 hover:bg-surface-2 transition-colors">
+              <div className="text-[10px] mono text-ink-3 uppercase tracking-wider mb-1 font-semibold">{s.label}</div>
+              <div className="text-sm mono text-ink font-bold flex items-center gap-2">
+                {s.ok && <span className="w-1.5 h-1.5 bg-accent inline-block" />}
                 {s.value}
               </div>
             </div>
@@ -136,10 +136,10 @@ export default function Knowledge() {
         </div>
 
         {/* Live Vector Search */}
-        <div className="bg-[#121212] border border-[#262626] p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-[#262626] pb-3">
-            <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 mono">
-              <span className="w-1.5 h-1.5 bg-white inline-block" /> Semantic Rule Search
+        <div className="bg-surface border border-line p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-line pb-3">
+            <h3 className="text-xs font-bold text-ink tracking-widest uppercase flex items-center gap-2 mono">
+              <span className="w-1.5 h-1.5 bg-accent inline-block" /> Semantic Rule Search
             </h3>
           </div>
 
@@ -149,34 +149,34 @@ export default function Knowledge() {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search Kerala Building Rules (e.g. front setback, FAR, coverage, staircase, fire escape)…"
-              className="flex-1 bg-[#0e0e0e] border border-[#333333] px-4 py-2.5 text-xs mono text-white placeholder-[#525252] focus:outline-none focus:border-white transition-colors"
+              className="flex-1 bg-inset border border-line px-4 py-2.5 text-xs mono text-ink placeholder-ink-3 focus:outline-none focus:border-ink transition-colors"
             />
             <button
               type="submit"
               disabled={searching || !searchQuery.trim()}
-              className="bg-white text-black font-mono text-xs font-bold px-5 py-2.5 border border-white hover:bg-[#e5e5e5] transition-colors cursor-pointer disabled:opacity-40"
+              className="bg-accent text-on-accent font-mono text-xs font-bold px-5 py-2.5 border border-ink hover:bg-accent-strong transition-colors cursor-pointer disabled:opacity-40"
             >
               <Icon name="search" /> {searching ? 'SEARCHING…' : 'SEARCH'}
             </button>
           </form>
 
           {searchResults && (
-            <div className="space-y-3 mt-4 pt-4 border-t border-[#262626]">
+            <div className="space-y-3 mt-4 pt-4 border-t border-line">
               {searchResults.length === 0 ? (
-                <div className="text-xs mono text-[#737373] p-4 bg-[#0e0e0e] border border-[#262626] text-center">
+                <div className="text-xs mono text-ink-3 p-4 bg-inset border border-line text-center">
                   NO MATCHING BUILDING RULES FOUND FOR “{searchQuery}”.
                 </div>
               ) : (
                 searchResults.map((r, i) => (
-                  <div key={i} className="p-4 bg-[#0e0e0e] border border-[#262626] space-y-2 hover:border-white transition-colors">
+                  <div key={i} className="p-4 bg-inset border border-line space-y-2 hover:border-ink transition-colors">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold mono text-white">{r.rule_id || `CHUNK MATCH #${i + 1}`}</span>
-                      <span className="text-[10px] mono text-black bg-white px-2 py-0.5 font-bold">
+                      <span className="text-xs font-bold mono text-ink">{r.rule_id || `CHUNK MATCH #${i + 1}`}</span>
+                      <span className="text-[10px] mono text-on-accent bg-accent px-2 py-0.5 font-bold">
                         SIMILARITY: {r.score}
                       </span>
                     </div>
-                    <p className="text-xs text-[#a3a3a3] leading-relaxed font-mono">{r.excerpt}</p>
-                    {r.source && <div className="text-[10px] mono text-[#737373]">SOURCE // {r.source}</div>}
+                    <p className="text-xs text-ink-2 leading-relaxed font-mono">{r.excerpt}</p>
+                    {r.source && <div className="text-[10px] mono text-ink-3">SOURCE // {r.source}</div>}
                   </div>
                 ))
               )}
@@ -185,10 +185,10 @@ export default function Knowledge() {
         </div>
 
         {/* Documents Table */}
-        <div className="bg-[#121212] border border-[#262626] overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-[#262626] bg-[#181818] flex items-center justify-between">
-            <h3 className="text-xs font-bold text-white tracking-widest uppercase flex items-center gap-2 mono">
-              <span className="w-1.5 h-1.5 bg-white inline-block" /> Ingested Corpus Documents
+        <div className="bg-surface border border-line overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-line bg-surface-2 flex items-center justify-between">
+            <h3 className="text-xs font-bold text-ink tracking-widest uppercase flex items-center gap-2 mono">
+              <span className="w-1.5 h-1.5 bg-accent inline-block" /> Ingested Corpus Documents
             </h3>
             <div>
               <input
@@ -200,36 +200,36 @@ export default function Knowledge() {
               />
               <button
                 onClick={() => uploadRef.current?.click()}
-                className="px-3 py-1.5 text-xs mono text-white border border-[#404040] hover:border-white bg-[#0e0e0e] flex items-center gap-1.5 cursor-pointer transition-colors"
+                className="px-3 py-1.5 text-xs mono text-ink border border-line-strong hover:border-ink bg-inset flex items-center gap-1.5 cursor-pointer transition-colors"
               >
                 <Icon name="upload" /> + UPLOAD DOCUMENT
               </button>
             </div>
           </div>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Indexed KBR documents">
             <table className="w-full min-w-[700px] text-left border-collapse">
               <thead>
-                <tr className="border-b border-[#262626] bg-[#0e0e0e]">
+                <tr className="border-b border-line bg-inset">
                   {['Document File', 'Format', 'Pages', 'Chunks', 'Indexed On', 'Index Status'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-[10px] mono text-[#737373] uppercase tracking-wider font-semibold">{h}</th>
+                    <th key={h} className="px-4 py-3 text-[10px] mono text-ink-3 uppercase tracking-wider font-semibold">{h}</th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#262626]">
+              <tbody className="divide-y divide-line">
                 {docList.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-6 text-xs mono text-[#737373] text-center">
+                    <td colSpan={6} className="px-4 py-6 text-xs mono text-ink-3 text-center">
                       No KBR documents found. Upload a document, then run ingestion.
                     </td>
                   </tr>
                 )}
                 {docList.map((d, idx) => (
-                  <tr key={d.doc || idx} className="hover:bg-[#181818] transition-colors">
-                    <td className="px-4 py-3.5 text-xs font-semibold text-white">{d.doc}</td>
-                    <td className="px-4 py-3.5"><span className="text-[10px] mono px-2 py-0.5 border border-[#262626] bg-[#0a0a0a] text-[#a3a3a3]">{d.type}</span></td>
-                    <td className="px-4 py-3.5 text-xs mono text-[#a3a3a3]">{d.pages}</td>
-                    <td className="px-4 py-3.5 text-xs mono text-white font-medium">{d.chunks}</td>
-                    <td className="px-4 py-3.5 text-[10px] mono text-[#737373]">{d.indexed}</td>
+                  <tr key={d.doc || idx} className="hover:bg-surface-2 transition-colors">
+                    <td className="px-4 py-3.5 text-xs font-semibold text-ink">{d.doc}</td>
+                    <td className="px-4 py-3.5"><span className="text-[10px] mono px-2 py-0.5 border border-line bg-bg text-ink-2">{d.type}</span></td>
+                    <td className="px-4 py-3.5 text-xs mono text-ink-2">{d.pages}</td>
+                    <td className="px-4 py-3.5 text-xs mono text-ink font-medium">{d.chunks}</td>
+                    <td className="px-4 py-3.5 text-[10px] mono text-ink-3">{d.indexed}</td>
                     <td className="px-4 py-3.5"><Pill kind="pill-ok">{d.status}</Pill></td>
                   </tr>
                 ))}
@@ -240,31 +240,31 @@ export default function Knowledge() {
 
         {/* Ingestion Progress */}
         {(ingesting || pct > 0) && (
-          <div className="bg-[#121212] border border-[#262626] p-6 fade-rise space-y-4">
-            <div className="text-[10px] mono text-[#a3a3a3] uppercase tracking-widest font-semibold">Corpus Ingestion Progress</div>
+          <div className="bg-surface border border-line p-6 fade-rise space-y-4">
+            <div className="text-[10px] mono text-ink-2 uppercase tracking-widest font-semibold">Corpus Ingestion Progress</div>
             <div className="flex items-center gap-0 mb-4">
               {STEPS.map((s, i) => (
                 <React.Fragment key={s}>
-                  {i > 0 && <div className={`flex-1 h-px ${i <= step ? 'bg-white' : 'bg-[#262626]'}`} />}
+                  {i > 0 && <div className={`flex-1 h-px ${i <= step ? 'bg-accent' : 'bg-surface-3'}`} />}
                   <div className="flex flex-col items-center px-1">
                     <div className={`w-8 h-8 flex items-center justify-center border ${
-                      i <= step ? 'border-white bg-[#0e0e0e] text-white' : 'border-[#262626] text-[#737373]'
+                      i <= step ? 'border-ink bg-inset text-ink' : 'border-line text-ink-3'
                     }`}>
                       {i < step || (i === step && step === 4) ? <Icon name="check" className="text-sm" /> : <span className="mono text-[10px]">{i + 1}</span>}
                     </div>
-                    <div className={`text-[9px] mono uppercase tracking-wider mt-2 whitespace-nowrap ${i <= step ? 'text-white' : 'text-[#737373]'}`}>{s}</div>
+                    <div className={`text-[9px] mono uppercase tracking-wider mt-2 whitespace-nowrap ${i <= step ? 'text-ink' : 'text-ink-3'}`}>{s}</div>
                   </div>
                 </React.Fragment>
               ))}
             </div>
             <div className="flex items-center justify-between text-xs mono">
-              <span className="text-[#a3a3a3]">
+              <span className="text-ink-2">
                 {step === 4 ? 'Ingestion and indexing complete.' : `Embedding chunk batch… (${pct}%)`}
               </span>
-              <span className="text-white font-bold">{pct}%</span>
+              <span className="text-ink font-bold">{pct}%</span>
             </div>
-            <div className="h-1 bg-[#262626] overflow-hidden">
-              <div className="h-full bg-white transition-all duration-150" style={{ width: `${pct}%` }} />
+            <div className="h-1 bg-surface-3 overflow-hidden">
+              <div className="h-full bg-accent transition-all duration-150" style={{ width: `${pct}%` }} />
             </div>
           </div>
         )}

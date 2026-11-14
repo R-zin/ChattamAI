@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from '../components/Toast.jsx'
 import Field from '../components/Field.jsx'
+import AuthLayout from '../components/AuthLayout.jsx'
 import { fetchAuthConfig, isAuthed, registerUser } from '../data.js'
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
@@ -70,22 +71,11 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen blueprint-grid flex items-center justify-center p-6 bg-[#0a0a0a]">
-      <div className="w-full max-w-md bg-[#121212] border border-[#262626] p-8 space-y-6 shadow-2xl">
-        <div className="border-b border-[#262626] pb-4">
-          <div className="text-[10px] mono uppercase tracking-widest text-[#737373] mb-1">
-            CHATTAM.AI
-          </div>
-          <h1 className="text-xl font-bold text-white uppercase font-sans">Create Account</h1>
-          <p className="text-xs text-[#a3a3a3] mt-1 mono">
-            Kerala Building Rules Compliance Platform
-          </p>
-        </div>
-
+    <AuthLayout title="Create Account" subtitle="Kerala Building Rules Compliance Platform">
         {registrationOpen === false && (
           <div
             role="status"
-            className="border border-[#404040] bg-[#0e0e0e] p-3 text-xs mono text-[#d4d4d4]"
+            className="border border-line-strong bg-inset p-3 text-xs mono text-ink-2"
           >
             Registration is by invitation only. Contact your administrator for an account.
           </div>
@@ -94,9 +84,9 @@ export default function Register() {
         {error && (
           <div
             role="alert"
-            className="border border-white bg-[#1a0a0a] p-3 text-xs mono text-white flex items-center gap-2.5"
+            className="border border-ink bg-danger/10 p-3 text-xs mono text-ink flex items-center gap-2.5"
           >
-            <span className="w-4 h-4 flex-shrink-0 border border-white flex items-center justify-center font-bold bg-white text-black text-[10px]">
+            <span className="w-4 h-4 flex-shrink-0 border border-ink flex items-center justify-center font-bold bg-accent text-on-accent text-[10px]">
               !
             </span>
             <span className="flex-1">{error}</span>
@@ -137,7 +127,7 @@ export default function Register() {
               <li
                 key={c.id}
                 data-ok={c.ok}
-                className={c.ok ? 'text-white' : 'text-[#737373]'}
+                className={c.ok ? 'text-ink' : 'text-ink-3'}
               >
                 {c.ok ? '✓' : '○'} {c.label}
               </li>
@@ -161,19 +151,18 @@ export default function Register() {
           <button
             type="submit"
             disabled={!canSubmit}
-            className="w-full bg-white text-black font-mono font-bold text-xs py-3 border border-white hover:bg-[#e5e5e5] transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full bg-accent text-on-accent font-mono font-bold text-xs py-3 border border-ink hover:bg-accent-strong transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {busy ? 'CREATING ACCOUNT…' : 'CREATE ACCOUNT →'}
           </button>
         </form>
 
-        <div className="pt-2 border-t border-[#262626] text-center text-xs mono text-[#737373]">
+        <div className="pt-2 border-t border-line text-center text-xs mono text-ink-3">
           Already have an account?{' '}
-          <Link to="/login" className="text-white underline hover:text-[#e5e5e5]">
+          <Link to="/login" className="text-ink underline hover:text-ink">
             Sign in
           </Link>
         </div>
-      </div>
-    </div>
+    </AuthLayout>
   )
 }

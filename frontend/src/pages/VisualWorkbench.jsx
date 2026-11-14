@@ -187,7 +187,7 @@ export default function VisualWorkbench() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0a0a0a] text-[#f5f5f5]">
+    <div className="min-h-screen flex flex-col bg-bg text-ink">
       <Header
         eyebrow="ARCHITECTURAL PDF AUDIT ENGINE"
         title="PDF Visual Workbench"
@@ -217,13 +217,12 @@ export default function VisualWorkbench() {
                     fileRef.current?.click()
                   }
                 }}
-                className={`flex-1 w-full border-2 border-dashed p-6 flex flex-col items-center justify-center cursor-pointer transition-all focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none relative overflow-hidden ${
+                className={`flex-1 w-full border-2 border-dashed p-6 flex flex-col items-center justify-center cursor-pointer transition-all focus-visible:ring-1 focus-visible:ring-accent focus-visible:outline-none relative overflow-hidden ${
                   drag
-                    ? 'border-white bg-[#181818]'
-                    : 'border-[#333333] hover:border-white bg-[#0e0e0e]'
+                    ? 'border-ink bg-surface-2'
+                    : 'border-line hover:border-ink bg-inset'
                 }`}
               >
-                <div className="blueprint-grid absolute inset-0 opacity-20 pointer-events-none" />
                 <input
                   ref={fileRef}
                   type="file"
@@ -231,24 +230,24 @@ export default function VisualWorkbench() {
                   className="hidden"
                   onChange={handleFileSelect}
                 />
-                <div className="w-10 h-10 border border-[#404040] bg-[#121212] flex items-center justify-center mb-3">
-                  <Icon name="file-text" className="text-xl text-white" />
+                <div className="w-10 h-10 border border-line-strong bg-surface flex items-center justify-center mb-3">
+                  <Icon name="file-text" className="text-xl text-ink" />
                 </div>
                 {file ? (
                   <div className="text-center relative z-10">
-                    <div className="font-semibold text-white text-sm mono">
+                    <div className="font-semibold text-ink text-sm mono">
                       {file.name}
                     </div>
-                    <div className="text-xs text-[#a3a3a3] mono mt-1">
+                    <div className="text-xs text-ink-2 mono mt-1">
                       {(file.size / 1024).toFixed(1)} KB — READY TO AUDIT
                     </div>
                   </div>
                 ) : (
                   <div className="text-center relative z-10">
-                    <div className="text-xs font-bold mono text-white uppercase tracking-wider">
+                    <div className="text-xs font-bold mono text-ink uppercase tracking-wider">
                       DROP ARCHITECTURAL DRAWING PDF HERE
                     </div>
-                    <div className="text-[11px] mono text-[#737373] mt-1">
+                    <div className="text-[11px] mono text-ink-3 mt-1">
                       Supports A4/A3/A1/A0 sheets with certified Area Statement schedules
                     </div>
                   </div>
@@ -291,7 +290,7 @@ export default function VisualWorkbench() {
             {error && (
               <div
                 role="alert"
-                className="mt-4 p-3 bg-[#1e0a0a] border border-[#772222] text-[#fca5a5] text-xs mono flex items-center gap-2"
+                className="mt-4 p-3 bg-danger/10 border border-danger/40 text-danger text-xs mono flex items-center gap-2"
               >
                 <Icon name="alert-triangle" className="text-base" />
                 <span>{error}</span>
@@ -331,16 +330,16 @@ export default function VisualWorkbench() {
             <div
               className={`p-5 border flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${
                 auditResult.is_compliant
-                  ? 'bg-[#121212] border-white text-white'
-                  : 'bg-[#141010] border-[#552222] text-[#f5f5f5]'
+                  ? 'bg-surface border-ink text-ink'
+                  : 'bg-danger/10 border-danger/40 text-ink'
               }`}
             >
               <div className="flex items-center gap-3">
                 <div
                   className={`w-9 h-9 border flex items-center justify-center shrink-0 ${
                     auditResult.is_compliant
-                      ? 'border-white bg-white text-black'
-                      : 'border-[#ff4444] bg-[#2a0e0e] text-[#ff6666]'
+                      ? 'border-ink bg-accent text-on-accent'
+                      : 'border-danger bg-danger/10 text-danger'
                   }`}
                 >
                   <Icon
@@ -354,7 +353,7 @@ export default function VisualWorkbench() {
                       ? 'COMPLIANT WITH STATUTORY CODES (KBR 2019)'
                       : 'NON-COMPLIANT: STATUTORY DEFICITS IDENTIFIED'}
                   </h2>
-                  <p className="text-xs text-[#a3a3a3] mt-0.5">
+                  <p className="text-xs text-ink-2 mt-0.5">
                     {auditResult.executive_summary}
                   </p>
                   {(assessment?.verification || result?.verification) && (
@@ -398,19 +397,19 @@ export default function VisualWorkbench() {
                       <Icon name="layers" />
                       <span>Certified Area Schedule Data</span>
                     </CardTitle>
-                    <span className="text-[9px] mono text-[#737373]">
+                    <span className="text-[9px] mono text-ink-3">
                       AUTO-EXTRACTED
                     </span>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid grid-cols-2 gap-3 text-xs">
-                      <div className="p-3 bg-[#181818] border border-[#262626]">
-                        <div className="text-[#737373] text-[9px] uppercase mono">
+                      <div className="p-3 bg-surface-2 border border-line">
+                        <div className="text-ink-3 text-[9px] uppercase mono">
                           Plot Extent
                         </div>
-                        <div className="font-semibold text-white mt-1 mono">
+                        <div className="font-semibold text-ink mt-1 mono">
                           {auditResult.plan_facts.plot_area_sqm} m²
-                          <span className="text-[#a3a3a3] font-normal ml-1">
+                          <span className="text-ink-2 font-normal ml-1">
                             (
                             {(
                               auditResult.plan_facts.plot_area_sqm / 40.47
@@ -420,22 +419,22 @@ export default function VisualWorkbench() {
                         </div>
                       </div>
 
-                      <div className="p-3 bg-[#181818] border border-[#262626]">
-                        <div className="text-[#737373] text-[9px] uppercase mono">
+                      <div className="p-3 bg-surface-2 border border-line">
+                        <div className="text-ink-3 text-[9px] uppercase mono">
                           Built-up Area
                         </div>
-                        <div className="font-semibold text-white mt-1 mono">
+                        <div className="font-semibold text-ink mt-1 mono">
                           {auditResult.plan_facts.built_up_area_sqm} m²
                         </div>
                       </div>
 
-                      <div className="p-3 bg-[#181818] border border-[#262626]">
-                        <div className="text-[#737373] text-[9px] uppercase mono">
+                      <div className="p-3 bg-surface-2 border border-line">
+                        <div className="text-ink-3 text-[9px] uppercase mono">
                           Ground Coverage
                         </div>
-                        <div className="font-semibold text-white mt-1 mono">
+                        <div className="font-semibold text-ink mt-1 mono">
                           {auditResult.plan_facts.ground_coverage_sqm} m²
-                          <span className="text-[#a3a3a3] font-normal ml-1">
+                          <span className="text-ink-2 font-normal ml-1">
                             (
                             {(
                               (auditResult.plan_facts.ground_coverage_sqm /
@@ -447,11 +446,11 @@ export default function VisualWorkbench() {
                         </div>
                       </div>
 
-                      <div className="p-3 bg-[#181818] border border-[#262626]">
-                        <div className="text-[#737373] text-[9px] uppercase mono">
+                      <div className="p-3 bg-surface-2 border border-line">
+                        <div className="text-ink-3 text-[9px] uppercase mono">
                           FAR / FSI Actual
                         </div>
-                        <div className="font-semibold text-white mt-1 mono">
+                        <div className="font-semibold text-ink mt-1 mono">
                           {(
                             auditResult.plan_facts.built_up_area_sqm /
                             auditResult.plan_facts.plot_area_sqm
@@ -459,60 +458,60 @@ export default function VisualWorkbench() {
                         </div>
                       </div>
 
-                      <div className="p-3 bg-[#181818] border border-[#262626]">
-                        <div className="text-[#737373] text-[9px] uppercase mono">
+                      <div className="p-3 bg-surface-2 border border-line">
+                        <div className="text-ink-3 text-[9px] uppercase mono">
                           Height & Floors
                         </div>
-                        <div className="font-semibold text-white mt-1 mono">
+                        <div className="font-semibold text-ink mt-1 mono">
                           {auditResult.plan_facts.building_height_m}m (
                           {auditResult.plan_facts.number_of_floors} Floors)
                         </div>
                       </div>
 
-                      <div className="p-3 bg-[#181818] border border-[#262626]">
-                        <div className="text-[#737373] text-[9px] uppercase mono">
+                      <div className="p-3 bg-surface-2 border border-line">
+                        <div className="text-ink-3 text-[9px] uppercase mono">
                           Access Road Width
                         </div>
-                        <div className="font-semibold text-white mt-1 mono">
+                        <div className="font-semibold text-ink mt-1 mono">
                           {auditResult.plan_facts.road_width_m} m
                         </div>
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t border-[#262626]">
-                      <div className="text-[#737373] text-[9px] uppercase mono mb-2 font-semibold">
+                    <div className="pt-3 border-t border-line">
+                      <div className="text-ink-3 text-[9px] uppercase mono mb-2 font-semibold">
                         Setback Clearances
                       </div>
                       <div className="grid grid-cols-4 gap-2 text-center text-xs">
-                        <div className="p-2 bg-[#181818] border border-[#262626]">
-                          <div className="text-[9px] mono text-[#737373]">
+                        <div className="p-2 bg-surface-2 border border-line">
+                          <div className="text-[9px] mono text-ink-3">
                             FRONT
                           </div>
-                          <div className="font-bold text-white mt-0.5 mono">
+                          <div className="font-bold text-ink mt-0.5 mono">
                             {auditResult.plan_facts.front_setback_m}m
                           </div>
                         </div>
-                        <div className="p-2 bg-[#181818] border border-[#262626]">
-                          <div className="text-[9px] mono text-[#737373]">
+                        <div className="p-2 bg-surface-2 border border-line">
+                          <div className="text-[9px] mono text-ink-3">
                             REAR
                           </div>
-                          <div className="font-bold text-white mt-0.5 mono">
+                          <div className="font-bold text-ink mt-0.5 mono">
                             {auditResult.plan_facts.rear_setback_m}m
                           </div>
                         </div>
-                        <div className="p-2 bg-[#181818] border border-[#262626]">
-                          <div className="text-[9px] mono text-[#737373]">
+                        <div className="p-2 bg-surface-2 border border-line">
+                          <div className="text-[9px] mono text-ink-3">
                             SIDE 1
                           </div>
-                          <div className="font-bold text-white mt-0.5 mono">
+                          <div className="font-bold text-ink mt-0.5 mono">
                             {auditResult.plan_facts.side_setback_1_m}m
                           </div>
                         </div>
-                        <div className="p-2 bg-[#181818] border border-[#262626]">
-                          <div className="text-[9px] mono text-[#737373]">
+                        <div className="p-2 bg-surface-2 border border-line">
+                          <div className="text-[9px] mono text-ink-3">
                             SIDE 2
                           </div>
-                          <div className="font-bold text-white mt-0.5 mono">
+                          <div className="font-bold text-ink mt-0.5 mono">
                             {auditResult.plan_facts.side_setback_2_m}m
                           </div>
                         </div>
@@ -536,15 +535,15 @@ export default function VisualWorkbench() {
                         {auditResult.applied_concessions.map((c, i) => (
                           <div
                             key={i}
-                            className="text-xs p-2.5 bg-[#181818] border border-[#333333] text-[#f5f5f5] flex items-center gap-2 mono"
+                            className="text-xs p-2.5 bg-surface-2 border border-line text-ink flex items-center gap-2 mono"
                           >
-                            <Icon name="check" className="text-white shrink-0" />
+                            <Icon name="check" className="text-ink shrink-0" />
                             <span>{c}</span>
                           </div>
                         ))}
                       </div>
                     ) : (
-                      <div className="text-xs text-[#737373] italic mono">
+                      <div className="text-xs text-ink-3 italic mono">
                         Standard provisions applied; no statutory concessions claimed for this plot size.
                       </div>
                     )}
@@ -561,14 +560,14 @@ export default function VisualWorkbench() {
                       <Icon name="check-square" />
                       <span>Statutory Parameter Comparison</span>
                     </CardTitle>
-                    <span className="text-[9px] font-mono text-[#737373]">
+                    <span className="text-[9px] font-mono text-ink-3">
                       KMBR/KPBR 2019
                     </span>
                   </CardHeader>
 
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">
-                      <thead className="bg-[#181818] text-[#737373] font-mono text-[9px] uppercase border-b border-[#262626]">
+                      <thead className="bg-surface-2 text-ink-3 font-mono text-[9px] uppercase border-b border-line">
                         <tr>
                           <th className="py-2.5 px-4">Parameter</th>
                           <th className="py-2.5 px-3">Plan</th>
@@ -577,19 +576,19 @@ export default function VisualWorkbench() {
                           <th className="py-2.5 px-4 text-right">Status</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#262626]">
+                      <tbody className="divide-y divide-line">
                         {auditResult.violations.map((v, i) => (
-                          <tr key={i} className="hover:bg-[#181818] transition-colors">
-                            <td className="py-2.5 px-4 font-semibold text-white">
+                          <tr key={i} className="hover:bg-surface-2 transition-colors">
+                            <td className="py-2.5 px-4 font-semibold text-ink">
                               {v.parameter}
                             </td>
-                            <td className="py-2.5 px-3 text-[#a3a3a3] mono">
+                            <td className="py-2.5 px-3 text-ink-2 mono">
                               {v.actual_value} {v.unit}
                             </td>
-                            <td className="py-2.5 px-3 text-[#a3a3a3] mono">
+                            <td className="py-2.5 px-3 text-ink-2 mono">
                               {v.required_value} {v.unit}
                             </td>
-                            <td className="py-2.5 px-3 font-mono text-[#fca5a5]">
+                            <td className="py-2.5 px-3 font-mono text-danger">
                               -{v.deficit} {v.unit}
                             </td>
                             <td className="py-2.5 px-4 text-right">
@@ -603,7 +602,7 @@ export default function VisualWorkbench() {
                           <tr>
                             <td
                               colSpan="5"
-                              className="py-6 text-center text-[#a3a3a3] mono text-xs"
+                              className="py-6 text-center text-ink-2 mono text-xs"
                             >
                               ✓ All measurable parameters satisfy regulatory thresholds.
                             </td>
@@ -622,7 +621,7 @@ export default function VisualWorkbench() {
                         <Icon name="tool" />
                         <span>Actionable Architectural Redesign Remedies</span>
                       </CardTitle>
-                      <span className="text-[9px] mono text-[#737373]">
+                      <span className="text-[9px] mono text-ink-3">
                         SOLUTIONS
                       </span>
                     </CardHeader>
@@ -630,18 +629,18 @@ export default function VisualWorkbench() {
                       {auditResult.remediations.map((r, i) => (
                         <div
                           key={i}
-                          className="p-3 bg-[#181818] border border-[#262626] space-y-1.5"
+                          className="p-3 bg-surface-2 border border-line space-y-1.5"
                         >
-                          <div className="flex items-center justify-between text-xs font-semibold text-white mono">
+                          <div className="flex items-center justify-between text-xs font-semibold text-ink mono">
                             <span>{r.parameter}</span>
-                            <span className="text-[9px] mono text-[#fca5a5]">
+                            <span className="text-[9px] mono text-danger">
                               {r.deficit_summary}
                             </span>
                           </div>
-                          <p className="text-xs text-[#a3a3a3] leading-relaxed">
+                          <p className="text-xs text-ink-2 leading-relaxed">
                             {r.action}
                           </p>
-                          <div className="text-[10px] mono text-white pt-1 flex items-center gap-1.5">
+                          <div className="text-[10px] mono text-ink pt-1 flex items-center gap-1.5">
                             <Icon name="target" className="text-xs" />
                             <span>Target: {r.target_value}</span>
                           </div>
@@ -753,12 +752,12 @@ export default function VisualWorkbench() {
                       </div>
 
                       {/* Live Computed Metrics Strip */}
-                      <div className="pt-3 border-t border-[#262626] grid grid-cols-3 gap-3 text-center">
-                        <div className="p-2.5 bg-[#181818] border border-[#262626]">
-                          <div className="text-[9px] mono text-[#737373] uppercase">
+                      <div className="pt-3 border-t border-line grid grid-cols-3 gap-3 text-center">
+                        <div className="p-2.5 bg-surface-2 border border-line">
+                          <div className="text-[9px] mono text-ink-3 uppercase">
                             SIMULATED COVERAGE
                           </div>
-                          <div className="text-xs font-bold mono text-white mt-0.5">
+                          <div className="text-xs font-bold mono text-ink mt-0.5">
                             {(
                               (simFacts.ground_coverage_sqm /
                                 simFacts.plot_area_sqm) *
@@ -768,11 +767,11 @@ export default function VisualWorkbench() {
                           </div>
                         </div>
 
-                        <div className="p-2.5 bg-[#181818] border border-[#262626]">
-                          <div className="text-[9px] mono text-[#737373] uppercase">
+                        <div className="p-2.5 bg-surface-2 border border-line">
+                          <div className="text-[9px] mono text-ink-3 uppercase">
                             SIMULATED FAR / FSI
                           </div>
-                          <div className="text-xs font-bold mono text-white mt-0.5">
+                          <div className="text-xs font-bold mono text-ink mt-0.5">
                             {(
                               simFacts.built_up_area_sqm /
                               simFacts.plot_area_sqm
@@ -780,15 +779,15 @@ export default function VisualWorkbench() {
                           </div>
                         </div>
 
-                        <div className="p-2.5 bg-[#181818] border border-[#262626]">
-                          <div className="text-[9px] mono text-[#737373] uppercase">
+                        <div className="p-2.5 bg-surface-2 border border-line">
+                          <div className="text-[9px] mono text-ink-3 uppercase">
                             TOTAL VIOLATIONS
                           </div>
                           <div
                             className={`text-xs font-bold mono mt-0.5 ${
                               simEvaluation?.violations?.length > 0
-                                ? 'text-[#fca5a5]'
-                                : 'text-white'
+                                ? 'text-danger'
+                                : 'text-ink'
                             }`}
                           >
                             {simEvaluation?.violations?.length || 0} ITEMS
@@ -843,10 +842,10 @@ export default function VisualWorkbench() {
           }
         >
           <div className="space-y-3">
-            <div className="text-[10px] mono text-[#737373] uppercase tracking-wider">
+            <div className="text-[10px] mono text-ink-3 uppercase tracking-wider">
               VERIFIED JSON OUTPUT SCHEMA (LSGD 2026.04)
             </div>
-            <div className="bg-[#0a0a0a] p-4 border border-[#262626] font-mono text-[11px] text-[#e5e5e5] max-h-96 overflow-auto">
+            <div className="bg-bg p-4 border border-line font-mono text-[11px] text-ink max-h-96 overflow-auto">
               <pre>{JSON.stringify(ksmartModal, null, 2)}</pre>
             </div>
           </div>

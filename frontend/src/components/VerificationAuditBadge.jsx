@@ -21,8 +21,8 @@ export default function VerificationAuditBadge({ verification, className = '' })
   let badgeConfig = {
     label: 'Single Model Audited',
     icon: 'info',
-    badgeClass: 'border-[#333333] bg-[#141414] text-[#a3a3a3] hover:border-[#555555]',
-    iconColor: 'text-[#a3a3a3]',
+    badgeClass: 'border-line bg-surface text-ink-2 hover:border-line-strong',
+    iconColor: 'text-ink-2',
     isActionable: false,
   }
 
@@ -31,8 +31,8 @@ export default function VerificationAuditBadge({ verification, className = '' })
       label: `Double-Checked & Confirmed by ${modelName}`,
       icon: 'check-circle',
       badgeClass:
-        'border-emerald-600/40 bg-emerald-950/20 text-emerald-400 hover:border-emerald-500/60',
-      iconColor: 'text-emerald-400',
+        'border-ok/40 bg-ok/10 text-ok hover:border-ok/60',
+      iconColor: 'text-ok',
       isActionable: true,
     }
   } else if (status === 'flagged_discrepancy' || status === 'adjusted') {
@@ -40,8 +40,8 @@ export default function VerificationAuditBadge({ verification, className = '' })
       label: `Discrepancies Reconciled (${resolvedCount} resolved)`,
       icon: 'alert-triangle',
       badgeClass:
-        'border-amber-600/40 bg-amber-950/20 text-amber-400 hover:border-amber-500/60',
-      iconColor: 'text-amber-400',
+        'border-warn/40 bg-warn/10 text-warn hover:border-warn/60',
+      iconColor: 'text-warn',
       isActionable: true,
     }
   } else if (status === 'skipped') {
@@ -49,8 +49,8 @@ export default function VerificationAuditBadge({ verification, className = '' })
       label: 'Single Model Audited',
       sublabel: 'Verifier Skipped',
       icon: 'shield',
-      badgeClass: 'border-[#333333] bg-[#141414] text-[#a3a3a3] hover:border-[#444444]',
-      iconColor: 'text-[#737373]',
+      badgeClass: 'border-line bg-surface text-ink-2 hover:border-line-strong',
+      iconColor: 'text-ink-3',
       isActionable: Boolean(verification.cross_check_notes || verification.reason),
     }
   } else if (status === 'error') {
@@ -58,8 +58,8 @@ export default function VerificationAuditBadge({ verification, className = '' })
       label: 'Verifier Offline (Using Primary Findings)',
       icon: 'alert-triangle',
       badgeClass:
-        'border-rose-600/40 bg-rose-950/20 text-rose-400 hover:border-rose-500/60',
-      iconColor: 'text-rose-400',
+        'border-danger/40 bg-danger/10 text-danger hover:border-danger/60',
+      iconColor: 'text-danger',
       isActionable: Boolean(verification.error),
     }
   }
@@ -67,19 +67,19 @@ export default function VerificationAuditBadge({ verification, className = '' })
   const typeMeta = {
     false_positive: {
       label: 'FALSE POSITIVE',
-      bg: 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300',
+      bg: 'bg-ok/10 border-ok/40 text-ok',
     },
     hallucination: {
       label: 'HALLUCINATION',
-      bg: 'bg-purple-950/40 border-purple-500/40 text-purple-300',
+      bg: 'bg-surface-3 border-line-strong text-ink',
     },
     missed_violation: {
       label: 'MISSED VIOLATION',
-      bg: 'bg-rose-950/40 border-rose-500/40 text-rose-300',
+      bg: 'bg-danger/10 border-danger/40 text-danger',
     },
     value_mismatch: {
       label: 'VALUE MISMATCH',
-      bg: 'bg-amber-950/40 border-amber-500/40 text-amber-300',
+      bg: 'bg-warn/10 border-warn/40 text-warn',
     },
   }
 
@@ -102,7 +102,7 @@ export default function VerificationAuditBadge({ verification, className = '' })
         />
         <span className="font-semibold tracking-tight">{badgeConfig.label}</span>
         {confidence && status === 'confirmed' && (
-          <span className="opacity-80 text-[10px] bg-black/40 px-1.5 py-0.5 rounded border border-current/20">
+          <span className="text-[10px] bg-surface px-1.5 py-0.5 rounded border border-current/30 font-semibold tabular-nums">
             {confidence}
           </span>
         )}
@@ -116,22 +116,22 @@ export default function VerificationAuditBadge({ verification, className = '' })
       {expanded && (
         <div
           data-testid="verification-details-card"
-          className="mt-3 p-4 bg-[#101010] border border-[#2a2a2a] rounded-sm text-xs space-y-4 shadow-xl"
+          className="mt-3 p-4 bg-inset border border-line rounded-sm text-xs space-y-4 shadow-xl"
         >
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#222222] pb-2.5">
-            <div className="flex items-center gap-2 mono text-[11px] text-[#a3a3a3]">
-              <span className="uppercase text-[#737373]">AUDITING ENGINE:</span>
-              <span className="text-white font-medium">{modelName}</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-2.5">
+            <div className="flex items-center gap-2 mono text-[11px] text-ink-2">
+              <span className="uppercase text-ink-3">AUDITING ENGINE:</span>
+              <span className="text-ink font-medium">{modelName}</span>
               {confidence && (
                 <>
-                  <span className="text-[#444444]">|</span>
-                  <span className="uppercase text-[#737373]">CONFIDENCE:</span>
-                  <span className="text-white font-medium">{confidence}</span>
+                  <span className="text-ink-3">|</span>
+                  <span className="uppercase text-ink-3">CONFIDENCE:</span>
+                  <span className="text-ink font-medium">{confidence}</span>
                 </>
               )}
             </div>
             {verification.primary_violations_count !== undefined && (
-              <div className="mono text-[10px] text-[#888888]">
+              <div className="mono text-[10px] text-ink-3">
                 <span>Primary: {verification.primary_violations_count}</span>
                 <span className="mx-1.5">→</span>
                 <span>
@@ -145,11 +145,11 @@ export default function VerificationAuditBadge({ verification, className = '' })
 
           {/* Cross check notes */}
           {verification.cross_check_notes && (
-            <div className="bg-[#151515] p-3 border-l-2 border-white/40 space-y-1">
-              <div className="text-[10px] mono text-[#737373] uppercase tracking-wider font-semibold">
+            <div className="bg-surface p-3 border-l-2 border-line-strong space-y-1">
+              <div className="text-[10px] mono text-ink-3 uppercase tracking-wider font-semibold">
                 AUDITOR CROSS-EXAMINATION NOTES
               </div>
-              <p className="text-xs text-[#d4d4d4] leading-relaxed">
+              <p className="text-xs text-ink-2 leading-relaxed">
                 {verification.cross_check_notes}
               </p>
             </div>
@@ -157,12 +157,12 @@ export default function VerificationAuditBadge({ verification, className = '' })
 
           {/* Reason or error message when skipped or failed */}
           {verification.reason && (
-            <p className="text-xs text-[#888888] font-mono">
+            <p className="text-xs text-ink-3 font-mono">
               Status info: {verification.reason}
             </p>
           )}
           {verification.error && (
-            <div className="p-2.5 bg-rose-950/20 border border-rose-800/40 text-rose-300 text-xs font-mono">
+            <div className="p-2.5 bg-danger/10 border border-danger/40 text-danger text-xs font-mono">
               Verifier error details: {verification.error}
             </div>
           )}
@@ -170,22 +170,22 @@ export default function VerificationAuditBadge({ verification, className = '' })
           {/* Discrepancies listing */}
           {discrepancies.length > 0 && (
             <div className="space-y-3 pt-1">
-              <div className="text-[10px] mono text-[#737373] uppercase tracking-wider font-bold">
+              <div className="text-[10px] mono text-ink-3 uppercase tracking-wider font-bold">
                 RECONCILED DISCREPANCIES ({discrepancies.length})
               </div>
               <div className="space-y-2.5">
                 {discrepancies.map((d, idx) => {
                   const typeInfo = typeMeta[d.type] || {
                     label: d.type ? d.type.toUpperCase() : 'DISCREPANCY',
-                    bg: 'bg-[#222222] border-[#444444] text-[#cccccc]',
+                    bg: 'bg-surface-3 border-line-strong text-ink-2',
                   }
                   return (
                     <div
                       key={idx}
-                      className="p-3 bg-[#141414] border border-[#262626] rounded-sm space-y-2"
+                      className="p-3 bg-surface border border-line rounded-sm space-y-2"
                     >
                       <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="mono font-semibold text-white text-xs">
+                        <span className="mono font-semibold text-ink text-xs">
                           {d.rule_reference || 'Statutory Reference'}
                         </span>
                         <span
@@ -194,24 +194,24 @@ export default function VerificationAuditBadge({ verification, className = '' })
                           {typeInfo.label}
                         </span>
                       </div>
-                      <p className="text-xs text-[#a3a3a3] leading-relaxed">
+                      <p className="text-xs text-ink-2 leading-relaxed">
                         {d.description}
                       </p>
                       {(d.primary_finding || d.verifier_finding) && (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-[11px]">
-                          <div className="p-2 bg-[#0d0d0d] border border-[#222222]">
-                            <div className="text-[9px] text-[#737373] uppercase tracking-wider mb-0.5">
+                          <div className="p-2 bg-inset border border-line">
+                            <div className="text-[9px] text-ink-3 uppercase tracking-wider mb-0.5">
                               PRIMARY FINDING
                             </div>
-                            <div className="text-[#a3a3a3]">
+                            <div className="text-ink-2">
                               {d.primary_finding || 'None'}
                             </div>
                           </div>
-                          <div className="p-2 bg-[#0d0d0d] border border-white/20">
-                            <div className="text-[9px] text-white uppercase tracking-wider mb-0.5">
+                          <div className="p-2 bg-inset border border-line">
+                            <div className="text-[9px] text-ink uppercase tracking-wider mb-0.5">
                               VERIFIER FINDING
                             </div>
-                            <div className="text-white font-medium">
+                            <div className="text-ink font-medium">
                               {d.verifier_finding || 'None'}
                             </div>
                           </div>

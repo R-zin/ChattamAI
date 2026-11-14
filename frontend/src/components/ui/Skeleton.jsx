@@ -3,7 +3,7 @@ import React from 'react'
 export function Skeleton({ className = '', ...props }) {
   return (
     <div
-      className={`animate-pulse bg-[#1a1a1a] border border-[#262626] ${className}`}
+      className={`animate-pulse bg-surface-2 border border-line ${className}`}
       aria-hidden="true"
       {...props}
     />
@@ -13,14 +13,14 @@ export function Skeleton({ className = '', ...props }) {
 export function SkeletonCard({ rows = 3, className = '' }) {
   return (
     <div
-      className={`border border-[#262626] bg-[#121212] p-5 space-y-4 ${className}`}
+      className={`border border-line bg-surface p-5 space-y-4 ${className}`}
       role="status"
       aria-label="Loading panel"
       aria-busy="true"
     >
       <Skeleton className="h-3 w-1/3" />
       <Skeleton className="h-8 w-1/2" />
-      <div className="pt-2 border-t border-[#262626] space-y-2">
+      <div className="pt-2 border-t border-line space-y-2">
         {Array.from({ length: rows }).map((_, i) => (
           <Skeleton key={i} className="h-3 w-full" />
         ))}
@@ -33,12 +33,12 @@ export function SkeletonCard({ rows = 3, className = '' }) {
 export function SkeletonTable({ rows = 5, cols = 4, className = '' }) {
   return (
     <div
-      className={`border border-[#262626] bg-[#121212] overflow-hidden ${className}`}
+      className={`border border-line bg-surface overflow-hidden ${className}`}
       role="status"
       aria-label="Loading table"
       aria-busy="true"
     >
-      <div className="px-5 py-3.5 border-b border-[#262626] bg-[#181818] flex items-center justify-between">
+      <div className="px-5 py-3.5 border-b border-line bg-surface-2 flex items-center justify-between">
         <Skeleton className="h-4 w-40" />
         <Skeleton className="h-3 w-20" />
       </div>

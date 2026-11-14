@@ -26,17 +26,17 @@ export default function Slider({
       <div className="flex items-center justify-between text-xs">
         <label
           htmlFor={id}
-          className="mono text-[11px] text-[#a3a3a3] uppercase tracking-wider font-semibold"
+          className="mono text-[11px] text-ink-2 uppercase tracking-wider font-semibold"
         >
           {label}
         </label>
         <div className="flex items-center gap-2">
           {baseline && (
-            <span className="mono text-[10px] text-[#737373]">
+            <span className="mono text-[10px] text-ink-3">
               [{baseline}]
             </span>
           )}
-          <span className="mono font-bold text-white bg-[#1a1a1a] border border-[#333333] px-2 py-0.5 text-xs">
+          <span className="mono font-bold text-ink bg-surface-2 border border-line px-2 py-0.5 text-xs">
             {value} {unit}
           </span>
         </div>
@@ -57,14 +57,14 @@ export default function Slider({
           aria-valuemax={max}
           aria-valuenow={value}
           aria-valuetext={`${value} ${unit}`}
-          className="w-full h-1 bg-[#262626] appearance-none cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white disabled:opacity-40 disabled:cursor-not-allowed accent-white"
+          className="w-full h-1 bg-surface-3 appearance-none cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:opacity-40 disabled:cursor-not-allowed accent-accent"
           style={{
             background: `linear-gradient(to right, #ffffff ${percentage}%, #262626 ${percentage}%)`,
           }}
         />
       </div>
 
-      <div className="flex justify-between text-[9px] mono text-[#555555]">
+      <div className="flex justify-between text-[9px] mono text-ink-3">
         <span>
           {min} {unit}
         </span>

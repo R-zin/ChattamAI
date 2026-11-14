@@ -81,7 +81,7 @@ export default function Modal({
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/80 backdrop-blur-xs transition-opacity"
+        className="fixed inset-0 bg-scrim backdrop-blur-xs transition-opacity"
         onClick={onClose}
         data-testid="modal-backdrop"
         aria-hidden="true"
@@ -94,27 +94,27 @@ export default function Modal({
         aria-modal="true"
         aria-labelledby="modal-title"
         tabIndex={-1}
-        className={`relative z-10 w-full ${maxWidth} bg-[#121212] border border-[#333333] shadow-2xl flex flex-col max-h-[85vh] fade-rise focus:outline-none`}
+        className={`relative z-10 w-full ${maxWidth} bg-surface border border-line shadow-2xl flex flex-col max-h-[85vh] fade-rise focus:outline-none`}
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-[#262626] bg-[#181818] flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-line bg-surface-2 flex items-center justify-between">
           <div>
             <h2
               id="modal-title"
-              className="text-xs mono font-bold text-white tracking-widest uppercase flex items-center gap-2"
+              className="text-xs mono font-bold text-ink tracking-widest uppercase flex items-center gap-2"
             >
-              <span className="w-1.5 h-1.5 bg-white inline-block" />
+              <span className="w-1.5 h-1.5 bg-accent inline-block" />
               <span>{title}</span>
             </h2>
             {subtitle && (
-              <p className="text-[10px] mono text-[#737373] mt-0.5">{subtitle}</p>
+              <p className="text-[10px] mono text-ink-3 mt-0.5">{subtitle}</p>
             )}
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="p-1 text-[#737373] hover:text-white border border-transparent hover:border-[#333333] transition-colors focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none"
+            className="p-1 text-ink-3 hover:text-ink border border-transparent hover:border-line transition-colors focus-visible:ring-1 focus-visible:ring-accent focus-visible:outline-none"
           >
             <Icon name="x" className="text-base" />
           </button>
@@ -125,7 +125,7 @@ export default function Modal({
 
         {/* Footer */}
         {footer && (
-          <div className="px-5 py-3.5 border-t border-[#262626] bg-[#0e0e0e] flex items-center justify-end gap-2">
+          <div className="px-5 py-3.5 border-t border-line bg-inset flex items-center justify-end gap-2">
             {footer}
           </div>
         )}

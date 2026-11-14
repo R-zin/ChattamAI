@@ -17,14 +17,14 @@ export default function Button({
   ...props
 }) {
   const baseStyles =
-    'mono font-bold uppercase tracking-wider inline-flex items-center justify-center transition-all duration-150 cursor-pointer select-none focus-visible:ring-1 focus-visible:ring-white focus-visible:outline-none disabled:opacity-40 disabled:cursor-not-allowed border'
+    'font-semibold uppercase tracking-wider inline-flex items-center justify-center transition-all duration-150 cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed border'
 
   const variants = {
-    primary: 'bg-white text-black border-white hover:bg-[#e5e5e5] hover:border-[#e5e5e5]',
-    secondary: 'bg-[#181818] text-[#f5f5f5] border-[#333333] hover:bg-[#222222] hover:border-[#555555]',
-    outline: 'bg-transparent text-[#f5f5f5] border-[#404040] hover:border-white hover:bg-[#121212]',
-    ghost: 'bg-transparent text-[#a3a3a3] border-transparent hover:text-white hover:bg-[#181818]',
-    danger: 'bg-[#220d0d] text-[#fca5a5] border-[#551a1a] hover:bg-[#331414] hover:border-[#772222]',
+    primary: 'bg-accent text-on-accent border-accent hover:bg-accent-strong hover:border-accent-strong',
+    secondary: 'bg-surface-2 text-ink border-line hover:bg-surface-3 hover:border-line-strong',
+    outline: 'bg-transparent text-ink border-line-strong hover:border-ink hover:bg-surface',
+    ghost: 'bg-transparent text-ink-2 border-transparent hover:text-ink hover:bg-surface-2',
+    danger: 'bg-danger/10 text-danger border-danger/40 hover:bg-danger/10 hover:border-danger/40',
   }
 
   const sizes = {

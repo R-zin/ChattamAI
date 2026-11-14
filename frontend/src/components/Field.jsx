@@ -7,16 +7,16 @@ export default function Field({ label, helper, id, ...props }) {
     <div>
       <label
         htmlFor={inputId}
-        className="block text-[10px] mono uppercase text-[#737373] mb-1.5 font-semibold"
+        className="block text-[11px] uppercase tracking-wider text-ink font-bold mb-1.5"
       >
         {label}
       </label>
       <input
         id={inputId}
-        className="w-full mono text-xs bg-[#0e0e0e] border border-[#333333] px-3 py-2.5 text-white outline-none focus:border-white transition-colors"
+        className="w-full text-sm bg-surface border border-line-strong px-3 py-2.5 text-ink placeholder:text-ink-3 outline-none focus:border-accent focus:ring-2 focus:ring-accent/30 disabled:opacity-50 transition-colors"
         {...props}
       />
-      {helper && <p className="text-[10px] mono text-[#737373] mt-1">{helper}</p>}
+      {helper && <p className="text-xs text-ink-2 mt-1.5">{helper}</p>}
     </div>
   )
 }

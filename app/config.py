@@ -22,15 +22,49 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
+_PLACEHOLDER_VALUES = frozenset(
+    {"none", "null", "undefined", "not-configured", "not-set", "dummy", ""}
+)
+
+
+def _clean_key(val: Optional[str]) -> Optional[str]:
+    """Return a stripped credential, or None for empty/placeholder values.
+
+    Infra templates (e.g. Bicep) set unset secrets to the literal string
+    ``none``; those must never be treated as real credentials.
+    """
+    if not val:
+        return None
+    cleaned = val.strip()
+    if cleaned.lower() in _PLACEHOLDER_VALUES:
+        return None
+    return cleaned
+
+
+def _env_key(*names: str) -> Optional[str]:
+    """First real (non-placeholder) credential among the given env var names."""
+    for name in names:
+        cleaned = _clean_key(os.getenv(name))
+        if cleaned:
+            return cleaned
+    return None
+
+
+def _env_choice(name: str) -> Optional[str]:
+    """An explicitly chosen provider name, ignoring placeholder values."""
+    cleaned = _clean_key(os.getenv(name))
+    return cleaned.lower() if cleaned else None
+
+
 def _default_llm_provider() -> str:
-    explicit = os.getenv("LLM_PROVIDER")
+    explicit = _env_choice("LLM_PROVIDER")
     if explicit:
-        return explicit.strip().lower()
-    if os.getenv("NVIDIA_API_KEY") or os.getenv("NIM_API_KEY"):
+        return explicit
+    if _env_key("NVIDIA_API_KEY", "NIM_API_KEY"):
         return "nim"
-    if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+    if _env_key("GEMINI_API_KEY", "GOOGLE_API_KEY"):
         return "gemini"
-    if os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN"):
+    if _env_key("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"):
         return "anthropic"
     return "gemini"
 
@@ -50,18 +84,12 @@ def _default_llm_model() -> str:
 
 
 def _default_embedding_provider() -> str:
-    explicit = os.getenv("EMBEDDING_PROVIDER")
+    explicit = _env_choice("EMBEDDING_PROVIDER")
     if explicit:
-        return explicit.strip().lower()
-    if os.getenv("NVIDIA_API_KEY") or os.getenv("NIM_API_KEY"):
+        return explicit
+    if _env_key("NVIDIA_API_KEY", "NIM_API_KEY"):
         return "nim"
-    if os.getenv("OPENAI_API_KEY") and not os.getenv("OPENAI_API_KEY", "").startswith(
-        "sk-test"
-    ):
-        return "openai"
-    return (
-        "nim" if (os.getenv("NVIDIA_API_KEY") or os.getenv("NIM_API_KEY")) else "openai"
-    )
+    return "openai"
 
 
 def _default_embedding_model() -> str:
@@ -82,23 +110,6 @@ def _default_embedding_dim() -> int:
     if provider in ("nim", "nvidia", "nemotron"):
         return 2048
     return 1536
-
-
-def _clean_key(val: Optional[str]) -> Optional[str]:
-    if not val:
-        return None
-    cleaned = val.strip()
-    if cleaned.lower() in (
-        "none",
-        "null",
-        "undefined",
-        "not-configured",
-        "not-set",
-        "dummy",
-        "",
-    ):
-        return None
-    return cleaned
 
 
 def _default_secret_key() -> str:
@@ -183,22 +194,16 @@ class Settings(BaseModel):
     # --- LLM (Google Gemini, Anthropic Claude, NVIDIA NIM Nemotron) ---
     llm_provider: str = Field(default_factory=_default_llm_provider)
     gemini_api_key: Optional[str] = Field(
-        default_factory=lambda: _clean_key(
-            os.getenv("GEMINI_API_KEY", os.getenv("GOOGLE_API_KEY"))
-        )
+        default_factory=lambda: _env_key("GEMINI_API_KEY", "GOOGLE_API_KEY")
     )
     anthropic_api_key: Optional[str] = Field(
-        default_factory=lambda: _clean_key(
-            os.getenv("ANTHROPIC_API_KEY", os.getenv("ANTHROPIC_AUTH_TOKEN"))
-        )
+        default_factory=lambda: _env_key("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")
     )
     anthropic_base_url: Optional[str] = Field(
         default_factory=lambda: os.getenv("ANTHROPIC_BASE_URL")
     )
     nvidia_api_key: Optional[str] = Field(
-        default_factory=lambda: _clean_key(
-            os.getenv("NVIDIA_API_KEY", os.getenv("NIM_API_KEY"))
-        )
+        default_factory=lambda: _env_key("NVIDIA_API_KEY", "NIM_API_KEY")
     )
     nvidia_base_url: Optional[str] = Field(
         default_factory=lambda: os.getenv(
@@ -229,11 +234,7 @@ class Settings(BaseModel):
         )
     )
     verifier_api_key: Optional[str] = Field(
-        default_factory=lambda: (
-            os.getenv("VERIFIER_API_KEY", "").strip()
-            or os.getenv("OPENAI_API_KEY", "").strip()
-            or None
-        )
+        default_factory=lambda: _env_key("VERIFIER_API_KEY", "OPENAI_API_KEY")
     )
     verifier_model: str = Field(
         default_factory=lambda: (

@@ -53,6 +53,10 @@ COPY alembic/ ./alembic/
 COPY alembic.ini .
 COPY scripts/ ./scripts/
 COPY data/ ./data/
+# Pristine KBR corpus outside /app/data: a volume mounted there hides ./data,
+# so app/bootstrap.py seeds the data dir from here on first boot.
+COPY data/kbr/ ./seed/kbr/
+ENV KBR_SEED_DIR=/app/seed/kbr
 COPY entrypoint.sh .
 RUN chmod +x entrypoint.sh
 

@@ -37,6 +37,11 @@ async def lifespan(app: FastAPI):
 
     init_db_safe()
 
+    # Seed KBR docs and build the index in the background if it is empty.
+    from app.bootstrap import start_background_ingest
+
+    start_background_ingest(app.state.rag)
+
     yield
 
 

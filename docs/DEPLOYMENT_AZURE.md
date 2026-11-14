@@ -124,7 +124,13 @@ Navigate to your GitHub Repository **Settings > Secrets and variables > Actions*
 - `AZURE_CONTAINER_APP_NAME`: `chattamai-prod`
 - `AZURE_CONTAINER_REGISTRY`: `your-acr-name`
 
-Every push to `main` will automatically build the container image, push to Azure Container Registry, deploy the updated revision, and run a live `/api/health` verification probe.
+Once the **CI Pipeline** passes on a push to `main`, the deploy workflow builds that exact commit, pushes it to Azure Container Registry and deploys the revision. It then polls `/api/health/ready` (up to ~6.5 minutes, because the first boot builds the rule index) and fails the deploy unless the response is HTTP 200 with `status: ok`; each failed attempt prints the `issues` the app reports (for example a missing API key or an empty index). It also checks that an unknown `/api/*` path returns a JSON 404. You can still run it by hand from the Actions tab.
+
+Notes:
+- The app receives `LLM_PROVIDER` and `EMBEDDING_PROVIDER` explicitly. Leave the Bicep parameters empty to derive them from the keys you supply (Gemini/Anthropic/NIM for the LLM; NIM if `nvidiaApiKey` is set, otherwise OpenAI for embeddings), or set them yourself.
+- `maxReplicas` defaults to 1 because the SQLite database, FAISS index and rate limiter live in each replica.
+- Liveness uses `/api/health/live`; readiness uses `/api/health/ready`, so a revision without a working API key stays unready instead of restart-looping.
+- The workflow does not send an authenticated sample compliance check (that needs a login token), so a passing deploy proves the providers, index and database are ready, not that an end-to-end check succeeds.
 
 ---
 
@@ -199,9 +205,9 @@ To prevent losing uploaded rules, index embeddings, and user accounts during con
 
 1. **Verify Health Endpoint**:
    ```bash
-   curl https://chattamai-prod.<your-region>.azurecontainerapps.io/api/health
+   curl https://chattamai-prod.<your-region>.azurecontainerapps.io/api/health/ready
    ```
-   Expected response:
+   While the first-boot index is still building (or a key is missing) this returns HTTP 503 and the body's `issues` list says why; `/api/health` returns the same body with HTTP 200. Expected response once ready:
    ```json
    {
      "status": "ok",

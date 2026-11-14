@@ -3,8 +3,11 @@
 A Retrieval-Augmented Generation system that helps LSGD engineers compare an
 uploaded building plan against the **Kerala Building Rules (KBR)** and surface
 potential violations. Built with **FastAPI** (API), **LangGraph** (compliance
-workflow orchestration), **FAISS** (vector store), **OpenAI embeddings**, and
-**Google Gemini** (primary analysis LLM via `google-genai`, with Anthropic Claude support).
+workflow orchestration), **FAISS** (vector store), and pluggable model
+providers: embeddings from **NVIDIA NIM** or **OpenAI**, and an analysis LLM from
+**Google Gemini**, **Anthropic Claude**, **NVIDIA NIM** or an OpenAI-compatible
+endpoint. You choose providers explicitly with `LLM_PROVIDER` and
+`EMBEDDING_PROVIDER`.
 
 ## How it works
 
@@ -52,20 +55,40 @@ branch rather than guessing.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # set OPENAI_API_KEY and GEMINI_API_KEY
+cp .env.example .env        # choose providers and set their API keys
 ```
 
-Required env vars (see `.env.example`):
-- `OPENAI_API_KEY` — embeddings (`text-embedding-3-small`)
-- `GEMINI_API_KEY` — Gemini LLM analysis (`gemini-2.5-flash`, from Google AI Studio)
-- *(Alternative)* `NVIDIA_API_KEY` / `NVIDIA_BASE_URL` — if using `LLM_PROVIDER=nim` (`nvidia/nemotron-3.5-super-vl-120b-a12b`)
-- *(Alternative)* `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL` — if using `LLM_PROVIDER=anthropic`
+Provider selection (set both explicitly; see `.env.example`):
+- `EMBEDDING_PROVIDER` = `nim` (needs `NVIDIA_API_KEY`) or `openai` (needs `OPENAI_API_KEY`).
+- `LLM_PROVIDER` = `gemini` (`GEMINI_API_KEY`), `anthropic` (`ANTHROPIC_API_KEY` or
+  `ANTHROPIC_AUTH_TOKEN` / `ANTHROPIC_BASE_URL`), `nim` (`NVIDIA_API_KEY`) or `openai`.
+- Placeholder credentials such as `none`, `null` or an empty string are treated as
+  *unset*, so infrastructure templates that inject them cannot select a provider.
+- Switching `EMBEDDING_PROVIDER` changes the vector dimension, so the index is
+  discarded on the next start and rebuilt by the startup ingest (needs `AUTO_INGEST`
+  on, the default; otherwise call `/api/ingest`).
 - `KBR_DATA_DIR` — folder of KBR PDFs/text (default `./data/kbr`)
 
 Tunables with sane defaults (see `.env.example` for the full list): `MIN_SCORE`,
 `TOP_K`, `CHUNK_SIZE`/`CHUNK_OVERLAP`, the cache `*_TTL`/`*_MAXSIZE` knobs,
 `EMBEDDING_BATCH_SIZE`, `LLM_TIMEOUT`/`LLM_MAX_RETRIES`, and the auth settings
 (`SECRET_KEY`, `AUTH_REQUIRED`, `ADMIN_KEY`, `TIME_OUT`).
+
+## First boot, health and readiness
+
+On start the app copies the bundled KBR documents into `KBR_DATA_DIR` if it holds
+none (it never overwrites your files) and, when embeddings are configured and the
+index is empty, builds the index in a background thread (`AUTO_INGEST=0` turns
+this off). The server accepts requests immediately; use the probes to know when
+it is usable:
+
+| Endpoint | Meaning |
+| --- | --- |
+| `GET /api/health/live` | Process is up (never touches providers or the index). |
+| `GET /api/health` | Always 200. `status` is `ok` only when embeddings, the LLM, a non-empty index and the database are ready; otherwise `degraded` with a human-readable `issues` list. |
+| `GET /api/health/ready` | Same body, but **503** unless `status` is `ok`. Use for deploy gates and readiness probes. |
+
+Unknown `/api/*` and `/auth/*` paths return a JSON 404 (never the web app).
 
 ## Run
 
@@ -142,11 +165,12 @@ app/
     embeddings.py    EmbeddingProvider + OpenAI impl + EmbeddingCache
     vectorstore.py   FAISS store (cosine via IndexFlatIP) + dedup/rebuild
     ingestion.py     KBR + plan loaders, sentence-aware chunking, rule_id extraction
-    llm.py           Anthropic Claude client
+    llm.py           LLM clients (Gemini, Anthropic, NIM, OpenAI-compatible)
     prompts.py       prompt templates
     graph.py         LangGraph workflow (sync + async) with per-node telemetry
     system.py        RAGSystem (wires it all together) + AnalysisMemo
-  services/          SQLAlchemy auth/user store (used by the auth routes)
+  bootstrap.py       first-boot KBR seeding + background auto-ingest
+  services/          SQLAlchemy auth/user store and report persistence
 scripts/
   fetch_kbr.py       download KBR documents into KBR_DATA_DIR
   bench_check.py     offline perf harness
@@ -160,8 +184,8 @@ flowchart, call graph, and extension/test seams), see
 
 ## Production Deployment
 
-- **Microsoft Azure (Container Apps)**: Deploy the full-stack container with Azure Files persistent volume for FAISS & SQLite. See [docs/DEPLOYMENT_AZURE.md](docs/DEPLOYMENT_AZURE.md).
-- **Fly.io + Vercel + Cloudflare (Option A)**: Edge-routed deployment with persistent volume on Fly.io and React frontend on Vercel CDN. See [docs/DEPLOYMENT_OPTION_A.md](docs/DEPLOYMENT_OPTION_A.md).
+- **Microsoft Azure (Container Apps) — primary target**: one container serves the API and the web app. `infra/main.bicep` provisions it; `.github/workflows/deploy-azure.yml` deploys the commit that passed CI and only succeeds once `/api/health/ready` returns `ok`. Set `LLM_PROVIDER` / `EMBEDDING_PROVIDER` and the matching key. Keep `maxReplicas` at 1: the SQLite database, FAISS index and rate limiter are per-replica. See [docs/DEPLOYMENT_AZURE.md](docs/DEPLOYMENT_AZURE.md).
+- **Fly.io + Vercel + Cloudflare (Option A) — optional, not the active deployment**: `fly.toml` and `cloudflare/wrangler.toml` are templates (e.g. `BACKEND_ORIGIN` is a placeholder). A Vercel frontend with no backend must build with `VITE_USE_MOCKS=true`. See [docs/DEPLOYMENT_OPTION_A.md](docs/DEPLOYMENT_OPTION_A.md).
 
 ## Production & Security Hardening
 
@@ -169,7 +193,7 @@ flowchart, call graph, and extension/test seams), see
 - **Security Headers & CSP**: Built-in HTTP middleware injects `Content-Security-Policy`, `Strict-Transport-Security`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: strict-origin-when-cross-origin`.
 - **Authentication**: Supports JWT token auth, TOTP 2-Factor Authentication, and Google OAuth 2.0 / OpenID Connect federation.
 - **Upload Validation**: Enforces 25MB file size caps and `%PDF-` magic header bytes validation.
-- **Rate Limiting**: Protects sensitive endpoints (`/auth/*`, `/api/check`, `/api/v2/*`) with configurable per-IP rate limits (`RATE_LIMIT_PER_MINUTE`).
+- **Rate Limiting**: Protects sensitive endpoints (`/auth/*`, `/api/check`, `/api/v2/*`) with configurable per-IP rate limits (`RATE_LIMIT_PER_MINUTE`). Limits are in memory and per replica. The client IP comes from `X-Forwarded-For` only when `TRUSTED_PROXY_COUNT` says how many proxies sit in front (the Docker image sets 1 for Azure ingress; use 2 if a Cloudflare Worker proxies to it; the default 0 ignores the header because clients can forge it).
 
 ## Limitations
 

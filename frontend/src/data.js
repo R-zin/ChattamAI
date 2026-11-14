@@ -8,12 +8,20 @@
 // rule numbering, page numbers, or persisted history. Those are PRESENTATIONAL —
 // we derive a display status from the real payload and treat the rest as framing.
 //
-// VITE_API_URL points at the FastAPI base (e.g. http://127.0.0.1:8000). When unset,
-// the UI runs on realistic mock data so the public Vercel demo works standalone.
+// API mode vs. demo mode:
+//   - VITE_API_URL points at the FastAPI base (e.g. http://127.0.0.1:8000). When
+//     empty/unset the app talks to the SAME ORIGIN that served it, which is how
+//     the Docker/Azure build is deployed (API and SPA share one container). In
+//     `npm run dev` the Vite dev server proxies /api and /auth to the backend.
+//   - VITE_USE_MOCKS=true opts in to realistic mock data with no backend (the
+//     standalone Vercel demo). It is never the silent default, so a live
+//     deployment can never show fake results by accident.
 
+const TRUTHY = ['1', 'true', 'yes', 'on']
+export const USE_MOCKS = TRUTHY.includes(String(import.meta.env.VITE_USE_MOCKS || '').trim().toLowerCase())
 export const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
 export const apiAvailable = () => {
-  if (!API_URL) return false
+  if (USE_MOCKS) return false
   // Guard against browser mixed-content blocks: An HTTPS web app cannot fetch insecure http:// URLs
   if (
     typeof window !== 'undefined' &&
@@ -383,12 +391,9 @@ export async function checkPdfV2(file) {
 
   const fd = new FormData()
   fd.append('file', file)
-  try {
-    return await request('/api/v2/check/pdf', { method: 'POST', body: fd })
-  } catch (err) {
-    console.warn('checkPdfV2 request failed, falling back to mock assessment:', err)
-    return MOCK_PDF_ASSESSMENT
-  }
+  // Errors propagate so the page can show them: never substitute a fake
+  // compliance assessment for a real plan.
+  return request('/api/v2/check/pdf', { method: 'POST', body: fd })
 }
 
 export async function exportPdfReportV2(file) {
@@ -604,33 +609,30 @@ export async function fetchHealth() {
 
 export async function fetchReports() {
   if (!apiAvailable()) return reports
-  try {
-    const data = await request('/api/reports')
-    if (!Array.isArray(data) || data.length === 0) return reports
-    return data.map((r) => {
-      let status = 'compliant'
-      if (r.status === 'fail') status = 'violation'
-      else if (r.status === 'warning') status = 'review'
-      else if (r.status === 'insufficient') status = 'insufficient'
+  // Live mode: a failure rejects (the page shows the error) and an empty
+  // archive is genuinely empty, never replaced by demo reports.
+  const data = await request('/api/reports')
+  if (!Array.isArray(data)) return []
+  return data.map((r) => {
+    let status = 'compliant'
+    if (r.status === 'fail') status = 'violation'
+    else if (r.status === 'warning') status = 'review'
+    else if (r.status === 'insufficient') status = 'insufficient'
 
-      const dateStr = r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : 'Recent'
-      const projectName = r.plan_text
-        ? (r.plan_text.length > 35 ? r.plan_text.slice(0, 32) + '…' : r.plan_text)
-        : `Assessment #${r.report_id}`
+    const dateStr = r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : 'Recent'
+    const projectName = r.plan_text
+      ? (r.plan_text.length > 35 ? r.plan_text.slice(0, 32) + '…' : r.plan_text)
+      : `Assessment #${r.report_id}`
 
-      return {
-        id: r.report_id,
-        project: projectName,
-        date: dateStr,
-        status: status,
-        violations: Array.isArray(r.violations) ? r.violations.length : 0,
-        reviewer: r.user_id ? `User ${r.user_id.slice(0, 8)}` : 'Engine Check',
-      }
-    })
-  } catch (err) {
-    console.error('fetchReports failed, falling back to local demo reports:', err)
-    return reports
-  }
+    return {
+      id: r.report_id,
+      project: projectName,
+      date: dateStr,
+      status: status,
+      violations: Array.isArray(r.violations) ? r.violations.length : 0,
+      reviewer: r.user_id ? `User ${r.user_id.slice(0, 8)}` : 'Engine Check',
+    }
+  })
 }
 
 export async function downloadReport(id, format = 'pdf') {
@@ -667,21 +669,17 @@ export async function downloadReport(id, format = 'pdf') {
 
 export async function fetchKbrDocuments() {
   if (!apiAvailable()) return kbrDocs
-  try {
-    const data = await request('/api/kbr/documents')
-    if (!Array.isArray(data) || data.length === 0) return kbrDocs
-    return data.map((d) => ({
-      doc: d.filename,
-      type: d.filename.endsWith('.pdf') ? 'KBR (PDF)' : 'KBR (TXT)',
-      pages: Math.max(1, Math.round(d.size / 3000)),
-      chunks: `${Math.max(1, Math.round(d.size / 500))}`,
-      indexed: d.modified ? new Date(d.modified).toISOString().slice(0, 10) : 'Recent',
-      status: 'INDEXED',
-    }))
-  } catch (err) {
-    console.error('fetchKbrDocuments failed, falling back to mock:', err)
-    return kbrDocs
-  }
+  // Live mode: failures reject and an empty corpus is shown as empty.
+  const data = await request('/api/kbr/documents')
+  if (!Array.isArray(data)) return []
+  return data.map((d) => ({
+    doc: d.filename,
+    type: d.filename.endsWith('.pdf') ? 'KBR (PDF)' : 'KBR (TXT)',
+    pages: Math.max(1, Math.round(d.size / 3000)),
+    chunks: `${Math.max(1, Math.round(d.size / 500))}`,
+    indexed: d.modified ? new Date(d.modified).toISOString().slice(0, 10) : 'Recent',
+    status: 'INDEXED',
+  }))
 }
 
 export async function searchKbrRules(query, limit = 5) {

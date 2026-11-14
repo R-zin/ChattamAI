@@ -5,6 +5,7 @@ import Pill from '../components/Pill.jsx'
 import Icon from '../components/Icon.jsx'
 import { toast } from '../components/Toast.jsx'
 import {
+  apiAvailable,
   kbrDocs,
   kbrStats,
   fetchKbrDocuments,
@@ -16,7 +17,8 @@ import {
 const STEPS = ['Loading PDF', 'Chunking', 'Embedding', 'Indexing', 'Complete']
 
 export default function Knowledge() {
-  const [docList, setDocList] = useState(kbrDocs)
+  // Live mode starts empty (never flashes demo documents); demo mode uses mocks.
+  const [docList, setDocList] = useState(apiAvailable() ? [] : kbrDocs)
   const [ingesting, setIngesting] = useState(false)
   const [step, setStep] = useState(0)
   const [pct, setPct] = useState(0)
@@ -30,11 +32,13 @@ export default function Knowledge() {
 
   useEffect(() => {
     let active = true
-    fetchKbrDocuments().then((docs) => {
-      if (active && Array.isArray(docs) && docs.length > 0) {
-        setDocList(docs)
-      }
-    })
+    fetchKbrDocuments()
+      .then((docs) => {
+        if (active && Array.isArray(docs)) setDocList(docs)
+      })
+      .catch((err) => {
+        if (active) toast(`Could not load KBR documents: ${err.message}`, 'danger')
+      })
     return () => {
       active = false
     }
@@ -212,6 +216,13 @@ export default function Knowledge() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#262626]">
+                {docList.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-6 text-xs mono text-[#737373] text-center">
+                      No KBR documents found. Upload a document, then run ingestion.
+                    </td>
+                  </tr>
+                )}
                 {docList.map((d, idx) => (
                   <tr key={d.doc || idx} className="hover:bg-[#181818] transition-colors">
                     <td className="px-4 py-3.5 text-xs font-semibold text-white">{d.doc}</td>

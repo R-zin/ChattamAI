@@ -22,12 +22,19 @@ export default function Reports() {
 
   useEffect(() => {
     let active = true
-    fetchReports().then((data) => {
-      if (active) {
-        setReportList(data)
-        setLoading(false)
-      }
-    })
+    fetchReports()
+      .then((data) => {
+        if (active) {
+          setReportList(data)
+          setLoading(false)
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setLoading(false)
+          toast(`Could not load reports: ${err.message}`, 'danger')
+        }
+      })
     return () => {
       active = false
     }

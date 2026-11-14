@@ -135,6 +135,13 @@ class HealthResponse(BaseModel):
     verifier_ready: bool = Field(
         default=False, description="Whether secondary verifier client is ready"
     )
+    database_ready: bool = Field(
+        default=True, description="Whether the database answered a probe query"
+    )
+    issues: list[str] = Field(
+        default_factory=list,
+        description="Human-readable reasons the service is not fully ready",
+    )
 
 
 # --- Auth models (additive; existing RAG models above are unchanged) ---------

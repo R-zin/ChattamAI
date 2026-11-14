@@ -270,8 +270,21 @@ def search_rules(
     return out
 
 
-@router.get("/health", response_model=HealthResponse)
-def health(rag: RAGSystem = Depends(get_rag)) -> HealthResponse:
+def _database_ready() -> bool:
+    try:
+        from sqlalchemy import text
+
+        from app.services.database import engine
+
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception:  # noqa: BLE001 - any failure means "not ready"
+        logger.warning("Database health probe failed", exc_info=True)
+        return False
+
+
+def _build_health(rag: RAGSystem) -> HealthResponse:
     settings = get_settings()
     verifier_enabled = getattr(settings, "verifier_enabled", False)
     verifier_ready = getattr(rag, "verifier_ready", False)
@@ -281,8 +294,26 @@ def health(rag: RAGSystem = Depends(get_rag)) -> HealthResponse:
     verifier_model = getattr(rag, "verifier_model", None) or getattr(
         settings, "verifier_model", None
     )
+    db_ready = _database_ready()
+    issues: list[str] = []
+    if not rag.embeddings_ready:
+        issues.append(
+            f"Embeddings not ready (provider={getattr(rag, 'embedding_provider', None)}): "
+            "missing or invalid API key"
+        )
+    if not rag.llm_ready:
+        issues.append(
+            f"LLM not ready (provider={getattr(rag, 'llm_provider', None)}): "
+            "missing or invalid API key"
+        )
+    if rag.index_size == 0:
+        issues.append("Rule index is empty: ingest the KBR documents")
+    if not db_ready:
+        issues.append("Database is unreachable")
     return HealthResponse(
-        status="ok" if (rag.embeddings_ready and rag.llm_ready) else "degraded",
+        status="ok" if not issues else "degraded",
+        database_ready=db_ready,
+        issues=issues,
         index_size=rag.index_size,
         embeddings_ready=rag.embeddings_ready,
         llm_ready=rag.llm_ready,
@@ -295,6 +326,29 @@ def health(rag: RAGSystem = Depends(get_rag)) -> HealthResponse:
         verifier_model=verifier_model,
         verifier_ready=verifier_ready,
     )
+
+
+@router.get("/health", response_model=HealthResponse)
+def health(rag: RAGSystem = Depends(get_rag)) -> HealthResponse:
+    """Always 200 with an honest ``status`` and ``issues`` list."""
+    return _build_health(rag)
+
+
+@router.get("/health/live")
+def health_live() -> dict:
+    """Liveness: the process is up. Never touches providers or the index."""
+    return {"status": "alive"}
+
+
+@router.get("/health/ready", response_model=HealthResponse)
+def health_ready(
+    response: Response, rag: RAGSystem = Depends(get_rag)
+) -> HealthResponse:
+    """Readiness: 503 unless LLM, embeddings, index and DB are all ready."""
+    report = _build_health(rag)
+    if report.status != "ok":
+        response.status_code = 503
+    return report
 
 
 class IngestRequest(BaseModel):

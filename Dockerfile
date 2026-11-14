@@ -21,6 +21,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8000 \
+    TRUSTED_PROXY_COUNT=1 \
     KBR_DATA_DIR=/app/data/kbr \
     INDEX_DIR=/app/data/index \
     DATABASE_URL=sqlite:////app/data/chattamai.db

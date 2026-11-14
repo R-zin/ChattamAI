@@ -113,15 +113,30 @@ def reset_rate_limits() -> None:
     _RATE_LIMIT_BUCKETS.clear()
 
 
+def client_ip_for(request: Request, trusted_proxies: int) -> str:
+    """Best-effort client IP that a caller cannot spoof.
+
+    ``X-Forwarded-For`` is ``client, proxy1, ..., proxyN`` where each proxy
+    appends the address it received the request from. Only the last
+    ``trusted_proxies`` entries were written by infrastructure we trust, so the
+    client is the entry that many positions from the right; anything left of it
+    is attacker-controlled. With no trusted proxies the header is ignored.
+    """
+    peer = request.client.host if request.client else "127.0.0.1"
+    if trusted_proxies <= 0:
+        return peer
+    forwarded = request.headers.get("x-forwarded-for", "")
+    hops = [h.strip() for h in forwarded.split(",") if h.strip()]
+    if len(hops) < trusted_proxies:
+        return peer
+    return hops[-trusted_proxies]
+
+
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
     path = request.url.path
     if any(path.startswith(p) for p in _SENSITIVE_PREFIXES):
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            client_ip = forwarded.split(",")[0].strip()
-        else:
-            client_ip = request.client.host if request.client else "127.0.0.1"
+        client_ip = client_ip_for(request, get_settings().trusted_proxy_count)
         now = time.time()
         window = 60.0
         max_requests = get_settings().rate_limit_per_minute
@@ -178,8 +193,20 @@ def root(request: Request):
     }
 
 
+_API_PREFIXES = ("api", "auth")
+
+
+def _is_api_path(full_path: str) -> bool:
+    first = full_path.strip("/").split("/", 1)[0]
+    return first in _API_PREFIXES
+
+
 @app.get("/{full_path:path}")
 def spa_fallback(request: Request, full_path: str):
+    # Unknown API paths must be a JSON 404, never the SPA shell with a 200: API
+    # clients and health probes would otherwise mistake HTML for a valid reply.
+    if _is_api_path(full_path):
+        raise HTTPException(status_code=404, detail="Not found")
     # Serve static root files if present and strictly contained within _DIST_DIR
     try:
         resolved_dist = _DIST_DIR.resolve()

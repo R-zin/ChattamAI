@@ -15,6 +15,7 @@ import Projects from './pages/Projects.jsx'
 import Activity from './pages/Activity.jsx'
 import Settings from './pages/Settings.jsx'
 import Login from './pages/Login.jsx'
+import Register from './pages/Register.jsx'
 import VisualWorkbench from './pages/VisualWorkbench.jsx'
 import { apiAvailable, isAuthed } from './data.js'
 
@@ -32,6 +33,7 @@ export default function App() {
       <ToastHost />
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route
           path="/*"
           element={

@@ -742,11 +742,67 @@ export async function login({ email, password }) {
     }
     return await res.json() // TokenResponse | OtpRequiredResponse
   } catch (err) {
-    if (err.message && (err.message.includes('Login failed') || err.message.includes('401') || err.message.includes('credentials'))) {
-      throw err
+    // Never fake a session when the backend is unreachable: every later call
+    // would 401. Surface the real problem instead.
+    if (err instanceof TypeError || /Failed to fetch|Load failed|NetworkError/i.test(err.message || '')) {
+      throw new Error('Backend service is currently unreachable.')
     }
-    console.warn('Backend login unreachable, falling back to demo session:', err)
-    return { access_token: 'demo-token', token_type: 'bearer', expires_in: 3600 }
+    throw err
+  }
+}
+
+// ---- self-service registration ------------------------------------------------
+// Turn a FastAPI error body into one readable sentence. Validation errors (422)
+// arrive as a list of {msg}; pydantic prefixes custom messages with "Value error, ".
+function registrationErrorMessage(status, body) {
+  const detail = body?.detail
+  if (status === 403) return 'Registration is by invitation only. Contact your administrator for an account.'
+  if (status === 409) return 'An account with this email already exists. Try signing in.'
+  if (status === 429) return 'Too many attempts. Please wait a minute and try again.'
+  if (Array.isArray(detail)) {
+    const msgs = detail.map((d) => String(d?.msg || '').replace(/^Value error,\s*/i, '')).filter(Boolean)
+    if (msgs.length) return msgs.join('. ')
+  }
+  if (typeof detail === 'string' && detail) return detail
+  return `Registration failed (${status})`
+}
+
+export async function registerUser({ email, password }) {
+  if (!apiAvailable()) {
+    await new Promise((r) => setTimeout(r, 400))
+    return { email: String(email).trim().toLowerCase() }
+  }
+  let res
+  try {
+    res = await fetch(`${API_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+  } catch (err) {
+    throw new Error('Backend service is currently unreachable.')
+  }
+  let body = null
+  try {
+    body = await res.json()
+  } catch (_) {}
+  if (!res.ok) throw new Error(registrationErrorMessage(res.status, body))
+  return body
+}
+
+// What the sign-in UI may offer (e.g. whether to show "Create account").
+// Returns null when unknown (backend unreachable / older backend): callers then
+// show the option and let the server decide.
+export async function fetchAuthConfig() {
+  if (!apiAvailable()) {
+    return { registration_open: true, totp_required: false, google_enabled: false }
+  }
+  try {
+    const res = await fetch(`${API_URL}/auth/config`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch (_) {
+    return null
   }
 }
 

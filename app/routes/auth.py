@@ -125,7 +125,41 @@ def get_db():
 
 
 def _get_user_by_email(db: Session, email: str) -> Optional[User]:
-    return db.query(User).filter(User.email == email).first()
+    # Case-insensitive so existing mixed-case accounts keep working and new
+    # registrations (stored lower-case) can be found however the user types it.
+    from sqlalchemy import func
+
+    needle = (email or "").strip().lower()
+    return db.query(User).filter(func.lower(User.email) == needle).first()
+
+
+def _self_registration_allowed() -> bool:
+    """Whether anyone may create an account without the admin key.
+
+    Read from ``os.environ`` at request time (like ``_totp_required``). Off by
+    default: when ``ADMIN_KEY`` is set, registration stays admin-gated unless
+    ``ALLOW_SELF_REGISTRATION`` is truthy. With no ``ADMIN_KEY`` it is open.
+    """
+    import os
+
+    if _admin_key() is None:
+        return True
+    return os.getenv("ALLOW_SELF_REGISTRATION", "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+@auth_router.get("/config", operation_id="auth_public_config")
+def public_auth_config() -> dict:
+    """Public, non-sensitive switches the sign-in UI needs (no secrets)."""
+    return {
+        "registration_open": _self_registration_allowed(),
+        "totp_required": _totp_required(),
+        "google_enabled": bool(get_settings().google_client_id),
+    }
 
 
 @auth_router.post(
@@ -142,12 +176,17 @@ def register(
     """Create a user with a bcrypt-hashed password.
 
     Gating: when the ``ADMIN_KEY`` env var is set, the request must send a
-    matching ``X-Admin-Key`` header. When ``ADMIN_KEY`` is unset, registration is
-    open (self-service) so the very first user can be created. Documented choice:
-    admin-key-if-configured, else open.
+    matching ``X-Admin-Key`` header, unless ``ALLOW_SELF_REGISTRATION`` is on
+    (then anyone may register, which is what the sign-up form uses). When
+    ``ADMIN_KEY`` is unset, registration is open so the very first user can be
+    created.
     """
     admin_key = _admin_key()
-    if admin_key is not None and not hmac.compare_digest(x_admin_key or "", admin_key):
+    if (
+        admin_key is not None
+        and not _self_registration_allowed()
+        and not hmac.compare_digest(x_admin_key or "", admin_key)
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Registration requires a valid X-Admin-Key header",

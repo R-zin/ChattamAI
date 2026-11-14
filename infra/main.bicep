@@ -93,6 +93,9 @@ param authRequired bool = true
 @description('Enforce mandatory TOTP 2FA step-up authentication.')
 param totpRequired bool = false
 
+@description('Let anyone create an account from the sign-up form. Off by default: registration then needs the admin key. Turn on only if you accept public sign-ups (each account can run LLM-backed checks).')
+param allowSelfRegistration bool = false
+
 // --- Providers: always passed to the app explicitly, never auto-detected there ---
 var resolvedLlmProvider = !empty(llmProvider) ? llmProvider : (!empty(geminiApiKey) ? 'gemini' : (!empty(anthropicApiKey) ? 'anthropic' : (!empty(nvidiaApiKey) ? 'nim' : 'gemini')))
 var resolvedEmbeddingProvider = !empty(embeddingProvider) ? embeddingProvider : (!empty(nvidiaApiKey) ? 'nim' : 'openai')
@@ -358,6 +361,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'TOTP_REQUIRED'
               value: totpRequired ? 'true' : 'false'
+            }
+            {
+              name: 'ALLOW_SELF_REGISTRATION'
+              value: allowSelfRegistration ? 'true' : 'false'
             }
           ]
           probes: [

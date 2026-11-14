@@ -33,6 +33,7 @@ npm run dev                             # proxies /api and /auth to :8000
 
 - **Providers are explicit.** Set `LLM_PROVIDER` and `EMBEDDING_PROVIDER`; changing the embedding provider changes the vector dimension and the index is rebuilt.
 - **Health has three endpoints.** `/api/health` is always 200 with `status` + `issues`; `/api/health/ready` is 503 unless ok; `/api/health/live` is process-only. Deploy gates use `ready`.
+- **Registration is admin-gated when `ADMIN_KEY` is set** (always, on Azure) unless `ALLOW_SELF_REGISTRATION` is true. The UI reads `GET /auth/config` to hide the sign-up link. Emails are normalised to lower-case; lookups are case-insensitive.
 - **Mock data is opt-in** (`VITE_USE_MOCKS=true`). Empty `VITE_API_URL` means same origin. Never reintroduce silent mock fallbacks on API errors.
 - **Unknown `/api/*` and `/auth/*` must 404 as JSON**, not fall through to the SPA.
 - **Rate limiting trusts `X-Forwarded-For` only via `TRUSTED_PROXY_COUNT`** (image default 1; 0 ignores the header). State is per replica, so Azure `maxReplicas` stays 1 (SQLite + FAISS are per replica too).

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+import re
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class IngestResponse(BaseModel):
@@ -147,11 +149,36 @@ class HealthResponse(BaseModel):
 # --- Auth models (additive; existing RAG models above are unchanged) ---------
 
 
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
 class RegisterRequest(BaseModel):
-    """Payload for ``POST /auth/register``."""
+    """Payload for ``POST /auth/register``.
+
+    The email is trimmed, lower-cased and shape-checked so ``A@x.com`` and
+    ``a@x.com`` cannot become two accounts. The password must be 8+ characters
+    with a letter and a digit, and at most 72 bytes (bcrypt ignores the rest).
+    """
 
     email: str = Field(..., description="Unique user email", min_length=3)
     password: str = Field(..., description="Plaintext password", min_length=8)
+
+    @field_validator("email")
+    @classmethod
+    def _normalise_email(cls, v: str) -> str:
+        v = v.strip().lower()
+        if len(v) > 254 or not _EMAIL_RE.match(v):
+            raise ValueError("Enter a valid email address")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def _check_password(cls, v: str) -> str:
+        if len(v.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 bytes")
+        if not (re.search(r"[A-Za-z]", v) and re.search(r"\d", v)):
+            raise ValueError("Password must contain at least one letter and one digit")
+        return v
 
 
 class LoginRequest(BaseModel):

@@ -1,3 +1,6 @@
+# OPTIONAL: alternate deployment (docs/DEPLOYMENT_OPTION_A.md). The active
+# deployment is Azure Container Apps (infra/main.bicep).
+
 # Fly.io deployment configuration for ChattamAI Backend
 # Preserves FAISS vector store and SQLite database via a persistent volume at /app/data.
 

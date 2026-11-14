@@ -21,7 +21,7 @@
       "value": 0
     },
     "maxReplicas": {
-      "value": 2
+      "value": 1
     },
     "authRequired": {
       "value": true

@@ -17,9 +17,11 @@ against the KBR and flags potential violations.
 - **FastAPI** — HTTP API (`app/main.py`)
 - **LangGraph** — orchestrates the multi-step compliance workflow (`app/rag/graph.py`)
 - **FAISS** (CPU) — vector store for KBR chunks (`app/rag/vectorstore.py`)
-- **OpenAI embeddings** (`text-embedding-3-small`) — for semantic retrieval
-- **Google Gemini** (`gemini-2.5-flash`) — the primary analysis LLM, using the
-  official `google-genai` SDK (`GEMINI_API_KEY`), with NVIDIA NIM Nemotron (`nvidia/nemotron-3.5-super-vl-120b-a12b`), Anthropic Claude & OpenRouter support
+- **Embeddings** (NVIDIA NIM `nvidia/nemotron-3-embed-1b` or OpenAI `text-embedding-3-small`,
+  chosen with `EMBEDDING_PROVIDER`) — for semantic retrieval
+- **Analysis LLM** chosen with `LLM_PROVIDER`: Google Gemini (`gemini-2.5-flash`, official
+  `google-genai` SDK), NVIDIA NIM Nemotron (`nvidia/nemotron-3.5-super-vl-120b-a12b`),
+  Anthropic Claude, or any OpenAI-compatible endpoint / OpenRouter
 - **pypdf** — text extraction from PDFs
 - **SQLAlchemy + passlib[bcrypt] + python-jose** — the auth/user store
   (`app/services/`), used by the `/auth/*` routes (see §7)
@@ -34,7 +36,7 @@ A compliance check runs as a **LangGraph state machine** with these nodes:
 plan_text
    │
    ▼
-extract_facts  ── Claude pulls regulated parameters (plot area, setbacks, FSI, …)
+extract_facts  ── the LLM pulls regulated parameters (plot area, setbacks, FSI, …)
    │
    ▼
 retrieve       ── embeds the extracted facts, FAISS similarity search over KBR chunks
@@ -42,10 +44,10 @@ retrieve       ── embeds the extracted facts, FAISS similarity search over K
    ├── no rules found ──► insufficient  ──► END (short-circuit, no guessing)
    │
    ▼
-analyze        ── Claude compares facts vs. retrieved rules → JSON violations
+analyze        ── the LLM compares facts vs. retrieved rules → JSON violations
    │
    ▼
-summarize      ── Claude writes an engineer-friendly report ──► END
+summarize      ── the LLM writes an engineer-friendly report ──► END
 ```
 
 - The graph is built once at startup and stored on `app.state.rag` (see
@@ -76,7 +78,7 @@ ChattamAI/
 │   │   ├── embeddings.py   EmbeddingProvider ABC + OpenAIEmbeddingProvider + EmbeddingCache
 │   │   ├── vectorstore.py  RuleVectorStore: FAISS IndexFlatIP (cosine) + JSON metadata
 │   │   │                   + content-hash dedup/rebuild
-│   │   ├── llm.py          ClaudeClient: thin wrapper over the Anthropic SDK (timeout/retries)
+│   │   ├── llm.py          LLM clients (Gemini/Anthropic/NIM/OpenAI-compatible; timeout/retries)
 │   │   └── prompts.py      SYSTEM_* prompt templates + helpers
 │   │
 │   ├── routes/
@@ -112,10 +114,14 @@ every credential exists. The cached `get_settings()` is the single source of tru
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `OPENAI_API_KEY` | — | **Required** for embeddings. No key ⇒ `embeddings_ready=False`. |
+| `EMBEDDING_PROVIDER` | `nim` if an NVIDIA key is set, else `openai` | Set explicitly. Placeholder keys (`none`, `null`, empty) count as unset. |
+| `OPENAI_API_KEY` | — | Needed when `EMBEDDING_PROVIDER=openai`. No usable key ⇒ `embeddings_ready=False`. |
 | `OPENAI_BASE_URL` | — | Optional proxy for embeddings |
-| `EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI embedding model |
-| `EMBEDDING_DIM` | `1536` | Must match the model (index is built to this dim) |
+| `EMBEDDING_MODEL` | provider default | Embedding model (`nvidia/nemotron-3-embed-1b` for NIM, `text-embedding-3-small` for OpenAI) |
+| `EMBEDDING_DIM` | `2048` (NIM) / `1536` (OpenAI) | Must match the model; a mismatch rebuilds the index |
+| `AUTO_INGEST` | `1` | Seed KBR docs and build the index in the background on first boot when it is empty |
+| `KBR_SEED_DIR` | `<repo>/seed/kbr` | Pristine KBR corpus copied into `KBR_DATA_DIR` when it is empty (the Docker image sets `/app/seed/kbr`) |
+| `TRUSTED_PROXY_COUNT` | `0` | Reverse proxies in front of the app that append to `X-Forwarded-For` (Docker image: `1`) |
 | `GEMINI_API_KEY` | — | Google AI Studio API key for Gemini LLM |
 | `LLM_PROVIDER` | `gemini` | Primary LLM provider (`gemini`, `anthropic`, `openrouter`, `nim`) |
 | `LLM_MODEL` | `gemini-2.5-flash` | Model identifier (e.g. `gemini-2.5-flash`, `nvidia/nemotron-3.5-super-vl-120b-a12b`, `claude-3-5-sonnet-20241022`) |
@@ -187,7 +193,7 @@ Both live on `RAGSystem` (`app/rag/system.py`) and are exposed as routes in
 
 **Typical dev loop:**
 ```bash
-cp .env.example .env          # set OPENAI_API_KEY; proxy already configured
+cp .env.example .env          # choose LLM_PROVIDER / EMBEDDING_PROVIDER and set their keys
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
@@ -260,9 +266,11 @@ up and used** — see items 1–2 — but the deployment-hardening gaps remain.)
    `POST /api/check/plan-ocr` endpoint (feature-flagged, requires the system
    Tesseract binary). OCR is **layout-free v1** (words, not geometry); true spatial /
    table layout analysis is future work.
-5. **`data/kbr/` is empty by default.** Add KBR documents (or fetch them with
-   `python -m scripts.fetch_kbr --url <URL>`) before ingesting; nothing useful is
-   indexed until you do.
+5. **First boot seeds and indexes the corpus.** `app/bootstrap.py` copies the bundled
+   KBR documents into `KBR_DATA_DIR` when it has none and builds the index in the
+   background when it is empty (`AUTO_INGEST=0` disables). Add your own documents
+   (or fetch them with `python -m scripts.fetch_kbr --url <URL>`) and call
+   `/api/ingest` to index them.
 6. **Re-running `/api/ingest` is idempotent but additive.** Re-ingesting the same
    documents is a no-op (content-hash dedup), and new documents are appended. To
    start fresh, either post `{"rebuild": true}` or delete `data/index/`.

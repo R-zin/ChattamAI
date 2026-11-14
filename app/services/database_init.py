@@ -35,31 +35,33 @@ def _ensure_user_totp_columns() -> None:
     """Additively ALTER an existing ``user`` table for the 2FA and OAuth columns.
 
     Fresh databases get these from ``create_all``; this is the only hand-migration
-    needed until Alembic lands (DEVELOPMENT.md §9). Standard ``ADD COLUMN`` is
-    safe on both SQLite and Postgres. Called under :func:`init_db_safe`, so a
-    failure is logged, never fatal."""
+    needed for databases created by ``create_all`` before Alembic existed. The
+    table name is quoted because ``user`` is a reserved word in Postgres. Only
+    run when the Alembic upgrade did not succeed (see :func:`init_db`); Alembic
+    migrations 0001-0003 already add every column here. Called under
+    :func:`init_db_safe`, so a failure is logged, never fatal."""
     from sqlalchemy import inspect, text
 
     cols = {c["name"] for c in inspect(engine).get_columns("user")}
     with engine.begin() as conn:
         if "totp_secret" not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN totp_secret VARCHAR"))
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN totp_secret VARCHAR'))
         if "totp_enabled" not in cols:
             conn.execute(
                 text(
-                    "ALTER TABLE user ADD COLUMN totp_enabled "
+                    'ALTER TABLE "user" ADD COLUMN totp_enabled '
                     "BOOLEAN NOT NULL DEFAULT 0"
                 )
             )
         if "auth_provider" not in cols:
             conn.execute(
                 text(
-                    "ALTER TABLE user ADD COLUMN auth_provider "
+                    'ALTER TABLE "user" ADD COLUMN auth_provider '
                     "VARCHAR NOT NULL DEFAULT 'local'"
                 )
             )
         if "google_sub" not in cols:
-            conn.execute(text("ALTER TABLE user ADD COLUMN google_sub VARCHAR"))
+            conn.execute(text('ALTER TABLE "user" ADD COLUMN google_sub VARCHAR'))
 
 
 # --- Reports (T1.1/Alembic) --------------------------------------------------
@@ -102,9 +104,12 @@ def init_db() -> None:
     from app.services import dbmodel, report_model  # noqa: F401  (register models)
 
     if not _run_alembic_upgrade():
+        # Legacy/offline path: create missing tables, then patch old tables that
+        # predate the migrations. After a successful upgrade the schema is at
+        # head, so the hand-written ALTERs are skipped.
         Base.metadata.create_all(bind=engine)
-    _ensure_user_totp_columns()
-    _ensure_report_verification_column()
+        _ensure_user_totp_columns()
+        _ensure_report_verification_column()
 
 
 def init_db_safe() -> bool:

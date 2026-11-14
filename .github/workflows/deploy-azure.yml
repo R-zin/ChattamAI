@@ -1,11 +1,14 @@
 name: Deploy to Azure Container Apps
 
+# Deploys only after the CI Pipeline has passed on a push to main, and ships the
+# exact commit CI tested. (workflow_run cannot filter by path, so docs-only
+# commits also redeploy; that is harmless because the image is rebuilt from the
+# same code.)
 on:
-  push:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types: [completed]
     branches: [main]
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
   workflow_dispatch:
     inputs:
       environment:
@@ -29,7 +32,14 @@ jobs:
   build-and-deploy:
     name: Build Container & Deploy to Azure
     runs-on: ubuntu-latest
+    # Manual runs always proceed. Automatic runs require a green CI run that was
+    # triggered by a push (not a pull request that merely has a branch named main).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     env:
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
       AZURE_RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP || 'rg-chattamai-prod' }}
       AZURE_CONTAINER_APP_NAME: ${{ secrets.AZURE_CONTAINER_APP_NAME || 'chattamai-prod' }}
       AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
@@ -37,6 +47,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
 
       - name: Log in to Azure
         uses: azure/login@v2
@@ -82,7 +94,7 @@ jobs:
           file: ./Dockerfile
           push: true
           tags: |
-            ${{ steps.resolve-acr.outputs.acr_server }}/chattamai:${{ github.sha }}
+            ${{ steps.resolve-acr.outputs.acr_server }}/chattamai:${{ env.DEPLOY_SHA }}
             ${{ steps.resolve-acr.outputs.acr_server }}/chattamai:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -90,7 +102,7 @@ jobs:
       - name: Deploy Image Revision to Azure Container App
         id: deploy-app
         run: |
-          IMAGE_URI="${{ steps.resolve-acr.outputs.acr_server }}/chattamai:${{ github.sha }}"
+          IMAGE_URI="${{ steps.resolve-acr.outputs.acr_server }}/chattamai:${{ env.DEPLOY_SHA }}"
           ACR_NAME="${{ steps.resolve-acr.outputs.acr_name }}"
           ACR_SERVER="${{ steps.resolve-acr.outputs.acr_server }}"
           TARGET_APP="$AZURE_CONTAINER_APP_NAME"
@@ -139,7 +151,7 @@ jobs:
           az containerapp ingress update \
             --name "$TARGET_APP" \
             --resource-group "$AZURE_RESOURCE_GROUP" \
-            --target-port 8000 >/dev/null 2>&1 || true
+            --target-port 8000
 
       - name: Verify Deployment Health
         run: |
@@ -154,33 +166,49 @@ jobs:
           
           echo "Application FQDN: https://$APP_URL"
           echo "Target Revision: $LATEST_REV"
-          echo "Awaiting health check endpoint (https://$APP_URL/api/health)..."
-          
+          echo "Awaiting readiness (https://$APP_URL/api/health/ready)..."
+          echo "First boot builds the rule index, so this can take several minutes."
+
           SUCCESS=0
-          for i in {1..20}; do
-            STATUS=$(curl -k -s --connect-timeout 5 --max-time 10 -o /tmp/health_resp.json -w "%{http_code}" "https://$APP_URL/api/health" || echo "000")
-            if [ "$STATUS" = "200" ]; then
-              echo "Health check succeeded with HTTP 200 on attempt $i."
-              cat /tmp/health_resp.json
+          STATUS="000"
+          for i in {1..40}; do
+            # No -k: the ingress certificate must be valid.
+            STATUS=$(curl -s --connect-timeout 5 --max-time 10 -o /tmp/health_resp.json -w "%{http_code}" "https://$APP_URL/api/health/ready" || echo "000")
+            if [ "$STATUS" = "200" ] && [ "$(jq -r '.status // empty' /tmp/health_resp.json 2>/dev/null)" = "ok" ]; then
+              echo "Ready (HTTP 200, status ok) on attempt $i."
+              jq . /tmp/health_resp.json
               SUCCESS=1
               break
             fi
-            
+
+            # A 503 body lists exactly what is missing (API key, empty index, DB).
+            ISSUES=$(jq -r '.issues // [] | join("; ")' /tmp/health_resp.json 2>/dev/null || echo "")
+
             # Check if revision provision state is already marked Failed
             REV_STATE=$(az containerapp revision show \
               --name "$TARGET_APP" \
               --revision "$LATEST_REV" \
               --resource-group "$AZURE_RESOURCE_GROUP" \
               --query "properties.provisioningState" -o tsv 2>/dev/null || echo "")
-            
-            echo "Attempt $i: Received HTTP $STATUS (Revision state: ${REV_STATE:-unknown}). Retrying in 5s..."
+
+            echo "Attempt $i: HTTP $STATUS (revision: ${REV_STATE:-unknown}) ${ISSUES:+- $ISSUES}. Retrying in 10s..."
             if [ "$REV_STATE" = "Failed" ] && [ $i -ge 3 ]; then
               echo "::warning::Revision '$LATEST_REV' has failed provisioning. Aborting poll early."
               break
             fi
-            sleep 5
+            sleep 10
           done
-          
+
+          if [ "$SUCCESS" -eq 1 ]; then
+            # Unknown API paths must be a JSON 404 (not the SPA shell with 200).
+            # This also proves the new image is the one serving traffic.
+            NOPE_CODE=$(curl -s -o /tmp/nope.json -w "%{http_code}" -H "Accept: text/html" "https://$APP_URL/api/__deploy_check__" || echo "000")
+            if [ "$NOPE_CODE" != "404" ] || ! jq -e '.detail' /tmp/nope.json >/dev/null 2>&1; then
+              echo "::error::Expected a JSON 404 for an unknown API path but got HTTP $NOPE_CODE."
+              SUCCESS=0
+            fi
+          fi
+
           if [ "$SUCCESS" -ne 1 ]; then
             echo "::error::Health check failed with final status $STATUS."
             echo "=== Target App Ingress & State ==="

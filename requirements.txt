@@ -38,8 +38,10 @@ PyMuPDF>=1.24,<1.27
 python-dotenv==1.2.1
 python-multipart==0.0.20
 
-# Database (existing models; unused by the RAG app for now)
+# Database: users, sessions, recovery codes, reports. SQLite locally; Postgres
+# (e.g. Supabase) via DATABASE_URL for persistence on Azure.
 sqlalchemy==2.0.51
+psycopg[binary]>=3.2,<3.3
 
 # Auth (password hashing + JWT). Both support Python 3.9 and 3.12.
 python-jose[cryptography]==3.5.0

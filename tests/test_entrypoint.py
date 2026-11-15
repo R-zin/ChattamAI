@@ -111,3 +111,18 @@ def test_non_sqlite_database_url_is_left_alone(tmp_path, stub_bin):
     )
     assert result.returncode == 0, result.stderr
     assert "DB=postgresql://u:p@db/app" in result.stdout
+
+
+def test_psycopg_database_url_is_left_alone(tmp_path, stub_bin):
+    data = tmp_path / "data"
+    result = run_entrypoint(
+        tmp_path,
+        stub_bin,
+        {
+            "KBR_DATA_DIR": str(data / "kbr"),
+            "INDEX_DIR": str(data / "index"),
+            "DATABASE_URL": "postgresql+psycopg://u:p@db/app",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert "DB=postgresql+psycopg://u:p@db/app" in result.stdout

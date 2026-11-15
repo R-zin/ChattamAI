@@ -201,6 +201,39 @@ To prevent losing uploaded rules, index embeddings, and user accounts during con
 
 ---
 
+## 6a. Persistent accounts with Supabase (Postgres) - recommended
+
+Accounts, sessions, 2FA recovery codes and reports live in the database. With
+the default SQLite URL they sit on `/app/data`, which is an **EmptyDir** unless
+`enablePersistentStorage=true`, so every new revision, restart or scale-to-zero
+wipes them. Point `DATABASE_URL` at Postgres instead:
+
+1. Create a Supabase project. Under **Connect**, copy the **Session pooler**
+   URI (port `5432`, host `*.pooler.supabase.com`). Use this one: the direct
+   host is IPv6-only, and the transaction pooler (port `6543`) breaks migrations.
+2. Make the URI `postgresql://postgres.<ref>:<password>@<host>:5432/postgres?sslmode=require`
+   (URL-encode special characters in the password).
+3. Store it as a Container App secret and reference it:
+
+   ```bash
+   az containerapp secret set -g rg-chattamai-prod -n chattamai-prod \
+     --secrets database-url='<URI>'
+   az containerapp update -g rg-chattamai-prod -n chattamai-prod \
+     --set-env-vars DATABASE_URL=secretref:database-url
+   ```
+
+   Or pass `databaseUrl` when running `infra/main.bicep` (it creates the same
+   `database-url` secret). Re-deploys of Bicep must pass it again, or the app
+   reverts to SQLite.
+4. `entrypoint.sh` runs `alembic upgrade head` on boot, which creates the
+   tables in Supabase. Register a user with the admin key, force a new revision,
+   and confirm the login still works.
+
+The FAISS index and KBR corpus stay on `/app/data` and are rebuilt on boot, so
+they do not need Supabase.
+
+---
+
 ## 7. Post-Deployment Verification
 
 1. **Verify Health Endpoint**:

@@ -33,6 +33,10 @@ param enablePersistentStorage bool = false
 param secretKey string
 
 @secure()
+@description('SQLAlchemy DATABASE_URL for the user/report store. Use a Postgres URL (e.g. the Supabase session pooler URI, port 5432) so accounts survive new revisions. When empty, falls back to SQLite on /app/data, which is lost unless enablePersistentStorage is true. Always pass it on re-deploys, or the app reverts to SQLite.')
+param databaseUrl string = ''
+
+@secure()
 @description('OpenAI API Key for text-embedding-3-small embeddings.')
 param openAiApiKey string = ''
 
@@ -229,6 +233,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           value: secretKey
         }
         {
+          name: 'database-url'
+          value: empty(databaseUrl) ? 'sqlite:////app/data/chattamai.db' : databaseUrl
+        }
+        {
           name: 'openai-api-key'
           value: empty(openAiApiKey) ? 'none' : openAiApiKey
         }
@@ -304,7 +312,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'DATABASE_URL'
-              value: 'sqlite:////app/data/chattamai.db'
+              secretRef: 'database-url'
             }
             {
               name: 'KBR_DATA_DIR'

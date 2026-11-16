@@ -58,6 +58,7 @@ os.environ.setdefault(
 from app.rag.embeddings import EmbeddingProvider  # noqa: E402
 from app.rag.graph import SYSTEM_ANALYZE_REPAIR  # noqa: E402
 from app.rag.prompts import SYSTEM_ANALYZE, SYSTEM_EXTRACT, SYSTEM_SUMMARY  # noqa: E402
+from app.rag.qa import SYSTEM_QA  # noqa: E402
 from app.rag.vectorstore import RuleVectorStore  # noqa: E402
 
 
@@ -136,6 +137,9 @@ FACTS_TEXT = (
 
 SUMMARY_TEXT = "The plan shows one high-severity setback violation; recommend revision."
 
+#: Canned rulebook answer citing the first excerpt (see ``FakeLLM.qa_mode``).
+QA_ANSWER_TEXT = "The minimum front setback is stated in the cited rule [1]."
+
 
 class FakeLLM:
     """Scripted LLM: returns canned responses keyed on the SYSTEM prompt.
@@ -151,13 +155,23 @@ class FakeLLM:
     payload (repair succeeds), ``"malformed"`` -> still broken (the node sets
     ``error="parse_failed: ..."``). Defaults to ``"malformed"`` so the error
     path is exercisable; set ``repair_mode="ok"`` to test repair recovery.
+
+    ``qa_mode`` scripts the rulebook Q&A answer (``SYSTEM_QA``): ``"ok"`` -> an
+    answer citing excerpt ``[1]``, ``"not_found"`` -> the abstention sentinel,
+    ``"uncited"`` -> an answer with no citation, ``"bad_citation"`` -> an answer
+    citing an excerpt number that does not exist. Anything else is returned as
+    the raw answer body.
     """
 
     def __init__(
-        self, analyze_mode: str = "ok", repair_mode: str = "malformed"
+        self,
+        analyze_mode: str = "ok",
+        repair_mode: str = "malformed",
+        qa_mode: str = "ok",
     ) -> None:
         self.analyze_mode = analyze_mode
         self.repair_mode = repair_mode
+        self.qa_mode = qa_mode
         self.calls: List[Dict[str, str]] = []  # (system, user) pairs seen
 
     def _analyze_body(self, mode: str) -> str:
@@ -181,7 +195,21 @@ class FakeLLM:
             return self._analyze_body(self.repair_mode)
         if system == SYSTEM_SUMMARY:
             return SUMMARY_TEXT
+        if system == SYSTEM_QA:
+            return self._qa_body(self.qa_mode)
         return "UNSCRIPTED SYSTEM PROMPT"
+
+    @staticmethod
+    def _qa_body(mode: str) -> str:
+        if mode == "ok":
+            return QA_ANSWER_TEXT
+        if mode == "not_found":
+            return "NOT_FOUND"
+        if mode == "uncited":
+            return "The minimum front setback is three metres."
+        if mode == "bad_citation":
+            return "The minimum front setback is three metres [9]."
+        return mode
 
 
 # ---------------------------------------------------------------------------

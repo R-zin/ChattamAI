@@ -6,7 +6,17 @@ import Pill from '../components/Pill.jsx'
 import Icon from '../components/Icon.jsx'
 import VerificationAuditBadge from '../components/VerificationAuditBadge.jsx'
 import { toast } from '../components/Toast.jsx'
-import { demoResponse, demoFactGrid, SEVERITY_META, STATUS_META, deriveStatus, downloadReport } from '../data.js'
+import {
+  demoResponse,
+  demoFactGrid,
+  SEVERITY_META,
+  STATUS_META,
+  GROUNDING_META,
+  COVERAGE_META,
+  COVERAGE_GAP_REASON,
+  deriveStatus,
+  downloadReport,
+} from '../data.js'
 
 function useResult() {
   const [resp, setResp] = useState(demoResponse)
@@ -19,6 +29,9 @@ function useResult() {
           setResp({
             ...demoResponse,
             ...parsed,
+            // Evidence about THIS check only: never borrow the demo's.
+            retrieval: parsed.retrieval || null,
+            grounding: parsed.grounding || null,
             verification: parsed.verification || demoResponse.verification,
             trace: demoResponse.trace,
             score: demoResponse.score,
@@ -42,6 +55,67 @@ function Excerpt({ text }) {
         )
       )}
     </p>
+  )
+}
+
+// Whether the finding's cited rule was actually among the retrieved excerpts.
+function GroundingBadge({ item }) {
+  if (!item) return null
+  const meta = GROUNDING_META[item.status]
+  if (!meta) return null
+  return (
+    <span title={item.note || meta.hint}>
+      <Pill kind={meta.pill} dot={false}>
+        <span aria-hidden="true">{meta.glyph}</span> {meta.label}
+      </Pill>
+    </span>
+  )
+}
+
+// Which regulated topics in the plan had a rule retrieved, and which did not.
+function CoveragePanel({ retrieval }) {
+  const coverage = Array.isArray(retrieval?.coverage) ? retrieval.coverage : []
+  if (coverage.length === 0) return null
+  const gaps = coverage.filter((c) => c.status === 'gap')
+  return (
+    <section aria-labelledby="coverage-heading">
+      <div className="flex items-center justify-between border-b border-line pb-2 mb-4">
+        <h4 id="coverage-heading" className="text-[10px] mono text-ink uppercase tracking-widest font-bold">
+          RULE COVERAGE
+        </h4>
+        <span className="text-[9px] mono text-ink-3">
+          {coverage.length - gaps.length}/{coverage.length} TOPICS
+        </span>
+      </div>
+      <div className="bg-surface border border-line p-4 space-y-3">
+        <ul className="divide-y divide-line">
+          {coverage.map((c) => {
+            const meta = COVERAGE_META[c.status] || COVERAGE_META.gap
+            return (
+              <li key={c.topic} className="py-2.5 space-y-1.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-xs text-ink font-semibold">{c.label}</span>
+                  <Pill kind={meta.pill} dot={false}>
+                    <span aria-hidden="true">{meta.glyph}</span> {meta.label}
+                  </Pill>
+                </div>
+                <div className="text-[10px] mono text-ink-2">
+                  {c.status === 'gap'
+                    ? COVERAGE_GAP_REASON[c.reason] || 'No rule was retrieved for this topic.'
+                    : (c.rule_ids || []).join(' · ')}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+        {gaps.length > 0 && (
+          <p className="text-[11px] text-ink-2 border-t border-line pt-3">
+            Topics without a retrieved rule were <strong className="text-ink">not assessed</strong>. They are not
+            confirmed compliant.
+          </p>
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -70,7 +144,7 @@ function EvidenceDrawer({ rule, onClose }) {
         </div>
         <div className="flex-1 overflow-y-auto scroll-mono p-6 space-y-6">
           <div className="grid grid-cols-2 gap-3 border border-line p-4 bg-surface">
-            {[['Rule Identifier', rule.rule_id || 'KBR-2019-SPEC'], ['Source File', rule.source], ['Section Reference', rule.page || 'Gazette Part B'], ['Cosine Score', `${rule.score >= 1 ? rule.score.toFixed(2) : rule.score}`]].map(([k, v]) => (
+            {[['Rule Identifier', rule.rule_id || 'KBR-2019-SPEC'], ['Source File', rule.source], ['Section Reference', [rule.section, rule.page ? (typeof rule.page === 'number' ? `p. ${rule.page}` : rule.page) : null].filter(Boolean).join(' · ') || 'Gazette Part B'], ['Relevance Score', `${rule.score >= 1 ? rule.score.toFixed(2) : rule.score}`]].map(([k, v]) => (
               <div key={k}>
                 <div className="text-[9px] mono text-ink-3 uppercase tracking-wider mb-0.5">{k}</div>
                 <div className="text-xs mono text-ink break-words font-medium">{v}</div>
@@ -98,7 +172,17 @@ export default function Results() {
   const result = resp
   const status = STATUS_META[deriveStatus(resp)]
   const [drawer, setDrawer] = useState(null)
-  const ruleByRef = (ref) => resp.retrieved_rules.find((r) => (r.rule_id && ref.includes(r.rule_id)) || ref.includes(r.rule_id || '::')) || resp.retrieved_rules[0]
+  const groundingByIndex = Object.fromEntries(
+    (resp.grounding?.items || []).map((item) => [item.violation_index, item])
+  )
+  // Prefer the excerpt the grounding check matched to this finding; fall back
+  // to matching the rule id in the reference text.
+  const ruleForFinding = (v, i) => {
+    const cited = groundingByIndex[i]?.citations?.[0]
+    if (cited && resp.retrieved_rules[cited - 1]) return resp.retrieved_rules[cited - 1]
+    const ref = v.rule_reference || ''
+    return resp.retrieved_rules.find((r) => r.rule_id && ref.includes(r.rule_id)) || resp.retrieved_rules[0]
+  }
 
   return (
     <>
@@ -177,9 +261,10 @@ export default function Results() {
                       <div className="flex gap-2.5 items-center flex-wrap">
                         <Pill kind={sm.pill}>{sm.label}</Pill>
                         <span className="text-xs mono text-ink font-semibold">{v.rule_reference}</span>
+                        <GroundingBadge item={groundingByIndex[i]} />
                       </div>
                       <button
-                        onClick={() => setDrawer(ruleByRef(v.rule_reference))}
+                        onClick={() => setDrawer(ruleForFinding(v, i))}
                         className="text-[10px] mono text-ink hover:underline flex items-center gap-1 border border-line px-2 py-1 bg-bg"
                       >
                         INSPECT CLAUSE <Icon name="external-link" />
@@ -228,6 +313,8 @@ export default function Results() {
                 </div>
               </div>
             </div>
+
+            <CoveragePanel retrieval={resp.retrieval} />
 
             <AnalysisTrace trace={resp.trace} />
           </div>

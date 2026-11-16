@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Header } from '../components/AppShell.jsx'
 import { AppFooter } from '../components/Shared.jsx'
 import Pill from '../components/Pill.jsx'
@@ -7,42 +7,169 @@ import { toast } from '../components/Toast.jsx'
 import {
   apiAvailable,
   kbrDocs,
-  kbrStats,
   fetchKbrDocuments,
+  fetchIndexStats,
   searchKbrRules,
+  askRulebook,
   ingestRules,
   uploadKbrDocument,
+  ANSWER_CONFIDENCE_META,
+  SEARCH_MODES,
 } from '../data.js'
 
 const STEPS = ['Loading PDF', 'Chunking', 'Embedding', 'Indexing', 'Complete']
 
+const DOC_STATUS_PILL = { INDEXED: 'pill-ok', 'NOT INDEXED': 'pill-warn', UNKNOWN: 'pill-info' }
+
+// Where an excerpt sits in the rulebook: "Rule 26, Table 4 · CHAPTER IV … · p. 50".
+function locator(rule) {
+  return [rule.section, rule.page ? `p. ${rule.page}` : null].filter(Boolean).join(' · ')
+}
+
+// The stat strip is derived from the live index, never from static numbers.
+function statItems(stats) {
+  if (!stats) {
+    return ['Documents Indexed', 'Chunks Indexed', 'Rules Recognised', 'Embedding Model', 'Retrieval'].map((label) => ({
+      label,
+      value: '—',
+    }))
+  }
+  const docs = Array.isArray(stats.documents) ? stats.documents : []
+  const rules = docs.reduce((n, d) => n + (d.rules || 0), 0)
+  const strategy = stats.retrieval_strategy === 'simple' ? 'Single query' : 'Topic-aware'
+  return [
+    { label: 'Documents Indexed', value: String(docs.length) },
+    { label: 'Chunks Indexed', value: Number(stats.index_size || 0).toLocaleString() },
+    { label: 'Rules Recognised', value: rules.toLocaleString() },
+    { label: 'Embedding Model', value: stats.embedding_model || '—' },
+    { label: 'Retrieval', value: `${strategy} · ${stats.hybrid ? 'Hybrid' : 'Semantic'}`, ok: true },
+  ]
+}
+
+// Render an answer, turning each verified [n] marker into a citation chip.
+function AnswerText({ text }) {
+  const parts = String(text || '').split(/(\[\d{1,2}\])/g)
+  return (
+    <p className="text-sm text-ink leading-relaxed">
+      {parts.map((part, i) =>
+        /^\[\d{1,2}\]$/.test(part) ? (
+          <a
+            key={i}
+            href={`#citation-${part.slice(1, -1)}`}
+            className="mx-0.5 px-1 text-[10px] font-bold text-on-accent bg-accent align-super no-underline"
+            aria-label={`Citation ${part.slice(1, -1)}`}
+          >
+            {part.slice(1, -1)}
+          </a>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </p>
+  )
+}
+
+function Citation({ c }) {
+  return (
+    <li id={`citation-${c.index}`} className="p-4 bg-inset border border-line space-y-2">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <span className="text-xs font-bold text-ink">
+          <span className="text-on-accent bg-accent px-1.5 py-0.5 mr-2">{c.index}</span>
+          {c.rule_id || 'Excerpt'}
+        </span>
+        <span className="text-[10px] text-ink-3">{c.source}</span>
+      </div>
+      {locator(c) && <div className="text-[10px] text-ink-2">{locator(c)}</div>}
+      <p className="text-xs text-ink-2 leading-relaxed">{c.excerpt}</p>
+    </li>
+  )
+}
+
+function RulebookAnswer({ result }) {
+  const meta = ANSWER_CONFIDENCE_META[result.confidence] || ANSWER_CONFIDENCE_META.none
+  const citations = Array.isArray(result.citations) ? result.citations : []
+  const cited = citations.filter((c) => c.cited)
+  const others = citations.filter((c) => !c.cited)
+  return (
+    <div className="space-y-4 pt-4 border-t border-line" role="status" aria-live="polite">
+      <div className="flex items-center gap-3 flex-wrap">
+        <Pill kind={meta.pill}>{meta.label}</Pill>
+        <span className="text-[11px] text-ink-2">{meta.hint}</span>
+      </div>
+      <AnswerText text={result.answer} />
+      {cited.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-[10px] text-ink-3 uppercase tracking-wider font-semibold">Cited rules</h4>
+          <ol className="space-y-2">
+            {cited.map((c) => (
+              <Citation key={c.index} c={c} />
+            ))}
+          </ol>
+        </div>
+      )}
+      {others.length > 0 && (
+        <details className="text-xs">
+          <summary className="cursor-pointer text-ink-2 hover:text-ink">
+            {result.abstained ? 'Rules that were checked' : 'Also retrieved, not cited'} ({others.length})
+          </summary>
+          <ol className="space-y-2 mt-2">
+            {others.map((c) => (
+              <Citation key={c.index} c={c} />
+            ))}
+          </ol>
+        </details>
+      )}
+    </div>
+  )
+}
+
 export default function Knowledge() {
   // Live mode starts empty (never flashes demo documents); demo mode uses mocks.
   const [docList, setDocList] = useState(apiAvailable() ? [] : kbrDocs)
+  const [stats, setStats] = useState(null)
   const [ingesting, setIngesting] = useState(false)
   const [step, setStep] = useState(0)
   const [pct, setPct] = useState(0)
 
   // Rule Search state
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchMode, setSearchMode] = useState('hybrid')
   const [searching, setSearching] = useState(false)
   const [searchResults, setSearchResults] = useState(null)
 
-  const uploadRef = useRef(null)
+  // Rulebook Q&A state
+  const [question, setQuestion] = useState('')
+  const [asking, setAsking] = useState(false)
+  const [answer, setAnswer] = useState(null)
 
-  useEffect(() => {
-    let active = true
-    fetchKbrDocuments()
-      .then((docs) => {
-        if (active && Array.isArray(docs)) setDocList(docs)
-      })
-      .catch((err) => {
-        if (active) toast(`Could not load KBR documents: ${err.message}`, 'danger')
-      })
-    return () => {
-      active = false
+  const uploadRef = useRef(null)
+  const active = useRef(true)
+
+  const refresh = useCallback(async () => {
+    try {
+      const docs = await fetchKbrDocuments()
+      if (active.current && Array.isArray(docs)) setDocList(docs)
+    } catch (err) {
+      if (active.current) toast(`Could not load KBR documents: ${err.message}`, 'danger')
+    }
+    try {
+      const next = await fetchIndexStats()
+      if (active.current) setStats(next)
+    } catch (err) {
+      if (active.current) {
+        setStats(null)
+        toast(`Could not load index statistics: ${err.message}`, 'danger')
+      }
     }
   }, [])
+
+  useEffect(() => {
+    active.current = true
+    refresh()
+    return () => {
+      active.current = false
+    }
+  }, [refresh])
 
   useEffect(() => {
     if (!ingesting) return
@@ -67,12 +194,14 @@ export default function Knowledge() {
     setIngesting(true)
     setPct(0)
     try {
-      await ingestRules(false)
-      toast('Corpus ingestion complete — FAISS vector index updated.', 'ok')
-      const updated = await fetchKbrDocuments()
-      setDocList(updated)
+      const result = await ingestRules(false)
+      const added = typeof result?.chunks === 'number' ? ` ${result.chunks.toLocaleString()} new chunks indexed.` : ''
+      toast(`Corpus ingestion complete.${added}`, 'ok')
+      await refresh()
     } catch (e) {
-      toast(`Ingestion completed: ${e.message}`, 'info')
+      setIngesting(false)
+      setPct(0)
+      toast(`Ingestion failed: ${e.message}`, 'danger')
     }
   }
 
@@ -83,8 +212,7 @@ export default function Knowledge() {
       toast(`Uploading “${f.name}” to KBR corpus…`, 'ok')
       await uploadKbrDocument(f)
       toast(`“${f.name}” uploaded successfully. Ingest rules to rebuild index.`, 'ok')
-      const updated = await fetchKbrDocuments()
-      setDocList(updated)
+      await refresh()
     } catch (err) {
       toast(`Upload failed: ${err.message}`, 'danger')
     }
@@ -95,12 +223,27 @@ export default function Knowledge() {
     if (!searchQuery.trim()) return
     setSearching(true)
     try {
-      const results = await searchKbrRules(searchQuery.trim(), 5)
-      setSearchResults(results)
+      const results = await searchKbrRules(searchQuery.trim(), 5, searchMode)
+      setSearchResults(Array.isArray(results) ? results : [])
     } catch (err) {
       toast(`Search failed: ${err.message}`, 'danger')
     } finally {
       setSearching(false)
+    }
+  }
+
+  const handleAsk = async (e) => {
+    e.preventDefault()
+    const q = question.trim()
+    if (q.length < 3) return
+    setAsking(true)
+    try {
+      setAnswer(await askRulebook(q))
+    } catch (err) {
+      setAnswer(null)
+      toast(`Could not answer: ${err.message}`, 'danger')
+    } finally {
+      setAsking(false)
     }
   }
 
@@ -109,7 +252,7 @@ export default function Knowledge() {
       <Header
         eyebrow="STATUTORY CORPUS"
         title="KBR Knowledge Base"
-        subtitle="Indexed statutory rulebook powering dense vector retrieval and compliance reasoning"
+        subtitle="Indexed statutory rulebook powering hybrid retrieval, cited answers and compliance reasoning"
         action={
           <button
             onClick={handleIngest}
@@ -122,35 +265,91 @@ export default function Knowledge() {
       />
 
       <div className="p-6 md:p-8 space-y-6 bg-bg">
-        {/* Metric Strip */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-px border border-line bg-surface divide-x divide-line">
-          {kbrStats.map((s) => (
+        {/* Metric Strip (live index statistics) */}
+        <dl className="grid grid-cols-2 md:grid-cols-5 gap-px border border-line bg-surface divide-x divide-line">
+          {statItems(stats).map((s) => (
             <div key={s.label} className="bg-surface p-4 hover:bg-surface-2 transition-colors">
-              <div className="text-[10px] mono text-ink-3 uppercase tracking-wider mb-1 font-semibold">{s.label}</div>
-              <div className="text-sm mono text-ink font-bold flex items-center gap-2">
-                {s.ok && <span className="w-1.5 h-1.5 bg-accent inline-block" />}
+              <dt className="text-[10px] mono text-ink-3 uppercase tracking-wider mb-1 font-semibold">{s.label}</dt>
+              <dd className="text-sm mono text-ink font-bold flex items-center gap-2 break-all">
+                {s.ok && <span className="w-1.5 h-1.5 bg-accent inline-block shrink-0" aria-hidden="true" />}
                 {s.value}
-              </div>
+              </dd>
             </div>
           ))}
-        </div>
+        </dl>
 
-        {/* Live Vector Search */}
-        <div className="bg-surface border border-line p-6 space-y-4">
+        {/* Ask the Rulebook */}
+        <section aria-labelledby="ask-heading" className="bg-surface border border-line p-6 space-y-4">
+          <div className="border-b border-line pb-3 space-y-1">
+            <h3 id="ask-heading" className="text-xs font-bold text-ink tracking-widest uppercase flex items-center gap-2 mono">
+              <span className="w-1.5 h-1.5 bg-accent inline-block" aria-hidden="true" /> Ask the Rulebook
+            </h3>
+            <p className="text-xs text-ink-2">
+              Answers are written only from the indexed rules and every statement is cited. If the rules do not cover
+              your question, you are told so instead of given a guess.
+            </p>
+          </div>
+
+          <form onSubmit={handleAsk} className="flex flex-col sm:flex-row gap-3">
+            <label htmlFor="ask-input" className="sr-only">
+              Question for the rulebook
+            </label>
+            <input
+              id="ask-input"
+              type="text"
+              value={question}
+              maxLength={600}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="e.g. What is the minimum front setback for a residential building?"
+              className="flex-1 bg-inset border border-line-strong px-4 py-2.5 text-xs mono text-ink placeholder-ink-3 focus:outline-none focus:border-ink transition-colors"
+            />
+            <button
+              type="submit"
+              disabled={asking || question.trim().length < 3}
+              className="bg-accent text-on-accent font-mono text-xs font-bold px-5 py-2.5 border border-ink hover:bg-accent-strong transition-colors cursor-pointer disabled:opacity-40"
+            >
+              <Icon name="book-open" /> {asking ? 'READING THE RULES…' : 'ASK'}
+            </button>
+          </form>
+
+          {answer && <RulebookAnswer result={answer} />}
+        </section>
+
+        {/* Rule Search */}
+        <section aria-labelledby="search-heading" className="bg-surface border border-line p-6 space-y-4">
           <div className="flex items-center justify-between border-b border-line pb-3">
-            <h3 className="text-xs font-bold text-ink tracking-widest uppercase flex items-center gap-2 mono">
-              <span className="w-1.5 h-1.5 bg-accent inline-block" /> Semantic Rule Search
+            <h3 id="search-heading" className="text-xs font-bold text-ink tracking-widest uppercase flex items-center gap-2 mono">
+              <span className="w-1.5 h-1.5 bg-accent inline-block" aria-hidden="true" /> Rule Search
             </h3>
           </div>
 
           <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
+            <label htmlFor="search-input" className="sr-only">
+              Search the rules
+            </label>
             <input
+              id="search-input"
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search Kerala Building Rules (e.g. front setback, FAR, coverage, staircase, fire escape)…"
-              className="flex-1 bg-inset border border-line px-4 py-2.5 text-xs mono text-ink placeholder-ink-3 focus:outline-none focus:border-ink transition-colors"
+              className="flex-1 bg-inset border border-line-strong px-4 py-2.5 text-xs mono text-ink placeholder-ink-3 focus:outline-none focus:border-ink transition-colors"
             />
+            <label htmlFor="search-mode" className="sr-only">
+              Search mode
+            </label>
+            <select
+              id="search-mode"
+              value={searchMode}
+              onChange={(e) => setSearchMode(e.target.value)}
+              className="bg-inset border border-line-strong px-3 py-2.5 text-xs mono text-ink focus:outline-none focus:border-ink"
+            >
+              {SEARCH_MODES.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label} — {m.hint}
+                </option>
+              ))}
+            </select>
             <button
               type="submit"
               disabled={searching || !searchQuery.trim()}
@@ -161,7 +360,7 @@ export default function Knowledge() {
           </form>
 
           {searchResults && (
-            <div className="space-y-3 mt-4 pt-4 border-t border-line">
+            <div className="space-y-3 mt-4 pt-4 border-t border-line" aria-live="polite">
               {searchResults.length === 0 ? (
                 <div className="text-xs mono text-ink-3 p-4 bg-inset border border-line text-center">
                   NO MATCHING BUILDING RULES FOUND FOR “{searchQuery}”.
@@ -169,26 +368,34 @@ export default function Knowledge() {
               ) : (
                 searchResults.map((r, i) => (
                   <div key={i} className="p-4 bg-inset border border-line space-y-2 hover:border-ink transition-colors">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
                       <span className="text-xs font-bold mono text-ink">{r.rule_id || `CHUNK MATCH #${i + 1}`}</span>
                       <span className="text-[10px] mono text-on-accent bg-accent px-2 py-0.5 font-bold">
-                        SIMILARITY: {r.score}
+                        RELEVANCE: {r.score}
                       </span>
                     </div>
+                    {locator(r) && <div className="text-[10px] text-ink-2">{locator(r)}</div>}
                     <p className="text-xs text-ink-2 leading-relaxed font-mono">{r.excerpt}</p>
-                    {r.source && <div className="text-[10px] mono text-ink-3">SOURCE // {r.source}</div>}
+                    <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-[10px] mono text-ink-3">
+                      {r.source && <span>SOURCE // {r.source}</span>}
+                      {typeof r.dense_score === 'number' && <span>SEMANTIC {r.dense_score.toFixed(2)}</span>}
+                      {typeof r.lexical_score === 'number' && <span>KEYWORD {r.lexical_score.toFixed(2)}</span>}
+                      {Array.isArray(r.matched_terms) && r.matched_terms.length > 0 && (
+                        <span>MATCHED: {r.matched_terms.join(', ')}</span>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
             </div>
           )}
-        </div>
+        </section>
 
         {/* Documents Table */}
         <div className="bg-surface border border-line overflow-hidden">
           <div className="px-5 py-3.5 border-b border-line bg-surface-2 flex items-center justify-between">
             <h3 className="text-xs font-bold text-ink tracking-widest uppercase flex items-center gap-2 mono">
-              <span className="w-1.5 h-1.5 bg-accent inline-block" /> Ingested Corpus Documents
+              <span className="w-1.5 h-1.5 bg-accent inline-block" aria-hidden="true" /> Ingested Corpus Documents
             </h3>
             <div>
               <input
@@ -207,18 +414,18 @@ export default function Knowledge() {
             </div>
           </div>
           <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="Indexed KBR documents">
-            <table className="w-full min-w-[700px] text-left border-collapse">
+            <table className="w-full min-w-[760px] text-left border-collapse">
               <thead>
                 <tr className="border-b border-line bg-inset">
-                  {['Document File', 'Format', 'Pages', 'Chunks', 'Indexed On', 'Index Status'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-[10px] mono text-ink-3 uppercase tracking-wider font-semibold">{h}</th>
+                  {['Document File', 'Format', 'Pages', 'Rules', 'Chunks', 'File Updated', 'Index Status'].map((h) => (
+                    <th key={h} scope="col" className="px-4 py-3 text-[10px] mono text-ink-3 uppercase tracking-wider font-semibold">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {docList.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-6 text-xs mono text-ink-3 text-center">
+                    <td colSpan={7} className="px-4 py-6 text-xs mono text-ink-3 text-center">
                       No KBR documents found. Upload a document, then run ingestion.
                     </td>
                   </tr>
@@ -228,9 +435,10 @@ export default function Knowledge() {
                     <td className="px-4 py-3.5 text-xs font-semibold text-ink">{d.doc}</td>
                     <td className="px-4 py-3.5"><span className="text-[10px] mono px-2 py-0.5 border border-line bg-bg text-ink-2">{d.type}</span></td>
                     <td className="px-4 py-3.5 text-xs mono text-ink-2">{d.pages}</td>
+                    <td className="px-4 py-3.5 text-xs mono text-ink-2">{d.rules ?? '—'}</td>
                     <td className="px-4 py-3.5 text-xs mono text-ink font-medium">{d.chunks}</td>
                     <td className="px-4 py-3.5 text-[10px] mono text-ink-3">{d.indexed}</td>
-                    <td className="px-4 py-3.5"><Pill kind="pill-ok">{d.status}</Pill></td>
+                    <td className="px-4 py-3.5"><Pill kind={DOC_STATUS_PILL[d.status] || 'pill-info'}>{d.status}</Pill></td>
                   </tr>
                 ))}
               </tbody>

@@ -1,0 +1,110 @@
+{
+  "description": "Golden retrieval cases for the bundled corpus (data/kbr): the sample excerpt and the Kerala Panchayat Building Rules 2019 gazette. Each expectation names a regulated subject and the rule ids that govern it; an expectation is met when any retrieved excerpt is filed under one of those rules. Rule numbers were read from the gazette text.",
+  "cases": [
+    {
+      "id": "facts-residential-full",
+      "kind": "facts",
+      "query": "- plot area: 240 sq.m\n- built-up area: 410 sq.m\n- floor space index (FSI): 1.7\n- number of floors: 3\n- building height: 12 m\n- front setback: 1 m\n- rear setback: 2 m\n- side setbacks: 1 m\n- road width abutting the plot: 4 m\n- parking provision: 1 car space\n- occupancy/usage type: residential (Group A1)\n- staircase: one staircase, 1.0 m wide",
+      "expect": [
+        {"subject": "setbacks", "rules": ["5.3", "Rule 26"]},
+        {"subject": "fsi", "rules": ["Rule 7", "Rule 27"]},
+        {"subject": "height", "rules": ["Rule 7", "Rule 24"]},
+        {"subject": "parking", "rules": ["11.2", "Rule 29"]},
+        {"subject": "access", "rules": ["5.3", "Rule 28"]},
+        {"subject": "stairs", "rules": ["Rule 16", "Rule 35"]}
+      ]
+    },
+    {
+      "id": "facts-commercial",
+      "kind": "facts",
+      "query": "- plot area: 800 sq.m\n- built-up area: 2400 sq.m\n- FAR: 3.0\n- ground coverage: 70%\n- number of floors: 4\n- building height: 15 m\n- front setback: 3 m\n- parking provision: 10 car spaces\n- occupancy/usage type: commercial (Group F mercantile)\n- road width abutting the plot: 6 m",
+      "expect": [
+        {"subject": "setbacks", "rules": ["5.3", "Rule 26"]},
+        {"subject": "fsi", "rules": ["Rule 7", "Rule 27"]},
+        {"subject": "coverage", "rules": ["Rule 27"]},
+        {"subject": "parking", "rules": ["11.2", "Rule 29"]},
+        {"subject": "access", "rules": ["5.3", "Rule 28"]}
+      ]
+    },
+    {
+      "id": "facts-small-house",
+      "kind": "facts",
+      "query": "- plot area: 110 sq.m\n- built-up area: 95 sq.m\n- number of floors: 2\n- building height: 7 m\n- front setback: 1.5 m\n- rear setback: 1 m\n- parking provision: not specified\n- occupancy/usage type: single family residential",
+      "expect": [
+        {"subject": "setbacks", "rules": ["5.3", "Rule 26", "Rule 50"]},
+        {"subject": "height", "rules": ["Rule 7", "Rule 24"]},
+        {"subject": "plot", "rules": ["Rule 5", "Rule 50", "Rule 22"]}
+      ]
+    },
+    {
+      "id": "facts-free-text",
+      "kind": "facts",
+      "query": "3 floor residential building, 12m tall, 1m front setback, FSI 2.4, two car parking spaces",
+      "expect": [
+        {"subject": "setbacks", "rules": ["5.3", "Rule 26"]},
+        {"subject": "fsi", "rules": ["Rule 7", "Rule 27"]},
+        {"subject": "parking", "rules": ["11.2", "Rule 29"]}
+      ]
+    },
+    {
+      "id": "q-front-setback",
+      "kind": "question",
+      "query": "What is the minimum front setback for a residential building?",
+      "expect": [{"subject": "setbacks", "rules": ["5.3", "Rule 26"]}]
+    },
+    {
+      "id": "q-far",
+      "kind": "question",
+      "query": "What is the maximum FAR allowed for a residential building?",
+      "expect": [{"subject": "fsi", "rules": ["Rule 7", "Rule 27"]}]
+    },
+    {
+      "id": "q-parking",
+      "kind": "question",
+      "query": "How many car parking spaces are required for an apartment?",
+      "expect": [{"subject": "parking", "rules": ["11.2", "Rule 29"]}]
+    },
+    {
+      "id": "q-staircase",
+      "kind": "question",
+      "query": "What is the minimum width of a staircase?",
+      "expect": [{"subject": "stairs", "rules": ["Rule 16", "Rule 35"]}]
+    },
+    {
+      "id": "q-access-width",
+      "kind": "question",
+      "query": "How wide must the road giving access to the plot be?",
+      "expect": [{"subject": "access", "rules": ["5.3", "Rule 28"]}]
+    },
+    {
+      "id": "q-coverage",
+      "kind": "question",
+      "query": "What is the maximum ground coverage permitted on a plot?",
+      "expect": [{"subject": "coverage", "rules": ["Rule 27"]}]
+    },
+    {
+      "id": "q-building-height",
+      "kind": "question",
+      "query": "How tall can a building be?",
+      "expect": [{"subject": "height", "rules": ["Rule 7", "Rule 24"]}]
+    },
+    {
+      "id": "q-rainwater",
+      "kind": "question",
+      "query": "Is rainwater harvesting mandatory for new buildings?",
+      "expect": [{"subject": "rainwater", "rules": ["Rule 76"]}]
+    },
+    {
+      "id": "q-lift",
+      "kind": "question",
+      "query": "When does a building need a lift?",
+      "expect": [{"subject": "lift", "rules": ["Rule 40"]}]
+    },
+    {
+      "id": "q-permit-validity",
+      "kind": "question",
+      "query": "How can a building permit be extended or renewed?",
+      "expect": [{"subject": "permit", "rules": ["Rule 15"]}]
+    }
+  ]
+}

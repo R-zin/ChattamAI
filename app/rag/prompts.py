@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import Any, List, Optional
 
 SYSTEM_EXTRACT = (
     "You are a senior building-plan examiner for the Kerala Local Self-Government "
@@ -55,16 +55,39 @@ PROMPT_ANALYZE_USER = (
 )
 
 
-def build_analyze_user(facts: str, rules: str) -> str:
-    return PROMPT_ANALYZE_USER.format(facts=facts, rules=rules)
+PROMPT_ANALYZE_GAPS = (
+    "\n\nTOPICS WITH NO RULE RETRIEVED: {gaps}\n"
+    "No excerpt above covers these topics. Do not infer or recall a requirement "
+    "for them. For each plan fact on such a topic, add one entry with severity "
+    "'info', rule_reference 'not retrieved' and a description beginning "
+    "'needs review - rule not retrieved'."
+)
+
+
+def build_analyze_user(facts: str, rules: str, gaps: Optional[List[str]] = None) -> str:
+    """The analyze prompt; ``gaps`` names topics retrieval found no rule for."""
+    user = PROMPT_ANALYZE_USER.format(facts=facts, rules=rules)
+    if gaps:
+        marker = "\n\nReturn the JSON analysis now."
+        body = user[: -len(marker)] if user.endswith(marker) else user
+        user = body + PROMPT_ANALYZE_GAPS.format(gaps=", ".join(gaps)) + marker
+    return user
 
 
 def format_rules_for_prompt(rules: list[tuple[str, dict, float]]) -> str:
+    """Numbered excerpts, each labelled with where it sits in the rulebook."""
     lines = []
     for i, (text, meta, _score) in enumerate(rules, start=1):
         src = meta.get("source", "unknown")
         rid = meta.get("rule_id") or meta.get("chunk", i)
-        lines.append(f"[{i}] ({src} / {rid})\n{text}")
+        label = f"{src} / {rid}"
+        section = meta.get("section")
+        if section:
+            label += f" / {section}"
+        page = meta.get("page")
+        if page:
+            label += f" / p. {page}"
+        lines.append(f"[{i}] ({label})\n{text}")
     return "\n\n".join(lines)
 
 

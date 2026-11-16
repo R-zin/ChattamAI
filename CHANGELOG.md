@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Structure-aware ingest** (`app/rag/structure.py`): chunks follow chapters, rules and tables, never cross a rule boundary, and carry a citable `rule_id` (`Rule 26, Table 4`), heading breadcrumb and PDF page. The breadcrumb is embedded and keyword-indexed with the text. Running page footers are stripped.
+- **Topic-aware multi-query retrieval** (`app/rag/retrieval.py`): the fact sheet is split by regulated topic, each topic is queried in the rulebook's vocabulary, all queries share one embedding call, and rankings are combined with reciprocal-rank fusion and MMR. Select with `RETRIEVAL_STRATEGY` (`advanced` default, `simple` = previous behaviour).
+- **Coverage grading with a corrective pass**: `retrieval.coverage` in the check response says, per regulated topic, whether a rule was retrieved. Gaps are passed to the analyst and summary prompts so an unretrieved topic is reported as not assessed instead of silently skipped.
+- **Citation grounding** (`app/rag/grounding.py`): each finding's cited rule and required value are checked against the retrieved excerpts and reported in `grounding` (`grounded` / `partial` / `ungrounded` / `uncited`). Findings are never removed.
+- **Rulebook Q&A**: `POST /api/rules/ask` returns an answer with server-verified `[n]` citations, or abstains when the indexed rules do not cover the question.
+- **Search modes and explanations**: `GET /api/rules/search` accepts `mode=hybrid|dense|lexical|advanced` and returns per-channel scores, matched terms, section and page.
+- **Index statistics**: `GET /api/kbr/index` reports chunks, rules and pages per indexed document.
+- **Domain lexicon** (`app/rag/lexicon.py`): normalising BM25 tokenizer (punctuation, plurals, units, clause numbers) and query-side synonyms (setback/yard/open space, FAR/FSI).
+- **Retrieval evaluation**: `scripts/eval_retrieval.py` and `tests/fixtures/retrieval_golden.json` measure recall@k and MRR offline against the bundled rulebook; a test gates the shipped configuration.
+- **UI**: "Ask the Rulebook" panel, search-mode selector and live index statistics on the Knowledge page; citation badges and a rule-coverage panel on the Results page.
+
+### Changed
+- **Index format v4**: existing indexes are discarded on start and rebuilt by the startup ingest (or `POST /api/ingest`). This re-embeds the corpus once.
+- Default `TOP_K` raised from 6 to 8 so each regulated topic in a full fact sheet can keep its rule.
+- The analysis memo key now includes the retrieved rule set, so a different `top_k` or strategy never replays another prompt's answer.
+- `GET /api/rules/search` now honours `AUTH_REQUIRED` and is rate limited, like the other paid endpoints.
+
+### Fixed
+- Knowledge page showed static demo statistics and estimated page/chunk counts in live mode; it now shows real numbers from the index, and marks uploaded-but-not-ingested documents as `NOT INDEXED`.
+- Knowledge page reported a failed ingestion as "Ingestion completed".
+
 ## [1.0.0] - 2026-10-27
 
 ### Added

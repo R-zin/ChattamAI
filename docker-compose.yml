@@ -23,7 +23,7 @@ services:
       - NVIDIA_BASE_URL=${NVIDIA_BASE_URL}
       - OCR_ENABLED=${OCR_ENABLED:-true}
       - MIN_SCORE=${MIN_SCORE:-0.0}
-      - TOP_K=${TOP_K:-6}
+      - TOP_K=${TOP_K:-8}
       - SECRET_KEY=${SECRET_KEY:-chattamai-docker-secret-change-me}
       - AUTH_REQUIRED=${AUTH_REQUIRED:-false}
       - TOTP_REQUIRED=${TOTP_REQUIRED:-false}

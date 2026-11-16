@@ -8,8 +8,9 @@ The store now fuses two signals: the dense cosine similarity (L2-normalised,
 ``IndexFlatIP``) and a BM25 lexical score, normalised to comparable scales and
 summed with the dense path weighted ~0.7 (``RAG_HYBRID_WEIGHT``). Dense-only
 retrieval (the previous behaviour) is preserved via ``dense_only_search`` and
-``similarity_search(use_hybrid=False)``. ``_INDEX_VERSION`` was bumped 2 -> 3 so
-old on-disk indexes are ignored and rebuilt.
+``similarity_search(use_hybrid=False)``. ``_INDEX_VERSION`` is bumped whenever
+the on-disk semantics change (2 -> 3 for hybrid retrieval, 3 -> 4 for
+structure-aware contextual chunks) so old indexes are ignored and rebuilt.
 """
 
 from __future__ import annotations
@@ -140,8 +141,9 @@ def test_hybrid_search_is_deterministic(index_dir):
 # ---------------------------------------------------------------------------
 # version bump ignores old-format indexes
 # ---------------------------------------------------------------------------
-def test_version_is_bumped_to_3():
-    assert _INDEX_VERSION == 3
+def test_version_is_bumped_to_4():
+    # 4 = structure-aware chunks embedded together with their heading context.
+    assert _INDEX_VERSION == 4
 
 
 def test_old_version_index_is_ignored_and_rebuilt(index_dir):
@@ -151,7 +153,7 @@ def test_old_version_index_is_ignored_and_rebuilt(index_dir):
     make_populated_store(FakeEmbeddingProvider(), index_dir)
     with open(index_dir / "rules_meta.json", encoding="utf-8") as fh:
         data = json.load(fh)
-    data["version"] = 2  # pretend the index was written by the old format
+    data["version"] = 3  # pretend the index was written by the previous format
     with open(index_dir / "rules_meta.json", "w", encoding="utf-8") as fh:
         json.dump(data, fh)
 

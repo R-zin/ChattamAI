@@ -14,6 +14,14 @@ behaviour) is preserved via ``dense_only_search`` and by passing
 ``use_hybrid=False``. An optional approximate-nearest-neighbour (ANN) dense
 index (IVF flat / HNSW) is selectable behind ``ann_backend``; the exact
 ``IndexFlatIP`` flat index stays the default.
+
+Contextual chunks (v4): a chunk whose metadata carries a ``context`` (its heading
+breadcrumb, see app/rag/structure.py) is embedded and lexically indexed as
+``context + text``, so it is findable by the words of its headings; the stored
+and returned text stays the bare excerpt. ``score_queries`` scores a batch of
+queries against every chunk in one embedding call and exposes the dense,
+lexical and fused channels separately - the primitive the multi-query retriever
+(app/rag/retrieval.py) and the search "explain" view are built on.
 """
 
 from __future__ import annotations
@@ -22,21 +30,26 @@ import hashlib
 import json
 import logging
 import os
+import re
+from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Dict, FrozenSet, List, Optional, Tuple
 
 import faiss
 import numpy as np
 
 from app.rag.embeddings import EmbeddingProvider, l2_normalize
+from app.rag.lexicon import expand_query_tokens, tokenize
 
 logger = logging.getLogger(__name__)
 
 # Bump when the on-disk layout or similarity semantics change. A saved index
 # whose version does not match is ignored and rebuilt, so we never mix old
 # L2-distance vectors with new cosine-similarity vectors. 2 -> 3 introduces
-# hybrid (BM25 + cosine) retrieval and the optional ANN dense index.
-_INDEX_VERSION = 3
+# hybrid (BM25 + cosine) retrieval and the optional ANN dense index. 3 -> 4:
+# chunks are structure-aware and embedded together with their heading context,
+# so vectors written by v3 are not comparable.
+_INDEX_VERSION = 4
 
 # BM25 is a pure-python optional dependency. If it is not installed we degrade
 # gracefully to dense-only retrieval (``hybrid_available`` is False).
@@ -45,13 +58,35 @@ try:  # pragma: no cover - exercised indirectly when rank_bm25 is absent
 except Exception:  # noqa: BLE001 - any import failure -> dense-only fallback
     BM25Okapi = None  # type: ignore[assignment]
 
-# Whitespace tokenizer for the BM25 lexical index (case-insensitive).
-_TOKEN_SPLIT = str.split
-
 
 def _tokenize(text: str) -> List[str]:
-    """Lower-cased whitespace tokens for the BM25 lexical index."""
-    return _TOKEN_SPLIT(text.lower())
+    """Normalised tokens for the BM25 lexical index (see app/rag/lexicon.py)."""
+    return tokenize(text)
+
+
+_RULE_LABEL_RE = re.compile(
+    r"^(?:(?:Rule|Section|Regulation|Clause)\s+\d|\d+(?:\.\d+)*$)"
+)
+
+
+def _index_text(text: str, meta: Optional[dict]) -> str:
+    """The text a chunk is embedded and lexically indexed as.
+
+    A chunk's heading breadcrumb (``meta["context"]``) is prepended so the
+    chunk matches queries phrased in the words of its headings.
+    """
+    context = (meta or {}).get("context")
+    return f"{context}\n{text}" if context else text
+
+
+@dataclass
+class QueryScores:
+    """Per-chunk scores of one query, aligned with chunk ids."""
+
+    query: str
+    dense: List[float]  # cosine similarity, [-1, 1]
+    lexical: List[float]  # BM25 scaled to [0, 1] for this query
+    fused: List[float]  # the hybrid ranking score
 
 
 def _minmax_normalize(scores: List[float]) -> List[float]:
@@ -154,6 +189,10 @@ class RuleVectorStore:
         self._metas: List[dict] = []
         self._hashes: set[str] = set()
         self._bm25: Optional[object] = None  # BM25Okapi instance, rebuilt lazily
+        # Derived, in-memory only: what each chunk is indexed as (context +
+        # text) and its token set (for redundancy checks during retrieval).
+        self._index_texts: List[str] = []
+        self._token_sets: List[FrozenSet[str]] = []
 
     # -- lexical (BM25) index ---------------------------------------------
     @property
@@ -167,13 +206,15 @@ class RuleVectorStore:
         Deterministic and offline. A no-op when the dependency is missing
         (store falls back to dense-only retrieval).
         """
-        if not self.hybrid_available:
+        self._index_texts = [
+            _index_text(t, m) for t, m in zip(self._texts, self._metas)
+        ]
+        tokenized = [_tokenize(t) for t in self._index_texts]
+        self._token_sets = [frozenset(toks) for toks in tokenized]
+        if not self.hybrid_available or not tokenized:
             self._bm25 = None
             return
-        if not self._texts:
-            self._bm25 = None
-            return
-        self._bm25 = BM25Okapi([_tokenize(t) for t in self._texts])
+        self._bm25 = BM25Okapi(tokenized)
 
     def content_version(self) -> str:
         """Fingerprint of the index contents (changes on any add/reset/rebuild).
@@ -290,7 +331,7 @@ class RuleVectorStore:
             self._texts = []
             self._metas = []
             self._hashes = set()
-            self._bm25 = None
+            self._rebuild_bm25()
 
     def reset(self) -> None:
         """Drop all vectors and metadata (used for a full rebuild of the index)."""
@@ -298,7 +339,7 @@ class RuleVectorStore:
         self._texts = []
         self._metas = []
         self._hashes = set()
-        self._bm25 = None
+        self._rebuild_bm25()
         self._save()
 
     # -- mutation ----------------------------------------------------------
@@ -323,7 +364,9 @@ class RuleVectorStore:
         keep_metas: List[dict] = []
         for i, text in enumerate(texts):
             meta = metas[i] if metas else {}
-            h = _content_hash(text)
+            # Hash what is indexed: the same sentence under two different
+            # headings is two distinct, separately retrievable chunks.
+            h = _content_hash(_index_text(text, meta))
             if dedup and h in self._hashes:
                 continue  # already indexed
             self._hashes.add(h)
@@ -335,7 +378,9 @@ class RuleVectorStore:
         if not keep_texts:
             return 0
 
-        embeddings = self.provider.embed(keep_texts)
+        embeddings = self.provider.embed(
+            [_index_text(t, m) for t, m in zip(keep_texts, keep_metas)]
+        )
         # Normalise -> inner product ranks by cosine similarity.
         embeddings = l2_normalize(np.ascontiguousarray(embeddings, dtype="float32"))
         self._train_if_needed(embeddings)
@@ -376,7 +421,114 @@ class RuleVectorStore:
         lexical index is unavailable (dense-only fallback)."""
         if not self.hybrid_available or self._bm25 is None:
             return [0.0] * self.size
-        return [float(s) for s in self._bm25.get_scores(_tokenize(query))]  # type: ignore[union-attr]
+        tokens = expand_query_tokens(query, _tokenize(query))
+        return [float(s) for s in self._bm25.get_scores(tokens)]  # type: ignore[union-attr]
+
+    def _fuse(self, dense_raw: List[float], bm25_raw: List[float]) -> List[float]:
+        """Weighted fusion of the two channels into one score per chunk."""
+        # Floor ANN misses (-inf) at the current minimum so min-max works.
+        finite = [s for s in dense_raw if s != float("-inf")]
+        floor = min(finite) if finite else 0.0
+        dense = [s if s != float("-inf") else floor for s in dense_raw]
+        if not self.hybrid_available:
+            return dense
+        dense_norm = _minmax_normalize(dense)
+        bm25_norm = _max_normalize(bm25_raw)
+        alpha = self.hybrid_weight
+        return [
+            alpha * dense_norm[i] + (1.0 - alpha) * bm25_norm[i]
+            for i in range(len(dense))
+        ]
+
+    # -- batch scoring / introspection (used by app/rag/retrieval.py) -------
+    def score_queries(self, queries: List[str]) -> List[QueryScores]:
+        """Score several queries against every chunk with ONE embedding call.
+
+        Returns one :class:`QueryScores` per query. The dense channel is the
+        raw cosine similarity, the lexical channel is BM25 scaled to [0, 1]
+        per query, and ``fused`` is the same hybrid score ``similarity_search``
+        ranks by. Empty when the index is empty.
+        """
+        n = self.size
+        if self._index is None or n == 0 or not queries:
+            return []
+        q = self.provider.embed(list(queries))
+        q = l2_normalize(np.ascontiguousarray(q, dtype="float32"))
+        scores, idxs = self._index.search(q, n)  # type: ignore[union-attr]
+        out: List[QueryScores] = []
+        for row, query in enumerate(queries):
+            dense = [float("-inf")] * n
+            for score, idx in zip(scores[row], idxs[row]):
+                if idx != -1:
+                    dense[int(idx)] = float(score)
+            bm25_raw = self._bm25_scores(query)
+            fused = self._fuse(dense, bm25_raw)
+            finite = [s for s in dense if s != float("-inf")]
+            floor = min(finite) if finite else 0.0
+            out.append(
+                QueryScores(
+                    query=query,
+                    dense=[s if s != float("-inf") else floor for s in dense],
+                    lexical=_max_normalize(bm25_raw),
+                    fused=fused,
+                )
+            )
+        return out
+
+    def chunk(self, idx: int) -> Tuple[str, dict]:
+        """The stored ``(text, meta)`` of chunk ``idx``."""
+        return self._texts[idx], self._metas[idx]
+
+    def index_text(self, idx: int) -> str:
+        """What chunk ``idx`` is indexed as (heading context + text)."""
+        return self._index_texts[idx]
+
+    def token_set(self, idx: int) -> FrozenSet[str]:
+        """Normalised lexical tokens of chunk ``idx`` (context included)."""
+        return self._token_sets[idx]
+
+    def document_stats(self) -> List[Dict[str, object]]:
+        """Per-source summary of what is indexed: chunks, rules, pages."""
+        stats: Dict[str, Dict[str, object]] = {}
+        for meta in self._metas:
+            source = str(meta.get("source") or "unknown")
+            entry = stats.setdefault(
+                source, {"source": source, "chunks": 0, "rules": set(), "pages": 0}
+            )
+            entry["chunks"] = int(entry["chunks"]) + 1  # type: ignore[arg-type]
+            # Count rules and numbered sections ("Rule 26", "5.3"), folding
+            # sub-rules and tables into their rule; chapters, appendices and
+            # positional chunk ids are not rules.
+            rule_id = str(meta.get("rule_id") or "")
+            if _RULE_LABEL_RE.match(rule_id):
+                entry["rules"].add(rule_id.split("(")[0].split(",")[0].strip())  # type: ignore[union-attr]
+            page = meta.get("page")
+            if isinstance(page, int) and page > int(entry["pages"]):  # type: ignore[arg-type]
+                entry["pages"] = page
+        return [
+            {
+                "source": entry["source"],
+                "chunks": entry["chunks"],
+                "rules": len(entry["rules"]),  # type: ignore[arg-type]
+                "pages": entry["pages"] or None,
+            }
+            for entry in sorted(stats.values(), key=lambda e: str(e["source"]))
+        ]
+
+    def lexical_search(self, query: str, k: int = 6) -> List[Tuple[str, dict, float]]:
+        """Keyword-only (BM25) retrieval; score is BM25 scaled to [0, 1].
+
+        Chunks with no lexical match at all are never returned.
+        """
+        if self._index is None or self.size == 0:
+            return []
+        scores = _max_normalize(self._bm25_scores(query))
+        order = sorted(range(len(scores)), key=lambda i: (-scores[i], i))
+        return [
+            (self._texts[i], self._metas[i], float(scores[i]))
+            for i in order[: min(k, len(order))]
+            if scores[i] > 0.0
+        ]
 
     def similarity_search(
         self,
@@ -424,16 +576,7 @@ class RuleVectorStore:
         n = self.size
         k = min(k, n)
 
-        dense_raw = self._dense_cosine_scores(query)
-        # Floor ANN misses (-inf) at the current minimum so min-max works.
-        finite = [s for s in dense_raw if s != float("-inf")]
-        floor = min(finite) if finite else 0.0
-        dense_raw = [s if s != float("-inf") else floor for s in dense_raw]
-        dense_norm = _minmax_normalize(dense_raw)
-        bm25_norm = _max_normalize(self._bm25_scores(query))
-
-        alpha = self.hybrid_weight
-        fused = [alpha * dense_norm[i] + (1.0 - alpha) * bm25_norm[i] for i in range(n)]
+        fused = self._fuse(self._dense_cosine_scores(query), self._bm25_scores(query))
         # Deterministic descending sort; ties broken by index (stable).
         order = sorted(range(n), key=lambda i: (-fused[i], i))
         results: List[Tuple[str, dict, float]] = []

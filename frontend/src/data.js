@@ -3,7 +3,9 @@
 // Honesty boundary (from the design system): the live FastAPI backend emits
 //   - extracted_facts: string[]
 //   - violations[]:     { rule_reference, severity(high|medium|low|info), description, plan_value?, required_value? }
-//   - retrieved_rules[]:{ source<filename>, rule_id:null, excerpt, score<FAISS cosine, higher=more relevant> }
+//   - retrieved_rules[]:{ source<filename>, rule_id, section?, page?, topics[], excerpt, score<higher=more relevant> }
+//   - retrieval:        { strategy, queries[], coverage[{topic,label,status,rule_ids,reason}], gaps[] }
+//   - grounding:        { score, grounded, partial, ungrounded, uncited, items[{violation_index,status,citations,note}] }
 // It does NOT emit an overall verdict enum, a 0-100 score, per-fact confidence,
 // rule numbering, page numbers, or persisted history. Those are PRESENTATIONAL —
 // we derive a display status from the real payload and treat the rest as framing.
@@ -90,6 +92,42 @@ export const SEVERITY_META = {
   info: { label: 'INFO', pill: 'pill-info' },
 }
 
+// Citation grounding of a finding (backend: app/rag/grounding.py). Colour is
+// never the only signal: each status has its own label and glyph.
+export const GROUNDING_META = {
+  grounded: { label: 'CITATION VERIFIED', pill: 'pill-ok', glyph: '✓', hint: 'The cited rule was retrieved and supports the required value.' },
+  partial: { label: 'PARTLY VERIFIED', pill: 'pill-warn', glyph: '◐', hint: 'Only the citation or the value could be matched to the retrieved rules.' },
+  ungrounded: { label: 'CITATION NOT FOUND', pill: 'pill-danger', glyph: '✕', hint: 'The cited rule is not among the retrieved excerpts. Verify manually.' },
+  uncited: { label: 'NO RULE CITED', pill: 'pill-info', glyph: '?', hint: 'The finding does not name an identifiable rule.' },
+}
+
+// Whether a rule was retrieved for a regulated topic (app/rag/retrieval.py).
+export const COVERAGE_META = {
+  covered: { label: 'RULE RETRIEVED', pill: 'pill-ok', glyph: '✓' },
+  recovered: { label: 'FOUND BY KEYWORD', pill: 'pill-info', glyph: '↺' },
+  gap: { label: 'NO RULE RETRIEVED', pill: 'pill-warn', glyph: '!' },
+}
+
+export const COVERAGE_GAP_REASON = {
+  not_in_index: 'No indexed rule covers this topic.',
+  truncated: 'A rule exists but did not fit in the retrieved set. Raise the rule count.',
+}
+
+// Evidence level of a rulebook answer (app/rag/qa.py).
+export const ANSWER_CONFIDENCE_META = {
+  high: { label: 'WELL SUPPORTED', pill: 'pill-ok', hint: 'Cited rules share the key terms of your question.' },
+  medium: { label: 'SUPPORTED', pill: 'pill-info', hint: 'Cited, but the rules use different wording. Read the excerpt.' },
+  low: { label: 'UNCITED ANSWER', pill: 'pill-warn', hint: 'The answer cites no retrieved rule. Do not rely on it.' },
+  none: { label: 'NOT IN THE RULES', pill: 'pill-insufficient', hint: 'The indexed rules do not answer this question.' },
+}
+
+export const SEARCH_MODES = [
+  { value: 'hybrid', label: 'Hybrid', hint: 'Meaning + keywords' },
+  { value: 'dense', label: 'Semantic', hint: 'Meaning only' },
+  { value: 'lexical', label: 'Keyword', hint: 'Exact words only' },
+  { value: 'advanced', label: 'Topic-aware', hint: 'What the compliance check uses' },
+]
+
 // ---- static reference data -------------------------------------------------
 export const metrics = [
   { label: 'Checks Completed', value: '128', delta: '+12%', tone: 'var(--ok)' },
@@ -172,6 +210,37 @@ export const demoResponse = {
         'The minimum clear width of a staircase serving as a primary means of escape shall not be less than 1.2 metres. Handrails may project into this width by not more than 75 millimetres on each side.',
     },
   ],
+  retrieval: {
+    strategy: 'advanced',
+    queries: [
+      { label: 'Full query', text: 'extracted fact sheet', topic: null },
+      { label: 'Setbacks', text: 'minimum front rear and side setback', topic: 'setbacks' },
+      { label: 'Parking', text: 'off-street car parking spaces required', topic: 'parking' },
+      { label: 'Fire safety & stairs', text: 'staircase width fire safety', topic: 'fire_stair' },
+    ],
+    coverage: [
+      { topic: 'setbacks', label: 'Setbacks', status: 'covered', rule_ids: ['23(4)'], reason: null },
+      { topic: 'parking', label: 'Parking', status: 'covered', rule_ids: ['27(1)'], reason: null },
+      { topic: 'fire_stair', label: 'Fire safety & stairs', status: 'covered', rule_ids: ['31(2)'], reason: null },
+      { topic: 'fsi', label: 'FSI / FAR', status: 'gap', rule_ids: [], reason: 'not_in_index' },
+    ],
+    gaps: ['FSI / FAR'],
+    candidates: 24,
+    corrective_hits: 0,
+  },
+  grounding: {
+    total: 3,
+    score: 0.833,
+    grounded: 2,
+    partial: 1,
+    ungrounded: 0,
+    uncited: 0,
+    items: [
+      { violation_index: 0, rule_reference: 'Rule 23(4)', status: 'grounded', citations: [1], value_supported: true, note: 'Cited rule was retrieved and states the required value.' },
+      { violation_index: 1, rule_reference: 'Rule 27(1)', status: 'partial', citations: [2], value_supported: false, note: 'Cited rule was retrieved, but it does not state the required value.' },
+      { violation_index: 2, rule_reference: 'Rule 31(2)', status: 'grounded', citations: [3], value_supported: true, note: 'Cited rule was retrieved and states the required value.' },
+    ],
+  },
   score: 78, // presentational
   trace: [
     { node: 'extract_facts', status: 'done', detail: '1.8s', ts: '2026-08-12 14:21:42' },
@@ -203,9 +272,9 @@ export const demoFactGrid = [
 ]
 
 export const kbrDocs = [
-  { doc: 'Kerala Building Rules 2019.pdf', type: 'KBR', pages: 142, chunks: '1,284', indexed: '2026-08-02', status: 'INDEXED' },
-  { doc: 'KBR Amendment 2021.pdf', type: 'KBR', pages: 38, chunks: '512', indexed: '2026-08-02', status: 'INDEXED' },
-  { doc: 'Municipal Building Rules 1999.pdf', type: 'MBR', pages: 96, chunks: '685', indexed: '2026-06-18', status: 'INDEXED' },
+  { doc: 'Kerala Building Rules 2019.pdf', type: 'KBR', pages: 142, rules: '109', chunks: '1,284', indexed: '2026-08-02', status: 'INDEXED' },
+  { doc: 'KBR Amendment 2021.pdf', type: 'KBR', pages: 38, rules: '31', chunks: '512', indexed: '2026-08-02', status: 'INDEXED' },
+  { doc: 'Municipal Building Rules 1999.pdf', type: 'MBR', pages: 96, rules: '74', chunks: '685', indexed: '2026-06-18', status: 'INDEXED' },
 ]
 
 export const kbrStats = [
@@ -667,35 +736,128 @@ export async function downloadReport(id, format = 'pdf') {
   URL.revokeObjectURL(url)
 }
 
+// What is actually in the rule index (per document) and how it is searched.
+// Live mode: real numbers from /api/kbr/index; failures reject.
+export async function fetchIndexStats() {
+  if (!apiAvailable()) {
+    return {
+      index_size: 2481,
+      documents: [
+        { source: 'Kerala Building Rules 2019.pdf', chunks: 1284, rules: 109, pages: 142 },
+        { source: 'KBR Amendment 2021.pdf', chunks: 512, rules: 31, pages: 38 },
+        { source: 'Municipal Building Rules 1999.pdf', chunks: 685, rules: 74, pages: 96 },
+      ],
+      embedding_provider: 'nim',
+      embedding_model: 'nvidia/nemotron-3-embed-1b',
+      embedding_dim: 2048,
+      retrieval_strategy: 'advanced',
+      hybrid: true,
+      hybrid_weight: 0.7,
+      structured_chunking: true,
+    }
+  }
+  return request('/api/kbr/index')
+}
+
 export async function fetchKbrDocuments() {
   if (!apiAvailable()) return kbrDocs
   // Live mode: failures reject and an empty corpus is shown as empty.
   const data = await request('/api/kbr/documents')
-  if (!Array.isArray(data)) return []
-  return data.map((d) => ({
-    doc: d.filename,
-    type: d.filename.endsWith('.pdf') ? 'KBR (PDF)' : 'KBR (TXT)',
-    pages: Math.max(1, Math.round(d.size / 3000)),
-    chunks: `${Math.max(1, Math.round(d.size / 500))}`,
-    indexed: d.modified ? new Date(d.modified).toISOString().slice(0, 10) : 'Recent',
-    status: 'INDEXED',
-  }))
+  if (!Array.isArray(data) || data.length === 0) return []
+  // Chunk / page counts are real numbers from the index, never estimates. If
+  // the index cannot be read the documents are still listed, with the counts
+  // shown as unknown rather than guessed.
+  let indexed = null
+  try {
+    const stats = await request('/api/kbr/index')
+    if (stats && Array.isArray(stats.documents)) {
+      indexed = Object.fromEntries(stats.documents.map((d) => [d.source, d]))
+    }
+  } catch (_) {
+    indexed = null
+  }
+  return data.map((d) => {
+    const entry = indexed ? indexed[d.filename] : undefined
+    const known = indexed !== null
+    return {
+      doc: d.filename,
+      type: /\.pdf$/i.test(d.filename) ? 'KBR (PDF)' : 'KBR (TXT)',
+      pages: entry?.pages ?? '—',
+      chunks: known ? String(entry?.chunks ?? 0) : '—',
+      rules: known ? String(entry?.rules ?? 0) : '—',
+      indexed: d.modified_at ? new Date(d.modified_at).toISOString().slice(0, 10) : '—',
+      status: !known ? 'UNKNOWN' : entry?.chunks > 0 ? 'INDEXED' : 'NOT INDEXED',
+    }
+  })
 }
 
-export async function searchKbrRules(query, limit = 5) {
+export async function searchKbrRules(query, limit = 5, mode = 'hybrid') {
   if (!apiAvailable()) {
     await new Promise((r) => setTimeout(r, 300))
     return [
       {
         rule_id: 'Rule 23(4)',
         source: 'Kerala_Building_Rules_2019.pdf',
+        section: 'CHAPTER IV OCCUPANCY > 23. Open spaces',
+        page: 47,
         chunk: 47,
         excerpt: `Every building shall have a front setback not less than prescribed for its occupancy group. (Query: "${query}")`,
         score: 0.91,
+        dense_score: 0.84,
+        lexical_score: 1,
+        matched_terms: ['front', 'setback'],
       },
     ]
   }
-  return request(`/api/rules/search?q=${encodeURIComponent(query)}&limit=${limit}`)
+  const qs = `q=${encodeURIComponent(query)}&limit=${limit}&mode=${encodeURIComponent(mode)}`
+  return request(`/api/rules/search?${qs}`)
+}
+
+// Ask the indexed rulebook a question. The backend answers only from retrieved
+// excerpts, verifies every [n] citation, and abstains when the rules do not
+// cover the question. Live mode: errors propagate (never a canned answer).
+export async function askRulebook(question, topK) {
+  if (!apiAvailable()) {
+    await new Promise((r) => setTimeout(r, 400))
+    return {
+      question,
+      answer:
+        'For a residential building of this classification the front setback shall not be less than 3 metres, measured from the plot boundary abutting the street [1].',
+      abstained: false,
+      confidence: 'high',
+      citations: [
+        {
+          index: 1,
+          cited: true,
+          source: 'Kerala_Building_Rules_2019.pdf',
+          rule_id: 'Rule 23(4)',
+          section: 'CHAPTER IV OCCUPANCY > 23. Open spaces',
+          page: 47,
+          excerpt:
+            'Every building shall have a front setback of not less than the value prescribed for its occupancy group. For a residential building of this classification, the minimum front setback shall not be less than 3 metres measured from the plot boundary abutting the street.',
+          score: 0.91,
+        },
+        {
+          index: 2,
+          cited: false,
+          source: 'Kerala_Building_Rules_2019.pdf',
+          rule_id: 'Rule 27(1)',
+          section: 'CHAPTER IV OCCUPANCY > 27. Parking',
+          page: 63,
+          excerpt: 'Off-street parking shall be provided on the same plot as the building it serves.',
+          score: 0.42,
+        },
+      ],
+      retrieval: { strategy: 'advanced', queries: [], coverage: [], gaps: [] },
+    }
+  }
+  const body = { question }
+  if (topK) body.top_k = topK
+  return request('/api/rules/ask', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
 }
 
 export async function ingestRules(rebuild = false) {

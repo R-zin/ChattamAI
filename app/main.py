@@ -108,6 +108,7 @@ _SENSITIVE_PREFIXES = (
     "/auth/totp",
     "/api/check",
     "/api/ingest",
+    "/api/rules",
     "/api/v2",
 )
 _RATE_LIMIT_MAX_KEYS = 5000

@@ -192,3 +192,102 @@ describe('registration and sign-in data layer (live mode)', () => {
     expect(await data.fetchAuthConfig()).toBeNull()
   })
 })
+
+describe('rulebook data layer (live mode)', () => {
+  let fetchMock
+  beforeEach(() => {
+    fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+  })
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+  })
+
+  it('askRulebook POSTs the question to /api/rules/ask', async () => {
+    const data = await loadData()
+    fetchMock.mockReturnValue(json({ answer: 'Three metres [1].', abstained: false, confidence: 'high', citations: [] }))
+    const result = await data.askRulebook('What is the front setback?', 4)
+    expect(result.answer).toBe('Three metres [1].')
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/rules/ask')
+    expect(opts.method).toBe('POST')
+    expect(JSON.parse(opts.body)).toEqual({ question: 'What is the front setback?', top_k: 4 })
+  })
+
+  it('askRulebook omits top_k when not given', async () => {
+    const data = await loadData()
+    fetchMock.mockReturnValue(json({ answer: 'x', abstained: false, confidence: 'low', citations: [] }))
+    await data.askRulebook('What is the front setback?')
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ question: 'What is the front setback?' })
+  })
+
+  it('askRulebook surfaces backend errors instead of a canned answer', async () => {
+    const data = await loadData()
+    fetchMock.mockReturnValue(json({ detail: 'Compliance check unavailable — missing: llm.' }, 503))
+    await expect(data.askRulebook('What is the front setback?')).rejects.toThrow('missing: llm')
+  })
+
+  it('searchKbrRules sends the query, limit and mode', async () => {
+    const data = await loadData()
+    fetchMock.mockReturnValue(json([]))
+    await data.searchKbrRules('front setback & yard', 7, 'lexical')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/rules/search?q=front%20setback%20%26%20yard&limit=7&mode=lexical')
+  })
+
+  it('searchKbrRules defaults to hybrid mode', async () => {
+    const data = await loadData()
+    fetchMock.mockReturnValue(json([]))
+    await data.searchKbrRules('parking')
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/rules/search?q=parking&limit=5&mode=hybrid')
+  })
+
+  it('fetchIndexStats reads /api/kbr/index and rejects on failure', async () => {
+    const data = await loadData()
+    fetchMock.mockReturnValueOnce(json({ index_size: 585, documents: [], retrieval_strategy: 'advanced' }))
+    expect((await data.fetchIndexStats()).index_size).toBe(585)
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/kbr/index')
+    fetchMock.mockReturnValueOnce(json({ detail: 'boom' }, 500))
+    await expect(data.fetchIndexStats()).rejects.toThrow('boom')
+  })
+
+  it('fetchKbrDocuments shows real chunk, rule and page counts from the index', async () => {
+    const data = await loadData()
+    fetchMock
+      .mockReturnValueOnce(
+        json([
+          { filename: 'kpbr-2019.pdf', size_bytes: 900000, modified_at: '2026-11-02T09:14:00', ext: '.pdf' },
+          { filename: 'new-upload.txt', size_bytes: 1200, modified_at: '2026-11-15T10:00:00', ext: '.txt' },
+        ])
+      )
+      .mockReturnValueOnce(
+        json({ index_size: 578, documents: [{ source: 'kpbr-2019.pdf', chunks: 578, rules: 108, pages: 179 }] })
+      )
+    const docs = await data.fetchKbrDocuments()
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual(['/api/kbr/documents', '/api/kbr/index'])
+    expect(docs[0]).toEqual({
+      doc: 'kpbr-2019.pdf',
+      type: 'KBR (PDF)',
+      pages: 179,
+      chunks: '578',
+      rules: '108',
+      indexed: '2026-11-02',
+      status: 'INDEXED',
+    })
+    // Uploaded but not ingested yet: honestly reported, not shown as indexed.
+    expect(docs[1].status).toBe('NOT INDEXED')
+    expect(docs[1].chunks).toBe('0')
+    expect(docs[1].pages).toBe('—')
+  })
+
+  it('fetchKbrDocuments lists documents with unknown counts when the index cannot be read', async () => {
+    const data = await loadData()
+    fetchMock
+      .mockReturnValueOnce(json([{ filename: 'kpbr-2019.pdf', size_bytes: 900000, modified_at: '2026-11-02T09:14:00' }]))
+      .mockReturnValueOnce(json({ detail: 'boom' }, 500))
+    const docs = await data.fetchKbrDocuments()
+    expect(docs).toHaveLength(1)
+    expect(docs[0].status).toBe('UNKNOWN')
+    expect(docs[0].chunks).toBe('—')
+  })
+})

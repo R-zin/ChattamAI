@@ -134,7 +134,11 @@ every credential exists. The cached `get_settings()` is the single source of tru
 | `INDEX_DIR` | `./data/index` | Where the FAISS index is written |
 | `CHUNK_SIZE` | `1000` | Chunk window (chars) |
 | `CHUNK_OVERLAP` | `150` | Overlap between chunks |
-| `TOP_K` | `6` | Rules retrieved per check |
+| `TOP_K` | `8` | Rules retrieved per check (one slot per regulated topic in the plan) |
+| `RETRIEVAL_STRATEGY` | `advanced` | `advanced` = topic-aware multi-query retrieval; `simple` = one hybrid query |
+| `STRUCTURED_CHUNKING` | `1` | Rule-aware chunks with rule id / heading / page; `0` = flat chunks (needs a rebuild) |
+| `RETRIEVAL_MMR_LAMBDA` | `0.75` | MMR trade-off when filling result slots (1.0 = relevance only) |
+| `RETRIEVAL_CANDIDATES` | `12` | How deep each sub-query's ranking is considered |
 | `MIN_SCORE` | `0.0` | Min cosine-similarity to keep a hit (higher=better; 0 = off) |
 | `EMBEDDING_CACHE_ENABLED` | `1` | Toggle the query-embedding cache |
 | `EMBEDDING_CACHE_TTL` | `300` | Query-embedding cache TTL (seconds) |
@@ -164,9 +168,12 @@ Both live on `RAGSystem` (`app/rag/system.py`) and are exposed as routes in
 
 ### `ingest` — `POST /api/ingest`
 - Reads every `.pdf`/`.txt`/`.md`/`.text` in `KBR_DATA_DIR` (via
-  `load_kbr_documents`).
-- Chunks each doc (sentence-aware `chunk_text`), detects a `rule_id` per chunk,
-  then embeds (in batches) + adds to FAISS.
+  `load_kbr_pages`, page by page for PDFs).
+- Chunks each doc along its own structure (`app/rag/structure.py`): chapters,
+  rules and tables are recognised, chunks never cross a rule boundary, and each
+  carries a `rule_id`, its heading breadcrumb (`section`) and `page`. The
+  breadcrumb is embedded together with the text. Then embeds (in batches) +
+  adds to FAISS and the BM25 index.
 - **Idempotent:** chunks already in the index (matched by content hash) are
   skipped, so re-running ingest does not duplicate vectors. Pass
   `{"rebuild": true}` (or `rag.ingest(rebuild=True)`) to drop the index and
@@ -181,11 +188,27 @@ Both live on `RAGSystem` (`app/rag/system.py`) and are exposed as routes in
 - Internally `RAGSystem.check()` drives the **async** graph (`acheck`); it is
   safe to call with or without an active event loop. Two caches cut cost on
   repeats: the query-embedding cache and the analyze-step memo.
-- Returns `{extracted_facts, summary, violations, retrieved_rules}`; each
-  `retrieved_rules` entry has `source`, `rule_id`, `excerpt`, and a cosine
-  `score` (higher = better). Per-node timing/counts are logged per check and
-  recorded in the graph state's `telemetry`.
+- Returns `{extracted_facts, summary, violations, retrieved_rules, retrieval,
+  grounding}`; each `retrieved_rules` entry has `source`, `rule_id`, `section`,
+  `page`, `topics`, `excerpt`, and a `score` (higher = better). `retrieval`
+  reports the strategy, the sub-queries and per-topic coverage (`gaps` lists
+  topics with no rule retrieved); `grounding` reports, per finding, whether its
+  cited rule was among the retrieved excerpts. Per-node timing/counts are logged
+  per check and recorded in the graph state's `telemetry`.
 - Uploads are streamed to a temp file then parsed with `load_plan_text`.
+
+### Rulebook tools
+- `POST /api/rules/ask` `{question, top_k?}` — a cited answer from the indexed
+  rules (`app/rag/qa.py`). `[n]` citations are verified server-side; the model
+  must abstain (`abstained: true`, `confidence: "none"`) when the excerpts do
+  not answer the question.
+- `GET /api/rules/search?q=&limit=&mode=` — `mode` is `hybrid` (default),
+  `dense`, `lexical` or `advanced`; every hit reports `dense_score`,
+  `lexical_score` and `matched_terms`.
+- `GET /api/kbr/index` — what is actually indexed (chunks, rules and pages per
+  document) and how it is searched.
+- `python scripts/eval_retrieval.py -v` — offline recall@k / MRR on the golden
+  cases in `tests/fixtures/retrieval_golden.json`.
 
 ### `health` — `GET /api/health`
 - Returns readiness flags: `status` is `"ok"` only if **both** embeddings and LLM

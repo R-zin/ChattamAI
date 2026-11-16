@@ -12,6 +12,7 @@ API and the built React app on port 8000. Primary deployment: Azure Container Ap
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 pytest -q -m "not live_nvidia"          # offline; fakes + respx, no network
+python scripts/eval_retrieval.py -v     # offline retrieval recall@k / MRR on the bundled rulebook
 ruff check . && ruff format --check .   # CI pins ruff 0.14.5
 uvicorn app.main:app --reload           # needs provider keys in .env
 
@@ -25,13 +26,16 @@ npm run dev                             # proxies /api and /auth to :8000
 - `app/config.py` single source of settings (`get_settings()`); env placeholders (`none`, empty) = unset.
 - `app/main.py` app, middleware (security headers, rate limit), SPA fallback; lifespan builds `RAGSystem`, `init_db_safe`, background ingest.
 - `app/bootstrap.py` first-boot KBR seeding + auto-ingest. `app/routes/` `rag.py` (v1 + health), `rag_v2.py`, `auth.py`.
-- `app/rag/` graph, vector store, embeddings, LLM clients, OCR. `app/rules/` symbolic engine. `app/pdf_intel/` plan extraction. `app/services/` DB, TOTP, OAuth, reports.
+- `app/rag/` graph, vector store, embeddings, LLM clients, OCR; `structure.py` (rule-aware chunking), `retrieval.py` (multi-query retriever), `lexicon.py` (KBR topics/synonyms), `grounding.py` (citation check), `qa.py` (rulebook Q&A). `app/rules/` symbolic engine. `app/pdf_intel/` plan extraction. `app/services/` DB, TOTP, OAuth, reports.
 - `frontend/src/data.js` the whole API layer plus mock data. `infra/main.bicep` + `.github/workflows/` deployment.
 - `docs/ARCHITECTURE.md` has a function-level map.
 
 ## Behaviour that is easy to get wrong
 
 - **Providers are explicit.** Set `LLM_PROVIDER` and `EMBEDDING_PROVIDER`; changing the embedding provider changes the vector dimension and the index is rebuilt.
+- **The index format is versioned.** `_INDEX_VERSION` (app/rag/vectorstore.py) changes whenever chunking or what gets embedded changes; an older index is discarded at boot and rebuilt by the startup ingest. Chunks are embedded as `heading breadcrumb + text` but stored and returned as bare text.
+- **Retrieval is topic-aware by default** (`RETRIEVAL_STRATEGY=advanced`, app/rag/retrieval.py): one sub-query per regulated topic, all embedded in a single call. `retrieval.coverage` gaps are real output, passed to the prompts; do not pad them with unrelated rules. Domain vocabulary lives in app/rag/lexicon.py.
+- **Grounding annotates, never deletes.** `grounding` reports whether each finding's citation is in the retrieved excerpts; `violations` is returned exactly as analysed. Rulebook Q&A (`/api/rules/ask`) must abstain rather than answer without evidence.
 - **Health has three endpoints.** `/api/health` is always 200 with `status` + `issues`; `/api/health/ready` is 503 unless ok; `/api/health/live` is process-only. Deploy gates use `ready`.
 - **Registration is admin-gated when `ADMIN_KEY` is set** (always, on Azure) unless `ALLOW_SELF_REGISTRATION` is true. The UI reads `GET /auth/config` to hide the sign-up link. Emails are normalised to lower-case; lookups are case-insensitive.
 - **UI uses design tokens only.** Colours are `--c-*` variables in `frontend/src/index.css` mapped to Tailwind (`bg-surface`, `text-ink-2`, `border-line`, `text-danger`...). Never write hex values or `text-white`/`bg-black` in components (a test fails). Light is the default theme; dark is `[data-theme='dark']`, toggled by `src/theme.js`. Status = colour + label + glyph. See `docs/redesign/README.md`; `frontend/scripts/ui-audit` is the browser audit.

@@ -46,6 +46,77 @@ class RuleReference(BaseModel):
     rule_id: Optional[str] = None
     excerpt: str
     score: float
+    section: Optional[str] = Field(
+        default=None, description="Heading breadcrumb the excerpt sits under"
+    )
+    page: Optional[int] = Field(
+        default=None, description="1-based page in the source document (PDF only)"
+    )
+    topics: List[str] = Field(
+        default_factory=list,
+        description="Regulated topics this excerpt carries evidence of",
+    )
+    retrieved_by: Optional[str] = Field(
+        default=None, description="Which sub-query ranked this excerpt highest"
+    )
+    corrective: bool = Field(
+        default=False,
+        description="Found by the corrective (keyword) pass, not the main ranking",
+    )
+
+
+class RetrievalQuery(BaseModel):
+    label: str
+    text: str
+    topic: Optional[str] = None
+
+
+class TopicCoverage(BaseModel):
+    topic: str
+    label: str
+    status: str = Field(..., description="covered | recovered | gap")
+    rule_ids: List[str] = Field(default_factory=list)
+    reason: Optional[str] = Field(
+        default=None, description="For a gap: not_in_index | truncated"
+    )
+
+
+class RetrievalDiagnostics(BaseModel):
+    """How the rules were retrieved and which regulated topics they cover."""
+
+    strategy: str = Field(..., description="advanced | simple")
+    queries: List[RetrievalQuery] = Field(default_factory=list)
+    coverage: List[TopicCoverage] = Field(default_factory=list)
+    gaps: List[str] = Field(
+        default_factory=list,
+        description="Topics in the plan for which no rule was retrieved",
+    )
+    candidates: int = 0
+    corrective_hits: int = 0
+
+
+class GroundingItem(BaseModel):
+    violation_index: int
+    rule_reference: str = ""
+    status: str = Field(..., description="grounded | partial | ungrounded | uncited")
+    citations: List[int] = Field(
+        default_factory=list,
+        description="1-based positions in retrieved_rules that support the finding",
+    )
+    value_supported: Optional[bool] = None
+    note: str = ""
+
+
+class GroundingSummary(BaseModel):
+    """Whether each finding cites a rule that was actually retrieved."""
+
+    total: int = 0
+    score: float = Field(default=1.0, ge=0.0, le=1.0)
+    grounded: int = 0
+    partial: int = 0
+    ungrounded: int = 0
+    uncited: int = 0
+    items: List[GroundingItem] = Field(default_factory=list)
 
 
 class Violation(BaseModel):
@@ -114,6 +185,67 @@ class ComplianceResponse(BaseModel):
     verification: Optional[VerificationResult] = Field(
         default=None, description="Audit and double-check results from secondary LLM"
     )
+    retrieval: Optional[RetrievalDiagnostics] = Field(
+        default=None, description="Retrieval strategy, sub-queries and topic coverage"
+    )
+    grounding: Optional[GroundingSummary] = Field(
+        default=None, description="Citation grounding of the findings"
+    )
+
+
+class RuleQuestionRequest(BaseModel):
+    """Payload for ``POST /api/rules/ask``."""
+
+    question: str = Field(..., min_length=3, max_length=600)
+    top_k: Optional[int] = Field(default=None, ge=1, le=20)
+
+
+class RuleCitation(BaseModel):
+    index: int = Field(..., description="The [n] this excerpt is cited as")
+    cited: bool = Field(..., description="Whether the answer cites this excerpt")
+    source: str = ""
+    rule_id: Optional[str] = None
+    section: Optional[str] = None
+    page: Optional[int] = None
+    excerpt: str
+    score: float
+
+
+class RuleAnswerResponse(BaseModel):
+    question: str
+    answer: str
+    abstained: bool = Field(
+        ..., description="True when the indexed rules do not answer the question"
+    )
+    confidence: str = Field(..., description="high | medium | low | none")
+    citations: List[RuleCitation] = Field(default_factory=list)
+    retrieval: Optional[RetrievalDiagnostics] = None
+
+
+class IndexedDocument(BaseModel):
+    source: str
+    chunks: int
+    rules: int = Field(..., description="Distinct rules/sections recognised")
+    pages: Optional[int] = None
+
+
+class IndexStatsResponse(BaseModel):
+    index_size: int
+    documents: List[IndexedDocument] = Field(default_factory=list)
+    embedding_provider: Optional[str] = None
+    embedding_model: Optional[str] = None
+    embedding_dim: Optional[int] = None
+    retrieval_strategy: Optional[str] = None
+    hybrid: bool = False
+    hybrid_weight: Optional[float] = None
+    structured_chunking: bool = True
+
+
+class RuleSearchHit(RuleReference):
+    chunk: Optional[int] = None
+    dense_score: Optional[float] = None
+    lexical_score: Optional[float] = None
+    matched_terms: List[str] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):
@@ -136,6 +268,9 @@ class HealthResponse(BaseModel):
     )
     verifier_ready: bool = Field(
         default=False, description="Whether secondary verifier client is ready"
+    )
+    retrieval_strategy: Optional[str] = Field(
+        default=None, description="Active retrieval strategy: advanced | simple"
     )
     database_ready: bool = Field(
         default=True, description="Whether the database answered a probe query"

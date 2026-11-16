@@ -73,16 +73,27 @@ def extract_rule_id(chunk: str) -> str | None:
     return None
 
 
-def _read_pdf(path: Path) -> str:
+def _read_pdf_pages(path: Path) -> List[str]:
+    """Text of each PDF page, in order (empty string for an image-only page)."""
     from pypdf import PdfReader
 
     reader = PdfReader(str(path))
-    parts = [page.extract_text() or "" for page in reader.pages]
-    return "\n".join(parts)
+    return [page.extract_text() or "" for page in reader.pages]
 
 
-def load_kbr_documents(data_dir: Path | None = None) -> List[Tuple[str, str]]:
-    """Return list of (text, source_name) for every readable file in data_dir."""
+def _read_pdf(path: Path) -> str:
+    return "\n".join(_read_pdf_pages(path))
+
+
+def load_kbr_pages(
+    data_dir: Path | None = None,
+) -> List[Tuple[str, List[str], bool]]:
+    """Return ``(source_name, pages, paged)`` for every readable KBR file.
+
+    ``pages`` is the text of each page for a PDF (``paged`` True) and a
+    single-element list for a text file, so structure-aware chunking can record
+    page numbers where they exist.
+    """
     settings = get_settings()
     canonical_dir = settings.kbr_data_dir.resolve()
     target_dir = Path(data_dir or canonical_dir).resolve()
@@ -97,24 +108,33 @@ def load_kbr_documents(data_dir: Path | None = None) -> List[Tuple[str, str]]:
     if not target_dir.exists():
         return []
 
-    docs: List[Tuple[str, str]] = []
+    docs: List[Tuple[str, List[str], bool]] = []
     for path in sorted(target_dir.iterdir()):
         if not path.is_file():
             continue
         suffix = path.suffix.lower()
         try:
             if suffix in _TEXT_EXTS:
-                text = path.read_text(encoding="utf-8", errors="ignore")
+                pages = [path.read_text(encoding="utf-8", errors="ignore")]
+                paged = False
             elif suffix in _PDF_EXTS:
-                text = _read_pdf(path)
+                pages = _read_pdf_pages(path)
+                paged = True
             else:
                 continue
         except Exception as exc:  # noqa: BLE001 - skip unreadable files
             print(f"[ingest] skipped {path.name}: {exc}")
             continue
-        if text.strip():
-            docs.append((text, path.name))
+        if any(page.strip() for page in pages):
+            docs.append((path.name, pages, paged))
     return docs
+
+
+def load_kbr_documents(data_dir: Path | None = None) -> List[Tuple[str, str]]:
+    """Return list of (text, source_name) for every readable file in data_dir."""
+    return [
+        ("\n".join(pages), source) for source, pages, _paged in load_kbr_pages(data_dir)
+    ]
 
 
 def split_sentences(text: str) -> List[str]:

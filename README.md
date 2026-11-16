@@ -15,24 +15,75 @@ endpoint. You choose providers explicitly with `LLM_PROVIDER` and
 building plan (text/PDF)
         │
         ▼
-┌──────────────── LangGraph workflow ────────────────┐
-│ 1. extract_facts  → pull regulated parameters        │
-│ 2. retrieve       → cosine search KBR chunks (FAISS) │
-│ 3. analyze        → Gemini compares facts vs rules   │
-│ 4. summarize      → engineer-friendly report          │
-└──────────────────────────────────────────────────────┘
+┌──────────────────── LangGraph workflow ─────────────────────┐
+│ 1. extract_facts  → pull regulated parameters                │
+│ 2. retrieve       → one query per regulated topic, fused     │
+│                     (FAISS cosine + BM25), graded for coverage│
+│ 3. analyze        → LLM compares facts vs retrieved rules    │
+│ 4. verify         → optional second LLM double-checks        │
+│ 5. ground         → every citation checked against the rules │
+│ 6. summarize      → engineer-friendly report                 │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 If no rules are retrieved, the workflow short-circuits to an `insufficient`
 branch rather than guessing.
 
+## Retrieval
+
+The rulebook is indexed and searched in a way that follows its own structure
+(none of this needs an extra model call):
+
+- **Structure-aware chunks.** Ingest recognises chapters, rules and tables
+  (`CHAPTER IV`, `26. Exterior and Interior open air spaces`, `TABLE 4`) and
+  never lets a chunk cross a rule boundary. Each chunk carries a citable
+  `rule_id` (`Rule 26, Table 4`), its heading breadcrumb and its PDF page, and is
+  embedded together with that breadcrumb so it can be found by the words of its
+  headings. Running page footers are stripped.
+- **Topic-aware multi-query retrieval.** A fact sheet covers many subjects
+  (setbacks, FSI, parking, stairs…); one embedding of all of them lets one
+  subject take every slot. The facts are split by regulated topic, each topic is
+  queried in the rulebook's vocabulary ("setback" → "yards", "FAR" → "FSI"), all
+  queries are embedded in **one** batch, and the rankings are combined with
+  reciprocal-rank fusion and MMR de-duplication.
+- **Coverage grading.** For every topic in the plan the response says whether a
+  rule was retrieved (`retrieval.coverage`). A topic with no rule is a reported
+  **gap**: the analyst is told not to invent a requirement for it and the report
+  says it was not assessed. A keyword-only corrective pass runs first.
+- **Citation grounding.** After the analysis, each finding's cited rule and
+  required value are checked against the retrieved excerpts
+  (`grounding.items[].status`: `grounded`, `partial`, `ungrounded`, `uncited`).
+  Findings are flagged, never deleted.
+- **Ask the rulebook.** `POST /api/rules/ask` answers a question from the
+  indexed rules with verified `[n]` citations, and abstains
+  (`abstained: true`) when the rules do not cover it.
+
+`RETRIEVAL_STRATEGY=simple` restores the single hybrid query;
+`STRUCTURED_CHUNKING=0` restores flat chunks (re-ingest with `rebuild`).
+
+Measure it offline (deterministic, no keys) against the bundled rulebook:
+
+```bash
+python scripts/eval_retrieval.py -v      # recall@k / MRR per index and strategy
+```
+
+| Index | Strategy | recall@8 | MRR |
+| --- | --- | --- | --- |
+| flat chunks | single query (previous) | 0.78 | 0.51 |
+| structured | single query | 0.78 | 0.68 |
+| structured | topic-aware (default) | **0.96** | **0.86** |
+
+These numbers use a hashed bag-of-words embedder, so they measure chunking,
+query decomposition and fusion, not a real embedding model. Run with
+`--provider configured` to evaluate with your own provider.
+
 ## What's in this build
 
-- **Optimized retrieval** — embeddings are L2-normalized and stored in a FAISS
-  inner-product index, so retrieval ranks by **cosine similarity** (higher =
-  better). A `MIN_SCORE` threshold drops weak matches, every chunk carries a
-  `rule_id`, and ingest is **idempotent** (content-hash dedup) with an optional
-  `rebuild` flag to start fresh.
+- **Hybrid index** — embeddings are L2-normalized and stored in a FAISS
+  inner-product index (cosine similarity) alongside a BM25 keyword index; the
+  two are fused into one score (higher = better). A `MIN_SCORE` threshold drops
+  weak matches, every chunk carries a `rule_id`, and ingest is **idempotent**
+  (content-hash dedup) with an optional `rebuild` flag to start fresh.
 - **Async pipeline + in-process caches** — `RAGSystem.acheck` runs the same
   graph asynchronously, and two TTL caches cut latency/cost: a query-embedding
   cache (`EmbeddingCache`) and an analyze-step memo that skips the analysis LLM
@@ -70,7 +121,7 @@ Provider selection (set both explicitly; see `.env.example`):
 - `KBR_DATA_DIR` — folder of KBR PDFs/text (default `./data/kbr`)
 
 Tunables with sane defaults (see `.env.example` for the full list): `MIN_SCORE`,
-`TOP_K`, `CHUNK_SIZE`/`CHUNK_OVERLAP`, the cache `*_TTL`/`*_MAXSIZE` knobs,
+`TOP_K`, `RETRIEVAL_STRATEGY`, `STRUCTURED_CHUNKING`, `CHUNK_SIZE`/`CHUNK_OVERLAP`, the cache `*_TTL`/`*_MAXSIZE` knobs,
 `EMBEDDING_BATCH_SIZE`, `LLM_TIMEOUT`/`LLM_MAX_RETRIES`, and the auth settings
 (`SECRET_KEY`, `AUTH_REQUIRED`, `ADMIN_KEY`, `TIME_OUT`).
 

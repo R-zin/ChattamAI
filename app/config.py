@@ -165,10 +165,31 @@ class Settings(BaseModel):
     analysis_cache_maxsize: int = int(os.getenv("ANALYSIS_CACHE_MAXSIZE", "512"))
 
     # --- Retrieval ---
-    top_k: int = int(os.getenv("TOP_K", "6"))
+    # Rule excerpts shown to the analyst. Retrieval reserves one slot per
+    # regulated topic in the plan (up to nine), so fewer than 8 can leave a
+    # topic's rule unretrieved; it is then reported as a coverage gap.
+    top_k: int = int(os.getenv("TOP_K", "8"))
     # Minimum cosine-similarity for a retrieved rule chunk to be used.
     # Scores are higher=better; 0.0 keeps everything (off).
     min_score: float = float(os.getenv("MIN_SCORE", "0.0"))
+
+    # --- Retrieval strategy (app/rag/retrieval.py) ---
+    # "advanced": the facts are split by regulated topic, each topic is
+    # retrieved for separately, results are rank-fused, de-duplicated and graded
+    # for topic coverage. "simple": one hybrid query, top-k (the old behaviour).
+    retrieval_strategy: str = (
+        os.getenv("RETRIEVAL_STRATEGY", "advanced").strip().lower() or "advanced"
+    )
+    # MMR trade-off when filling result slots: 1.0 = relevance only.
+    retrieval_mmr_lambda: float = float(os.getenv("RETRIEVAL_MMR_LAMBDA", "0.75"))
+    # How deep into each sub-query's ranking candidates are considered.
+    retrieval_candidates: int = int(os.getenv("RETRIEVAL_CANDIDATES", "12"))
+    # Structure-aware ingest (app/rag/structure.py): chunks follow rule
+    # boundaries and carry rule id, heading breadcrumb and page. Off = flat
+    # sentence chunks. Changing it requires a rebuild (POST /api/ingest).
+    structured_chunking: bool = os.getenv(
+        "STRUCTURED_CHUNKING", "1"
+    ).strip().lower() not in ("0", "false", "no", "off")
 
     # --- OCR (image / image-PDF plans; plan.md Phase 3) ---
     # Opt-in feature flag, OFF by default so a box without the Tesseract binary

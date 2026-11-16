@@ -20,7 +20,11 @@ from app.schemas import (
     ComplianceRequest,
     ComplianceResponse,
     HealthResponse,
+    IndexStatsResponse,
     IngestResponse,
+    RuleAnswerResponse,
+    RuleQuestionRequest,
+    RuleSearchHit,
     SetModelRequest,
     SetModelResponse,
 )
@@ -244,30 +248,61 @@ def get_rag() -> RAGSystem:
     return rag
 
 
-@router.get("/rules/search")
+@router.get(
+    "/rules/search",
+    response_model=List[RuleSearchHit],
+    dependencies=[Depends(require_auth)],
+)
 def search_rules(
     q: str,
     limit: int = 10,
+    mode: str = "hybrid",
     rag: RAGSystem = Depends(get_rag),
-) -> List[Dict[str, Any]]:
-    """Direct lexical/semantic search over the indexed Kerala Building Rules chunks."""
-    limit = max(1, min(50, limit))
-    store = getattr(rag, "_store", None)
-    if not store or store.size == 0:
+) -> List[RuleSearchHit]:
+    """Search the indexed Kerala Building Rules and explain each hit.
+
+    ``mode`` selects the ranking: ``hybrid`` (dense + BM25, default), ``dense``,
+    ``lexical`` or ``advanced`` (the topic-aware retriever the compliance check
+    uses). Every hit reports both channel scores and the query terms it matched.
+    """
+    if not q.strip():
         return []
-    results = store.similarity_search(q, k=limit)
-    out = []
-    for text, meta, score in results:
-        out.append(
-            {
-                "rule_id": meta.get("rule_id") if isinstance(meta, dict) else None,
-                "source": meta.get("source") if isinstance(meta, dict) else None,
-                "chunk": meta.get("chunk") if isinstance(meta, dict) else None,
-                "excerpt": text or (meta.get("text") if isinstance(meta, dict) else ""),
-                "score": round(float(score), 4),
-            }
-        )
-    return out
+    try:
+        rows = rag.search(q.strip(), limit=limit, mode=mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return [RuleSearchHit(**row) for row in rows]
+
+
+@router.post("/rules/ask", response_model=RuleAnswerResponse)
+def ask_rules(
+    body: RuleQuestionRequest,
+    rag: RAGSystem = Depends(get_rag),
+    actor: Optional["User"] = Depends(require_auth),
+) -> RuleAnswerResponse:
+    """Ask the indexed rulebook a question; get a cited answer or an abstention.
+
+    The answer is built only from retrieved excerpts and each ``[n]`` citation
+    is verified server-side. When the rules do not answer the question the
+    response has ``abstained: true`` instead of a guess.
+    """
+    try:
+        result = rag.ask(body.question, top_k=body.top_k)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return RuleAnswerResponse(**result)
+
+
+@router.get(
+    "/kbr/index",
+    response_model=IndexStatsResponse,
+    dependencies=[Depends(require_auth)],
+)
+def kbr_index_stats(rag: RAGSystem = Depends(get_rag)) -> IndexStatsResponse:
+    """What is actually indexed: chunks and rules per document, and how it is searched."""
+    return IndexStatsResponse(**rag.index_stats())
 
 
 def _database_ready() -> bool:
@@ -325,6 +360,7 @@ def _build_health(rag: RAGSystem) -> HealthResponse:
         verifier_provider=verifier_provider,
         verifier_model=verifier_model,
         verifier_ready=verifier_ready,
+        retrieval_strategy=getattr(rag, "retrieval_strategy", None),
     )
 
 

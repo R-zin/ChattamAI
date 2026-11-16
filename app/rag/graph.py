@@ -1,9 +1,14 @@
 """LangGraph workflow that turns a building plan into a compliance report.
 
 Flow:
-    extract_facts -> retrieve -> analyze -> summarize
+    extract_facts -> retrieve -> analyze -> verify_analysis -> ground -> summarize
                               |
                               +--> (no rules found) -> insufficient -> END
+
+``retrieve`` uses the topic-aware multi-query retriever (app/rag/retrieval.py)
+when the ``Context`` carries one, and reports which regulated topics the
+retrieved rules cover. ``ground`` then checks every finding's citation against
+the retrieved excerpts (app/rag/grounding.py); neither step calls a model.
 
 Nodes are plain functions closed over a `Context` so the graph stays easy to
 test and the LLM / vector store can be swapped independently. An async graph
@@ -39,6 +44,10 @@ class ComplianceState(TypedDict, total=False):
     verification: Optional[dict]
     summary: str
     error: Optional[str]
+    # What was retrieved and why: strategy, sub-queries, per-topic coverage.
+    retrieval: dict
+    # Citation grounding of the final violations against ``retrieved``.
+    grounding: dict
     # Per-node observability: {node: {"ms": float, "in_chars": int, "out_chars": int}}
     telemetry: dict
 
@@ -53,6 +62,9 @@ class Context:
     analysis_cache: object = None
     # Secondary LLM used to double-check and audit candidate violations.
     verifier_llm: Optional[object] = None
+    # Retrieval strategy (app.rag.retrieval.RuleRetriever). ``None`` keeps the
+    # plain single-query ``store.similarity_search``.
+    retriever: Optional[object] = None
 
 
 # --------------------------------------------------------------------------
@@ -114,14 +126,37 @@ def extract_facts(state: ComplianceState, ctx: Context) -> dict:
 
 
 def retrieve(state: ComplianceState, ctx: Context) -> dict:
-    # Embed the extracted facts as the retrieval query for best semantic match.
+    # The extracted facts are the retrieval query. With a retriever they are
+    # decomposed by regulated topic and each topic is retrieved for separately.
     span = _node_span(state, "retrieve")
     query = state.get("facts") or state["plan_text"]
     k = state.get("top_k") or ctx.default_top_k
     span.measure_in(query)
-    results = ctx.store.similarity_search(query, k=k)
+    if ctx.retriever is not None:
+        results, trace = ctx.retriever.retrieve(query, k=k)
+        retrieval = trace.as_dict()
+    else:
+        results = ctx.store.similarity_search(query, k=k)
+        retrieval = {"strategy": "simple", "queries": [], "coverage": [], "gaps": []}
     span.measure_out(*[r[0] for r in results])
-    return {"retrieved": results, "telemetry": span.finish()}
+    return {"retrieved": results, "retrieval": retrieval, "telemetry": span.finish()}
+
+
+def _retrieved_fingerprint(state: ComplianceState) -> str:
+    """Identity of the rule set the analysis is about to be shown."""
+    import hashlib
+
+    parts = [
+        str(meta.get("sha256") or text) for text, meta, _score in state["retrieved"]
+    ]
+    parts.extend(_coverage_gaps(state))
+    return hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
+
+
+def _coverage_gaps(state: ComplianceState) -> List[str]:
+    retrieval = state.get("retrieval") or {}
+    gaps = retrieval.get("gaps") or []
+    return [str(g) for g in gaps]
 
 
 def analyze(state: ComplianceState, ctx: Context) -> dict:
@@ -134,14 +169,16 @@ def analyze(state: ComplianceState, ctx: Context) -> dict:
     span = _node_span(state, "analyze")
     facts = state["facts"]
     rules_text = format_rules_for_prompt(state["retrieved"])
-    user = build_analyze_user(facts, rules_text)
+    user = build_analyze_user(facts, rules_text, gaps=_coverage_gaps(state))
     span.measure_in(user)
 
     # Analysis memo: an identical re-check (same facts against the same index
-    # CONTENTS) skips the LLM entirely. Keyed by (facts_hash, index_version), where
-    # index_version is the store's content fingerprint — a rebuild that swaps
-    # content but keeps the same size still invalidates the cache (store.size
-    # alone would have gone stale).
+    # CONTENTS) skips the LLM entirely. Keyed by (facts_hash, index_version,
+    # retrieved_fingerprint), where index_version is the store's content
+    # fingerprint — a rebuild that swaps content but keeps the same size still
+    # invalidates the cache (store.size alone would have gone stale) — and the
+    # fingerprint pins the exact rule set shown to the model, so a different
+    # ``top_k`` or retrieval strategy never replays another prompt's answer.
     memo = ctx.analysis_cache
     memo_key = None
     if memo is not None:
@@ -155,7 +192,7 @@ def analyze(state: ComplianceState, ctx: Context) -> dict:
                 if callable(content_version)
                 else getattr(ctx.store, "size", 0)
             )
-            memo_key = (facts_hash, index_version)
+            memo_key = (facts_hash, index_version, _retrieved_fingerprint(state))
             hit = memo.get(memo_key) if hasattr(memo, "get") else None
             if hit is not None:
                 cached_json, cached_violations = hit
@@ -291,6 +328,24 @@ def verify_analysis(state: ComplianceState, ctx: Context) -> dict:
         }
 
 
+def ground(state: ComplianceState, ctx: Context) -> dict:
+    """Check each finding's citation against the retrieved excerpts.
+
+    Deterministic (no model call). Findings are annotated, never removed.
+    """
+    from app.rag.grounding import ground_violations
+
+    span = _node_span(state, "ground")
+    try:
+        grounding = ground_violations(
+            state.get("violations") or [], state.get("retrieved") or []
+        )
+    except Exception:  # grounding is evidence, never a reason to fail a check
+        logger.warning("ground: citation grounding failed", exc_info=True)
+        return {"telemetry": span.finish()}
+    return {"grounding": grounding, "telemetry": span.finish()}
+
+
 def summarize(state: ComplianceState, ctx: Context) -> dict:
     from app.rag.prompts import SYSTEM_SUMMARY
 
@@ -305,6 +360,20 @@ def summarize(state: ComplianceState, ctx: Context) -> dict:
         and verification.get("cross_check_notes")
     ):
         user += f"\n\nVERIFICATION RECONCILIATION:\n{verification['cross_check_notes']}"
+    gaps = _coverage_gaps(state)
+    if gaps:
+        user += (
+            "\n\nTOPICS WITH NO RULE RETRIEVED (not assessed; say so, do not "
+            f"call them compliant):\n{', '.join(gaps)}"
+        )
+    grounding = state.get("grounding") or {}
+    unchecked = int(grounding.get("ungrounded") or 0)
+    if unchecked:
+        user += (
+            f"\n\nCITATION CHECK:\n{unchecked} of {grounding.get('total')} "
+            "findings cite a rule that was not among the retrieved excerpts; "
+            "recommend manual verification of those."
+        )
     span.measure_in(user)
     summary = ctx.llm.complete(SYSTEM_SUMMARY, user)
     span.measure_out(summary)
@@ -361,13 +430,8 @@ async def aextract_facts(state: ComplianceState, ctx: Context) -> dict:
 
 
 async def aretrieve(state: ComplianceState, ctx: Context) -> dict:
-    span = _node_span(state, "retrieve")
-    query = state.get("facts") or state["plan_text"]
-    k = state.get("top_k") or ctx.default_top_k
-    span.measure_in(query)
-    results = await asyncio.to_thread(ctx.store.similarity_search, query, k=k)
-    span.measure_out(*[r[0] for r in results])
-    return {"retrieved": results, "telemetry": span.finish()}
+    # Same body as the sync node (embedding + FAISS are blocking), off-loop.
+    return await asyncio.to_thread(retrieve, state, ctx)
 
 
 async def aanalyze(state: ComplianceState, ctx: Context) -> dict:
@@ -378,6 +442,10 @@ async def aanalyze(state: ComplianceState, ctx: Context) -> dict:
 
 async def averify_analysis(state: ComplianceState, ctx: Context) -> dict:
     return await asyncio.to_thread(verify_analysis, state, ctx)
+
+
+async def aground(state: ComplianceState, ctx: Context) -> dict:
+    return ground(state, ctx)  # pure CPU, microseconds: no thread hop needed
 
 
 async def asummarize(state: ComplianceState, ctx: Context) -> dict:
@@ -503,6 +571,7 @@ def build_compliance_graph(ctx: Context):
     builder.add_node("retrieve", partial(retrieve, ctx=ctx))
     builder.add_node("analyze", partial(analyze, ctx=ctx))
     builder.add_node("verify_analysis", partial(verify_analysis, ctx=ctx))
+    builder.add_node("ground", partial(ground, ctx=ctx))
     builder.add_node("summarize", partial(summarize, ctx=ctx))
     builder.add_node("insufficient", partial(insufficient, ctx=ctx))
 
@@ -514,7 +583,8 @@ def build_compliance_graph(ctx: Context):
         {"analyze": "analyze", "insufficient": "insufficient"},
     )
     builder.add_edge("analyze", "verify_analysis")
-    builder.add_edge("verify_analysis", "summarize")
+    builder.add_edge("verify_analysis", "ground")
+    builder.add_edge("ground", "summarize")
     builder.add_edge("insufficient", END)
     builder.add_edge("summarize", END)
     return builder.compile()
@@ -534,6 +604,7 @@ def build_async_compliance_graph(ctx: Context):
     builder.add_node("retrieve", partial(aretrieve, ctx=ctx))
     builder.add_node("analyze", partial(aanalyze, ctx=ctx))
     builder.add_node("verify_analysis", partial(averify_analysis, ctx=ctx))
+    builder.add_node("ground", partial(aground, ctx=ctx))
     builder.add_node("summarize", partial(asummarize, ctx=ctx))
     builder.add_node("insufficient", partial(ainsufficient, ctx=ctx))
 
@@ -545,7 +616,8 @@ def build_async_compliance_graph(ctx: Context):
         {"analyze": "analyze", "insufficient": "insufficient"},
     )
     builder.add_edge("analyze", "verify_analysis")
-    builder.add_edge("verify_analysis", "summarize")
+    builder.add_edge("verify_analysis", "ground")
+    builder.add_edge("ground", "summarize")
     builder.add_edge("insufficient", END)
     builder.add_edge("summarize", END)
     return builder.compile()

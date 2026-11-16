@@ -112,6 +112,36 @@ flowchart LR
     SM -.-> LLM3["complete(SYSTEM_SUMMARY)"]
 ```
 
+**Current chain (supersedes the diagram above where they differ):**
+`extract_facts → retrieve → analyze → verify_analysis → ground → summarize`, with
+the same `retrieve → insufficient` short-circuit. Two nodes changed shape:
+
+```mermaid
+flowchart LR
+    F(["facts"]) --> QP["build_query_plan()<br/>retrieval.py<br/>full query + one per topic"]
+    QP --> SQ["RuleVectorStore.score_queries()<br/>ONE embed call, dense + BM25 per chunk"]
+    SQ --> GR["grade: best chunk with topic evidence<br/>lexicon.TOPICS[*].evidence"]
+    GR -->|"no evidence in ranking"| CP["corrective pass<br/>keyword-only re-rank"]
+    GR --> FU["RRF across queries + MMR fill"]
+    CP --> FU
+    FU --> OUT(["hits + RetrievalTrace<br/>coverage / gaps"])
+    OUT --> AN["analyze<br/>gaps → prompt"]
+    AN --> VF["verify_analysis"]
+    VF --> GD["ground<br/>grounding.ground_violations()"]
+    GD --> SM["summarize<br/>gaps + ungrounded → prompt"]
+```
+
+- `retrieve` delegates to `Context.retriever` (`RuleRetriever`, `app/rag/retrieval.py`);
+  with no retriever it falls back to `store.similarity_search`. It writes
+  `state["retrieval"]` (strategy, sub-queries, per-topic coverage, gaps).
+- `ground` (`app/rag/grounding.py`) is deterministic and writes `state["grounding"]`;
+  it never edits `state["violations"]`.
+- Ingest goes through `load_kbr_pages()` → `structure.build_chunks()`, which emits
+  `(text, meta)` with `rule_id`, `section`, `context` and `page`; the store embeds
+  `context + text` (`vectorstore._index_text`).
+- Rulebook Q&A (`RAGSystem.ask` → `qa.answer_question`) reuses the same retriever
+  in question mode and verifies the model's `[n]` citations.
+
 **Node contract (extend here):** every node is `def node(state: ComplianceState, ctx: Context) -> dict`, async variants prefixed `a`. `Context` (`graph.py:44`) injects `llm`, `store`, `default_top_k`, `analysis_cache`. Add a node by writing one of these and registering it in `build_compliance_graph()` (`graph.py:394`) / `build_async_compliance_graph()` (`graph.py:415`).
 
 ---
@@ -165,6 +195,10 @@ Where a developer hooks in. Bold = the primary ones.
 | Cache analyze-step output | Pass any `get`/`put` object as `Context.analysis_cache` (`AnalysisMemo`) | `app/rag/graph.py:44`; `app/rag/system.py:42` |
 | Extend plan ingestion (new format/OCR) | The `load_plan_text()` `Path -> str` seam; OCR helpers | `app/rag/ingestion.py:223`; `app/rag/ocr.py` |
 | Gate a route behind auth | Attach the `require_auth` dependency (no-op until `AUTH_REQUIRED=true`) | `app/routes/auth.py:175` |
+| Add a regulated topic or synonym | Extend `TOPICS` / `_SYNONYM_RULES` (fact pattern, canonical query, evidence pattern) | `app/rag/lexicon.py` |
+| Change how rules are retrieved | `RuleRetriever` + `RetrievalConfig`; inject via `Context.retriever` | `app/rag/retrieval.py` |
+| Recognise another heading style | Add a pattern + branch in `split_sections()` | `app/rag/structure.py` |
+| Measure a retrieval change | Add cases to `tests/fixtures/retrieval_golden.json`, run `python scripts/eval_retrieval.py -v` | `scripts/eval_retrieval.py` |
 | Tune behavior without code | `Settings` env fields (chunk size, caches, `top_k`, `min_score`, `ocr_enabled`, `auth_required`, keys) | `app/config.py:24` |
 | Write offline tests | `FakeEmbeddingProvider`, `FakeLLM`, `build_rag_system()`, `app_client` fixture | `tests/conftest.py:57`, `:130`, `:224`, `:252` |
 | Benchmark offline (no keys) | `python scripts/bench_check.py` — reuses the same seams | `scripts/bench_check.py:523` |
@@ -184,7 +218,12 @@ Where a developer hooks in. Bold = the primary ones.
 | `app/rag/system.py` | `RAGSystem` façade (ingest / check / plan-file) + `AnalysisMemo` cache |
 | `app/rag/graph.py` | LangGraph compliance nodes, routing, `_parse_violations`, graph builders, telemetry |
 | `app/rag/ingestion.py` | Load KBR/plan documents, sentence-aware chunking, rule-id extraction, OCR gate |
-| `app/rag/vectorstore.py` | `RuleVectorStore`: FAISS cosine (IndexFlatIP), content-hash dedup, versioned persistence |
+| `app/rag/vectorstore.py` | `RuleVectorStore`: FAISS cosine + BM25 hybrid, contextual indexing, `score_queries` batch scoring, content-hash dedup, versioned persistence |
+| `app/rag/structure.py` | Structure-aware chunking: chapters / rules / tables → chunks with `rule_id`, breadcrumb, page |
+| `app/rag/retrieval.py` | `RuleRetriever`: topic decomposition, RRF + MMR, coverage grading, corrective pass, `RetrievalTrace` |
+| `app/rag/lexicon.py` | KBR domain lexicon: lexical tokenizer, query synonyms, regulated `TOPICS`, fact parsing |
+| `app/rag/grounding.py` | Citation grounding of findings against retrieved excerpts |
+| `app/rag/qa.py` | Rulebook Q&A with verified citations and abstention |
 | `app/rag/embeddings.py` | `EmbeddingProvider` ABC + OpenAI/NVIDIA backends + `EmbeddingCache` wrapper, `l2_normalize` |
 | `app/rag/llm.py` | LLM clients (`ClaudeClient`, `OpenRouter`) behind the `complete()` seam, timeout/retries |
 | `app/rag/prompts.py` | `SYSTEM_*` prompts + `format_rules_for_prompt` / `build_analyze_user` |
@@ -193,6 +232,7 @@ Where a developer hooks in. Bold = the primary ones.
 | `app/services/database_init.py` | `init_db()` / `init_db_safe()` table creation at boot |
 | `app/services/dbmodel.py` | `User` / `UserSession` ORM, bcrypt hashing, JWT create/decode |
 | `scripts/bench_check.py` | Offline p50/p95 bench harness (fakes-backed) |
+| `scripts/eval_retrieval.py` | Offline retrieval evaluation (recall@k / MRR) on the golden cases |
 | `scripts/fetch_kbr.py` | Stdlib-only KBR corpus downloader + provenance sidecars |
 | `tests/` | Offline pytest suite (`FakeEmbeddingProvider`, `FakeLLM`, `app_client`) |
 

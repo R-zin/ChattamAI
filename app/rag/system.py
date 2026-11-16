@@ -32,9 +32,11 @@ from app.rag.graph import (
 from app.rag.ingestion import (
     chunk_text,
     extract_rule_id,
-    load_kbr_documents,
+    load_kbr_pages,
     load_plan_text,
 )
+from app.rag.lexicon import content_tokens
+from app.rag.retrieval import RetrievalConfig, RuleRetriever
 from app.rag.vectorstore import RuleVectorStore
 from app.rag.validation import validate_building_plan_text
 
@@ -150,6 +152,8 @@ class RAGSystem:
         self._llm = None
         self._graph = None
         self._agraph = None
+        self._retriever: Optional[RuleRetriever] = None
+        self.retrieval_strategy: str = self.settings.retrieval_strategy
         self.score_threshold = _default_score_threshold()
 
         # Analysis memo: skip the analysis LLM on an identical re-check.
@@ -163,6 +167,8 @@ class RAGSystem:
             # Test seam: a caller-supplied provider (fake) replaces real construction.
             self._provider = provider
             self.embeddings_ready = True
+            self.embedding_provider = getattr(provider, "provider", "custom")
+            self.embedding_model = getattr(provider, "model", "custom")
         else:
             try:
                 from app.rag.embeddings import EmbeddingCache, get_embedding_provider
@@ -238,6 +244,15 @@ class RAGSystem:
                 score_threshold=self.score_threshold,
             )
             self._store.load_or_create()
+            self._retriever = RuleRetriever(
+                self._store,
+                RetrievalConfig(
+                    strategy=self.settings.retrieval_strategy,
+                    mmr_lambda=self.settings.retrieval_mmr_lambda,
+                    candidates_per_query=self.settings.retrieval_candidates,
+                ),
+            )
+            self.retrieval_strategy = self._retriever.config.strategy
 
         if self._store is not None and self._llm is not None:
             ctx = Context(
@@ -246,6 +261,7 @@ class RAGSystem:
                 default_top_k=self.settings.top_k,
                 analysis_cache=self._analysis_memo,
                 verifier_llm=self.verifier_llm,
+                retriever=self._retriever,
             )
             self._graph = build_compliance_graph(ctx)
             self._agraph = build_async_compliance_graph(ctx)
@@ -266,19 +282,29 @@ class RAGSystem:
         if rebuild:
             self._store.reset()
 
-        docs = load_kbr_documents(data_dir)
+        docs = load_kbr_pages(data_dir)
         total_chunks = 0
         added = 0
-        for text, source in docs:
-            chunks = chunk_text(text)
+        for source, pages, paged in docs:
+            if self.settings.structured_chunking:
+                # Chunks follow the rulebook's own structure and carry rule id,
+                # heading breadcrumb and page (app/rag/structure.py).
+                from app.rag.structure import build_chunks
+
+                pairs = build_chunks(source, pages, paged=paged)
+                chunks = [text for text, _meta in pairs]
+                metas = [meta for _text, meta in pairs]
+            else:
+                chunks = chunk_text("\n".join(pages))
+                metas = []
+                for i, chunk in enumerate(chunks):
+                    # Prefer a real rule/section header detected in the chunk;
+                    # fall back to a stable positional id so every excerpt is
+                    # citable.
+                    rid = extract_rule_id(chunk) or f"{source}#chunk-{i + 1}"
+                    metas.append({"source": source, "chunk": i + 1, "rule_id": rid})
             if not chunks:
                 continue
-            metas = []
-            for i, chunk in enumerate(chunks):
-                # Prefer a real rule/section header detected in the chunk; fall
-                # back to a stable positional id so every excerpt is citable.
-                rid = extract_rule_id(chunk) or f"{source}#chunk-{i + 1}"
-                metas.append({"source": source, "chunk": i + 1, "rule_id": rid})
             added += self._store.add_texts(chunks, metas, dedup=not rebuild)
             total_chunks += len(chunks)
         return {
@@ -321,17 +347,16 @@ class RAGSystem:
             "summary": summary,
             "violations": result.get("violations", []),
             "retrieved_rules": [
-                {
-                    "source": meta.get("source", ""),
-                    "rule_id": meta.get("rule_id"),
-                    "excerpt": text,
-                    "score": score,
-                }
+                _rule_reference(text, meta, score)
                 for text, meta, score in result.get("retrieved", [])
             ],
         }
         if error:
             shaped["error"] = error
+        if result.get("retrieval"):
+            shaped["retrieval"] = result["retrieval"]
+        if result.get("grounding"):
+            shaped["grounding"] = result["grounding"]
         verification_data = result.get("verification")
         if verification_data and isinstance(verification_data, dict):
             try:
@@ -444,3 +469,123 @@ class RAGSystem:
     @property
     def index_size(self) -> int:
         return self._store.size if self._store else 0
+
+    # ------------------------------------------------------------------
+    # Rulebook tools: question answering, search, index statistics
+    # ------------------------------------------------------------------
+    def ask(self, question: str, top_k: Optional[int] = None) -> dict:
+        """Answer a question from the rule index with verified citations.
+
+        See app/rag/qa.py. Raises ``RuntimeError`` when embeddings or the LLM
+        are not configured and ``ValueError`` for an unusable question.
+        """
+        self._require_ready()
+        from app.rag.qa import answer_question
+
+        return answer_question(
+            self._llm,
+            self._retriever,
+            question,
+            top_k=top_k or self.settings.top_k,
+            index_size=self.index_size,
+        )
+
+    def search(self, query: str, limit: int = 10, mode: str = "hybrid") -> list:
+        """Search the rule index and explain each hit.
+
+        ``mode``: ``hybrid`` (dense + BM25, the default), ``dense`` (embedding
+        only), ``lexical`` (keywords only) or ``advanced`` (the topic-aware
+        retriever). Each hit carries its dense and lexical channel scores and
+        the query terms it matched, so a surprising ranking can be understood.
+        """
+        mode = (mode or "hybrid").lower()
+        if mode not in SEARCH_MODES:
+            raise ValueError(
+                f"Unknown search mode '{mode}'. Use one of: {', '.join(SEARCH_MODES)}."
+            )
+        store = self._store
+        if store is None or store.size == 0:
+            return []
+        limit = max(1, min(50, int(limit)))
+        terms = set(content_tokens(query))
+
+        def row(idx: int, score: float, scores, extra: Optional[dict] = None) -> dict:
+            text, meta = store.chunk(idx)
+            out = _rule_reference(text, {**meta, **(extra or {})}, round(score, 4))
+            out["chunk"] = meta.get("chunk")
+            out["dense_score"] = round(scores.dense[idx], 4)
+            out["lexical_score"] = round(scores.lexical[idx], 4)
+            out["matched_terms"] = sorted(terms & store.token_set(idx))
+            return out
+
+        scores = store.score_queries([query])[0]
+        if mode == "advanced" and self._retriever is not None:
+            hits, _trace = self._retriever.retrieve(
+                query, k=limit, facts_mode=False, strategy="advanced"
+            )
+            by_hash = {m.get("sha256"): i for i, m in enumerate(store._metas)}
+            rows = []
+            for _text, meta, score in hits:
+                idx = by_hash.get(meta.get("sha256"))
+                if idx is not None:
+                    extra = {
+                        "topics": meta.get("topics"),
+                        "retrieved_by": meta.get("retrieved_by"),
+                    }
+                    rows.append(row(idx, score, scores, extra))
+            return rows
+
+        channel = {
+            "hybrid": scores.fused,
+            "dense": scores.dense,
+            "lexical": scores.lexical,
+        }[mode]
+        order = sorted(range(store.size), key=lambda i: (-channel[i], i))[:limit]
+        threshold = store.score_threshold
+        rows = []
+        for idx in order:
+            score = float(channel[idx])
+            if mode == "lexical" and score <= 0.0:
+                continue  # no keyword in common: not a match at all
+            if mode != "lexical" and threshold is not None and score < threshold:
+                continue
+            rows.append(row(idx, score, scores))
+        return rows
+
+    def index_stats(self) -> dict:
+        """What is actually in the index, per document, and how it is searched."""
+        store = self._store
+        documents = store.document_stats() if store is not None else []
+        return {
+            "index_size": self.index_size,
+            "documents": documents,
+            "embedding_provider": self.embedding_provider,
+            "embedding_model": self.embedding_model,
+            "embedding_dim": getattr(self._provider, "dim", None),
+            "retrieval_strategy": self.retrieval_strategy,
+            "hybrid": bool(store.hybrid_available) if store is not None else False,
+            "hybrid_weight": store.hybrid_weight if store is not None else None,
+            "structured_chunking": self.settings.structured_chunking,
+        }
+
+
+#: Modes accepted by :meth:`RAGSystem.search`.
+SEARCH_MODES = ("hybrid", "dense", "lexical", "advanced")
+
+
+def _rule_reference(text: str, meta: dict, score: float) -> dict:
+    """Public ``RuleReference`` dict for one retrieved chunk."""
+    out = {
+        "source": meta.get("source", ""),
+        "rule_id": meta.get("rule_id"),
+        "excerpt": text,
+        "score": score,
+    }
+    for key in ("section", "page", "retrieved_by"):
+        if meta.get(key) is not None:
+            out[key] = meta[key]
+    if meta.get("topics"):
+        out["topics"] = list(meta["topics"])
+    if meta.get("corrective"):
+        out["corrective"] = True
+    return out

@@ -43,6 +43,9 @@ def _ensure_user_totp_columns() -> None:
     from sqlalchemy import inspect, text
 
     cols = {c["name"] for c in inspect(engine).get_columns("user")}
+    # Postgres rejects ``DEFAULT 0`` on a BOOLEAN; SQLite has no FALSE literal
+    # on older builds, so pick per dialect.
+    false_literal = "FALSE" if engine.dialect.name == "postgresql" else "0"
     with engine.begin() as conn:
         if "totp_secret" not in cols:
             conn.execute(text('ALTER TABLE "user" ADD COLUMN totp_secret VARCHAR'))
@@ -50,7 +53,7 @@ def _ensure_user_totp_columns() -> None:
             conn.execute(
                 text(
                     'ALTER TABLE "user" ADD COLUMN totp_enabled '
-                    "BOOLEAN NOT NULL DEFAULT 0"
+                    f"BOOLEAN NOT NULL DEFAULT {false_literal}"
                 )
             )
         if "auth_provider" not in cols:

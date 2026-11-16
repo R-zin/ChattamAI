@@ -298,6 +298,8 @@ class Settings(BaseModel):
         )
     )
 
+    # Informational only: the live engine is built in app/services/database.py,
+    # which normalizes this value (postgres:// -> postgresql+psycopg://).
     database_url: str = os.getenv("DATABASE_URL", "sqlite:///./chattamai.db")
     session_timeout_seconds: int = int(os.getenv("TIME_OUT", "3600"))
 

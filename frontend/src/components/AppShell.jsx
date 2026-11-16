@@ -2,20 +2,46 @@ import React, { useState, useEffect } from 'react'
 import { NavLink, Link } from 'react-router-dom'
 import Icon from './Icon.jsx'
 import ThemeToggle from './ThemeToggle.jsx'
+import { fetchHealth } from '../data.js'
+
+// Engine status shown in the rail, from GET /api/health (never assumed).
+const ENGINE_STATUS = {
+  checking: { label: 'CHECKING', dot: 'bg-line-strong' },
+  ok: { label: 'ONLINE', dot: 'bg-ok' },
+  degraded: { label: 'DEGRADED', dot: 'bg-warn' },
+  offline: { label: 'OFFLINE', dot: 'bg-danger' },
+}
+
+function useEngineStatus() {
+  const [state, setState] = useState({ key: 'checking', issues: [] })
+  useEffect(() => {
+    let active = true
+    fetchHealth()
+      .then((h) => {
+        if (!active) return
+        setState({ key: h?.status === 'ok' ? 'ok' : 'degraded', issues: h?.issues || [] })
+      })
+      .catch(() => active && setState({ key: 'offline', issues: ['The backend is unreachable.'] }))
+    return () => {
+      active = false
+    }
+  }, [])
+  return state
+}
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: 'layout-dashboard', end: true },
   { to: '/workbench', label: 'PDF Visual Workbench', icon: 'eye' },
   { to: '/new-check', label: 'New Compliance Check', icon: 'plus-square' },
-  { to: '/projects', label: 'Projects', icon: 'folder' },
   { to: '/reports', label: 'Reports', icon: 'file-text' },
   { to: '/kbr', label: 'KBR Knowledge Base', icon: 'database' },
-  { to: '/activity', label: 'Activity', icon: 'activity' },
   { to: '/settings', label: 'Settings', icon: 'settings' },
 ]
 
 export default function AppShell({ children }) {
   const [open, setOpen] = useState(false)
+  const engine = useEngineStatus()
+  const engineMeta = ENGINE_STATUS[engine.key]
 
   // Close mobile drawer on Escape key press
   useEffect(() => {
@@ -113,14 +139,17 @@ export default function AppShell({ children }) {
 
         {/* Rail footer: engine status + theme switch */}
         <div className="border-t border-line p-4 space-y-2">
-          <div className="flex items-center justify-between px-3">
+          <div
+            className="flex items-center justify-between px-3"
+            title={engine.issues.length ? engine.issues.join('\n') : undefined}
+          >
             <div className="flex items-center gap-2">
-              <span aria-hidden="true" className="inline-block w-2 h-2 rounded-full bg-ok" />
+              <span aria-hidden="true" className={`inline-block w-2 h-2 rounded-full ${engineMeta.dot}`} />
               <span className="text-[11px] font-semibold tracking-wider uppercase text-ink-2">
                 KBR 2019 Engine
               </span>
             </div>
-            <span className="text-[10px] font-semibold text-ink-3">ONLINE</span>
+            <span className="text-[10px] font-semibold text-ink-3">{engineMeta.label}</span>
           </div>
           <ThemeToggle />
         </div>

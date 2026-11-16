@@ -3,7 +3,7 @@ import { toast } from '../components/Toast.jsx'
 import { Header } from '../components/AppShell.jsx'
 import { AppFooter } from '../components/Shared.jsx'
 import Icon from '../components/Icon.jsx'
-import { analysisModel, apiAvailable, embeddingModel, totpDisable, totpEnable, totpSetup, totpStatus } from '../data.js'
+import { fetchHealth, totpDisable, totpEnable, totpSetup, totpStatus } from '../data.js'
 
 function Field({ label, value, onChange, type = 'text', helper }) {
   const id = `setting-${String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
@@ -23,10 +23,9 @@ function Field({ label, value, onChange, type = 'text', helper }) {
 }
 
 export default function Settings() {
-  const [topK, setTopK] = useState('6')
-  const [chunkSize, setChunkSize] = useState('1000')
-  const [overlap, setOverlap] = useState('150')
-  const [provider, setProvider] = useState('NVIDIA NIM')
+  const [health, setHealth] = useState(null)
+  const [healthError, setHealthError] = useState(null)
+  const [totpError, setTotpError] = useState(null)
   // --- 2FA state (Security section) ---
   const [totp, setTotp] = useState(null)
   const [enroll, setEnroll] = useState(null)
@@ -39,8 +38,15 @@ export default function Settings() {
   const [secBusy, setSecBusy] = useState(false)
 
   useEffect(() => {
-    if (apiAvailable()) {
-      totpStatus().then(setTotp).catch(() => setTotp(null))
+    let active = true
+    totpStatus()
+      .then((t) => active && setTotp(t))
+      .catch((e) => active && setTotpError(e.message))
+    fetchHealth()
+      .then((h) => active && setHealth(h))
+      .catch((e) => active && setHealthError(e.message))
+    return () => {
+      active = false
     }
   }, [])
 
@@ -63,7 +69,7 @@ export default function Settings() {
       setCode('')
       setEnrollPw('')
       toast('Two-factor authentication enabled.', 'ok')
-      if (apiAvailable()) setTotp(await totpStatus())
+      setTotp(await totpStatus())
     } catch (e) { toast(e.message || 'Invalid code or password', 'info') }
     finally { setSecBusy(false) }
   }
@@ -91,59 +97,47 @@ export default function Settings() {
       <Header
         eyebrow="SYSTEM CONFIGURATION"
         title="Settings"
-        subtitle="Manage NVIDIA NIM inference endpoints, vector retrieval parameters, and account security"
+        subtitle="Service configuration and account security"
       />
 
       <div className="p-6 md:p-8 space-y-6 max-w-4xl bg-bg">
 
-        {/* Retrieval Settings */}
+        {/* Service configuration (read-only; set via server environment) */}
         <section className="bg-surface border border-line p-6 space-y-4">
           <div className="flex items-center gap-2 border-b border-line pb-3">
             <span className="w-1.5 h-1.5 bg-accent inline-block" />
-            <h3 className="text-xs font-bold text-ink uppercase tracking-widest mono">Vector Retrieval Parameters</h3>
+            <h3 className="text-xs font-bold text-ink uppercase tracking-widest mono">Service Configuration</h3>
           </div>
-          <div className="grid sm:grid-cols-3 gap-4">
-            <Field label="TOP_K CHUNKS" value={topK} onChange={setTopK} type="number" helper="Max KBR rule chunks passed to LLM reasoning" />
-            <Field label="CHUNK SIZE" value={chunkSize} onChange={setChunkSize} type="number" helper="Character length per document split" />
-            <Field label="CHUNK OVERLAP" value={overlap} onChange={setOverlap} type="number" helper="Sliding window context preservation" />
-          </div>
-        </section>
-
-        {/* Model Inference Settings */}
-        <section className="bg-surface border border-line p-6 space-y-4">
-          <div className="flex items-center gap-2 border-b border-line pb-3">
-            <span className="w-1.5 h-1.5 bg-accent inline-block" />
-            <h3 className="text-xs font-bold text-ink uppercase tracking-widest mono">AI Model Inference Configuration</h3>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-[10px] mono uppercase text-ink-3 mb-1.5 font-semibold">Active LLM Model</label>
-              <div className="mono text-xs bg-inset border border-line px-3 py-2 text-ink">
-                {provider === 'NVIDIA NIM' ? 'nvidia/nemotron-3.5-super-vl-120b-a12b' : analysisModel}
+          {healthError ? (
+            <div className="text-xs mono text-danger">Could not load service status: {healthError}</div>
+          ) : !health ? (
+            <div className="text-xs mono text-ink-3">Loading service status…</div>
+          ) : (
+            <>
+              <div className="grid sm:grid-cols-2 gap-4">
+                {[
+                  ['Service Status', health.status + (health.issues?.length ? ` (${health.issues.join('; ')})` : '')],
+                  ['Indexed Rule Chunks', Number(health.index_size || 0).toLocaleString()],
+                  ['LLM Provider', health.llm_provider || '—'],
+                  ['LLM Model', health.llm_model || '—'],
+                  ['Embedding Provider', health.embedding_provider || '—'],
+                  ['Embedding Model', health.embedding_model || '—'],
+                  ['Retrieval Strategy', health.retrieval_strategy || '—'],
+                  ['Verifier', health.verifier_enabled ? `${health.verifier_provider || '—'} / ${health.verifier_model || '—'}` : 'Disabled'],
+                  ['Database', health.database_ready ? 'Ready' : 'Not ready'],
+                  ['Plan OCR', health.ocr_enabled ? (health.ocr_provider === 'nim' ? 'PaddleOCR (NVIDIA NIM)' : health.ocr_provider || '—') : 'Disabled'],
+                ].map(([k, v]) => (
+                  <div key={k}>
+                    <div className="block text-[10px] mono uppercase text-ink-3 mb-1.5 font-semibold">{k}</div>
+                    <div className="mono text-xs bg-inset border border-line px-3 py-2 text-ink break-words">{v}</div>
+                  </div>
+                ))}
               </div>
-            </div>
-            <div>
-              <label className="block text-[10px] mono uppercase text-ink-3 mb-1.5 font-semibold">Dense Embedding Model</label>
-              <div className="mono text-xs bg-inset border border-line px-3 py-2 text-ink">{embeddingModel}</div>
-            </div>
-          </div>
-          <div>
-            <label className="block text-[10px] mono uppercase text-ink-3 mb-1.5 font-semibold">Provider Endpoint</label>
-            <div className="inline-flex border border-line bg-inset">
-              {['NVIDIA NIM', 'Anthropic', 'OpenRouter'].map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setProvider(p)}
-                  className={`px-4 py-2 text-xs mono transition-colors ${
-                    provider === p ? 'bg-accent text-on-accent font-bold' : 'text-ink-3 hover:text-ink'
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-            <div className="text-[9px] mono text-ink-3 mt-1">Configured for active compliance reasoning</div>
-          </div>
+              <div className="text-[9px] mono text-ink-3">
+                Providers, models and retrieval parameters are set through the server environment (LLM_PROVIDER, EMBEDDING_PROVIDER, OCR_PROVIDER and related settings).
+              </div>
+            </>
+          )}
         </section>
 
         {/* Security / 2FA Section */}
@@ -153,8 +147,8 @@ export default function Settings() {
             <h3 className="text-xs font-bold text-ink uppercase tracking-widest mono">Security & Authentication (TOTP 2FA)</h3>
           </div>
 
-          {!apiAvailable() ? (
-            <div className="text-xs mono text-ink-3">API not configured — running on local mock security state.</div>
+          {totpError ? (
+            <div className="text-xs mono text-danger">Could not load 2FA status: {totpError}</div>
           ) : !totp ? (
             <div className="text-xs mono text-ink-3">Checking 2FA configuration…</div>
           ) : (

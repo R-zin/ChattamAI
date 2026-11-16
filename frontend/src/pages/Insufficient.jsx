@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { Header } from '../components/AppShell.jsx'
-import { AppFooter, AnalysisTrace } from '../components/Shared.jsx'
+import { AppFooter } from '../components/Shared.jsx'
 import Pill from '../components/Pill.jsx'
 import Icon from '../components/Icon.jsx'
 
@@ -18,7 +18,6 @@ export default function Insufficient() {
       <Header
         eyebrow="Audit Notice"
         title="Compliance Assessment"
-        subtitle="Villa Extension — Kozhikode"
       />
 
       <div className="flex-1 flex items-center justify-center p-6 md:p-12 bg-bg">
@@ -77,10 +76,6 @@ export default function Insufficient() {
             <div className="text-[10px] mono text-ink-2 leading-relaxed">
               Insufficient evidence does not constitute statutory approval. Re-submit with verified setbacks, plot area, and access street measurements.
             </div>
-          </div>
-
-          <div className="max-w-sm mx-auto">
-            <AnalysisTrace trace={[{ node: 'retrieve', status: 'done', detail: '0 rules matched', ts: '2026-08-05 11:30:12' }]} />
           </div>
         </div>
       </div>

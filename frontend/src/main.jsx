@@ -11,19 +11,16 @@ import Results from './pages/Results.jsx'
 import Insufficient from './pages/Insufficient.jsx'
 import Knowledge from './pages/Knowledge.jsx'
 import Reports from './pages/Reports.jsx'
-import Projects from './pages/Projects.jsx'
-import Activity from './pages/Activity.jsx'
 import Settings from './pages/Settings.jsx'
 import Login from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import VisualWorkbench from './pages/VisualWorkbench.jsx'
-import { apiAvailable, isAuthed } from './data.js'
+import { isAuthed } from './data.js'
 
-// Mock-mode exempt: when the API isn't configured the demo renders on static
-// data with no auth gating. With an API configured, unauthenticated visits to any
-// protected page redirect to /login; an expired token redirects via request()'s 401.
+// Unauthenticated visits to any protected page redirect to /login; an expired
+// token redirects via the data layer's 401 handling.
 function RequireAuth({ children }) {
-  if (apiAvailable() && !isAuthed()) return <Navigate to="/login" replace />
+  if (!isAuthed()) return <Navigate to="/login" replace />
   return children
 }
 
@@ -44,12 +41,11 @@ export default function App() {
                   <Route path="/new-check" element={<NewCheck />} />
                   <Route path="/workbench" element={<VisualWorkbench />} />
                   <Route path="/analysis" element={<Analysis />} />
-                  <Route path="/results/demo" element={<Results />} />
+                  <Route path="/results" element={<Results />} />
                   <Route path="/results/insufficient" element={<Insufficient />} />
+                  <Route path="/results/:id" element={<Results />} />
                   <Route path="/kbr" element={<Knowledge />} />
                   <Route path="/reports" element={<Reports />} />
-                  <Route path="/projects" element={<Projects />} />
-                  <Route path="/activity" element={<Activity />} />
                   <Route path="/settings" element={<Settings />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>

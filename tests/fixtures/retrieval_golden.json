@@ -1,5 +1,5 @@
 {
-  "description": "Golden retrieval cases for the bundled corpus (data/kbr): the sample excerpt and the Kerala Panchayat Building Rules 2019 gazette. Each expectation names a regulated subject and the rule ids that govern it; an expectation is met when any retrieved excerpt is filed under one of those rules. Rule numbers were read from the gazette text.",
+  "description": "Golden retrieval cases for the Kerala Panchayat Building Rules 2019 gazette (data/kbr) plus the synthetic sample excerpt test fixture (tests/fixtures/kbr). Each expectation names a regulated subject and the rule ids that govern it; an expectation is met when any retrieved excerpt is filed under one of those rules. Rule numbers were read from the gazette text.",
   "cases": [
     {
       "id": "facts-residential-full",

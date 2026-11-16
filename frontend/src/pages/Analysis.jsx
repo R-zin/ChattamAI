@@ -1,13 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import Icon from '../components/Icon.jsx'
-import { pipelineScript, deriveStatus, analyzePlan, getPendingAnalysis } from '../data.js'
+import { deriveStatus, getPendingAnalysis } from '../data.js'
 
 const STAGES = [
   { no: '01', name: 'EXTRACT FACTS', desc: 'Extracting architectural parameters', icon: 'drafting-compass' },
   { no: '02', name: 'RETRIEVE RULES', desc: 'Searching KBR 2019 vector store', icon: 'search' },
-  { no: '03', name: 'REGULATORY AUDIT', desc: 'Reasoning with Nemotron 120B', icon: 'sparkles' },
+  { no: '03', name: 'REGULATORY AUDIT', desc: 'Evaluating the plan against KBR rules', icon: 'sparkles' },
   { no: '04', name: 'GENERATE REPORT', desc: 'Synthesizing compliance verdict', icon: 'file-text' },
+]
+// Progress narration while the request runs. It describes the pipeline stages
+// only; no plan values or outcomes are shown until the real response arrives.
+const pipelineScript = [
+  { t: 0, log: 'Parsing submitted plan…', stage: 0 },
+  { t: 1.5, log: 'Extracting plan parameters…', stage: 0 },
+  { t: 3, log: 'Searching indexed KBR rules…', stage: 1 },
+  { t: 4.5, log: 'Evaluating plan against retrieved rules…', stage: 2 },
+  { t: 6, log: 'Compiling compliance assessment…', stage: 3 },
 ]
 const TOTAL = pipelineScript[pipelineScript.length - 1].t // seconds
 
@@ -21,10 +30,15 @@ export default function Analysis() {
   const startRef = useRef(null)
   const cancelledRef = useRef(false)
   const navigatedRef = useRef(false)
-  const pendingRef = useRef(getPendingAnalysis() || state?.pending || analyzePlan({ planText: '' }))
+  const pendingRef = useRef(getPendingAnalysis() || state?.pending || null)
 
   // Run the api call in the background while the animation plays.
   useEffect(() => {
+    // Nothing submitted (page reloaded or opened directly): start a new check.
+    if (!pendingRef.current) {
+      nav('/new-check', { replace: true })
+      return
+    }
     pendingRef.current
       .then((resp) => {
         if (cancelledRef.current) return
@@ -33,9 +47,9 @@ export default function Analysis() {
       })
       .catch((err) => {
         if (cancelledRef.current) return
-        setError(err?.message || 'The content of the file is not a building plan.')
+        setError(err?.message || 'The analysis could not be completed.')
       })
-  }, [])
+  }, [nav])
 
   useEffect(() => {
     if (error) return
@@ -64,10 +78,10 @@ export default function Analysis() {
       navigatedRef.current = true
       const timer = setTimeout(() => {
         if (cancelledRef.current) return
-        let to = '/results/demo'
+        let to = '/results'
         try {
           const raw = sessionStorage.getItem('chattam.result')
-          if (raw) to = deriveStatus(JSON.parse(raw)) === 'insufficient' ? '/results/insufficient' : '/results/demo'
+          if (raw && deriveStatus(JSON.parse(raw)) === 'insufficient') to = '/results/insufficient'
         } catch {}
         nav(to, { replace: true })
       }, 500)
@@ -86,6 +100,7 @@ export default function Analysis() {
   const ds = String(Math.floor((elapsed % 1) * 100)).padStart(2, '0')
 
   const LOGS = pipelineScript.slice(0, logCount)
+  const notAPlan = !!error && /not a building plan/i.test(error)
 
   return (
     <div className="flex-1 flex flex-col relative bg-bg text-ink">
@@ -95,13 +110,13 @@ export default function Analysis() {
         <div className="min-w-0">
           <div className="text-[9px] mono text-ink-2 uppercase tracking-[0.15em] mb-0.5 flex items-center gap-2 font-semibold">
             <span className={`w-1.5 h-1.5 rounded-full ${error ? 'bg-accent' : 'bg-accent animate-pulse'}`} />
-            {error ? 'VALIDATION FAILED' : 'REAL-TIME VERIFICATION'}
+            {error ? 'ANALYSIS FAILED' : 'REAL-TIME VERIFICATION'}
           </div>
           <h2 className="text-lg md:text-xl font-bold tracking-tight text-ink uppercase font-sans truncate">
-            {error ? 'Document Verification Failed' : 'Auditing Building Plan'}
+            {error ? (notAPlan ? 'Document Verification Failed' : 'Analysis Failed') : 'Auditing Building Plan'}
           </h2>
           <p className="text-xs text-ink-2 truncate font-mono">
-            TARGET: <span className="text-ink">{state?.meta?.fileName || 'plan_014.pdf'}</span>
+            TARGET: <span className="text-ink">{state?.meta?.fileName || 'submitted plan'}</span>
           </p>
         </div>
         <div className="flex items-center gap-4 flex-shrink-0">
@@ -130,11 +145,11 @@ export default function Analysis() {
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 bg-accent inline-block" />
                 <span className="text-[10px] mono text-ink font-bold uppercase tracking-widest">
-                  VALIDATION FAILURE // HTTP 400
+                  {notAPlan ? 'VALIDATION FAILURE' : 'ANALYSIS FAILURE'}
                 </span>
               </div>
               <span className="text-[10px] mono text-ink-2 border border-line px-2 py-0.5">
-                NON-ARCHITECTURAL DOCUMENT
+                {notAPlan ? 'NON-ARCHITECTURAL DOCUMENT' : 'REQUEST FAILED'}
               </span>
             </div>
 
@@ -146,10 +161,13 @@ export default function Analysis() {
                 {error}
               </h3>
               <p className="text-xs mono text-ink-2 leading-relaxed">
-                The submitted file does not contain recognizable architectural parameters, zoning classifications, or dimensional specifications required for Kerala Building Rules (KBR 2019) compliance verification.
+                {notAPlan
+                  ? 'The submitted file does not contain recognizable architectural parameters, zoning classifications, or dimensional specifications required for Kerala Building Rules (KBR 2019) compliance verification.'
+                  : 'The compliance service could not complete this analysis. Try again; if the problem persists, check the service status.'}
               </p>
             </div>
 
+            {notAPlan && (
             <div className="border border-line bg-surface p-4 mb-8 space-y-2">
               <div className="text-[10px] mono text-ink-3 uppercase tracking-wider font-semibold">
                 MINIMUM REQUIRED CONTENT SPECIFICATIONS:
@@ -161,6 +179,7 @@ export default function Analysis() {
                 <li>Physical Dimensions (e.g. Building height, number of storeys)</li>
               </ul>
             </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-4">
               <button
@@ -271,7 +290,7 @@ export default function Analysis() {
         </div>
         <div className="flex items-center gap-2 text-ink-2">
           <span className={`w-1.5 h-1.5 rounded-full ${error ? 'bg-accent' : 'bg-accent animate-pulse'}`} />
-          <span>{error ? 'Validation Failed' : 'Facts Extraction → Rule Retrieval → Compliance Reasoning'}</span>
+          <span>{error ? 'Analysis Failed' : 'Facts Extraction → Rule Retrieval → Compliance Reasoning'}</span>
         </div>
       </footer>
     </div>

@@ -16,7 +16,7 @@ import pytest
 from app.rag.structure import build_chunks, split_sections
 
 ROOT = Path(__file__).resolve().parent.parent
-SAMPLE = ROOT / "data" / "kbr" / "sample_kbr_excerpt.txt"
+SAMPLE = ROOT / "tests" / "fixtures" / "kbr" / "sample_kbr_excerpt.txt"
 GAZETTE_PDF = ROOT / "data" / "kbr" / "kerala-panchayat-building-rules-2019.pdf"
 
 

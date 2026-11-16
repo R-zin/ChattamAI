@@ -18,16 +18,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Domain lexicon** (`app/rag/lexicon.py`): normalising BM25 tokenizer (punctuation, plurals, units, clause numbers) and query-side synonyms (setback/yard/open space, FAR/FSI).
 - **Retrieval evaluation**: `scripts/eval_retrieval.py` and `tests/fixtures/retrieval_golden.json` measure recall@k and MRR offline against the bundled rulebook; a test gates the shipped configuration.
 - **UI**: "Ask the Rulebook" panel, search-mode selector and live index statistics on the Knowledge page; citation badges and a rule-coverage panel on the Results page.
+- **PaddleOCR on NVIDIA NIM for floor plans** (`OCR_PROVIDER=nim`, default when `NVIDIA_API_KEY` is set). Image plans and image-only PDFs are sent to `baidu/paddleocr` (hosted, or a self-hosted NIM via `PADDLEOCR_URL`). Large drawings are split into overlapping full-resolution tiles to fit the hosted payload limit. Detections feed the existing layout reconstruction (`label: value` lines), transient errors are retried, and the app falls back to Tesseract if the NIM fails. Azure now enables OCR by default (`ocrEnabled`, `ocrProvider` Bicep params), and `/api/health` reports `ocr_enabled` / `ocr_provider`.
+
+### Removed
+- **Sample data everywhere.** The synthetic `data/kbr/sample_kbr_excerpt.txt` is no longer shipped or indexed; on boot, older deployments delete it from the data volume (only when its content matches the sample) and rebuild the index.
+- **Frontend mock/demo mode** (`VITE_USE_MOCKS`), the demo credentials and guest login, the sample presets on New Check, the sample PDF in the Workbench, and the Projects and Activity pages (they had no backend and only showed fixed sample records).
 
 ### Changed
 - **Index format v4**: existing indexes are discarded on start and rebuilt by the startup ingest (or `POST /api/ingest`). This re-embeds the corpus once.
 - Default `TOP_K` raised from 6 to 8 so each regulated topic in a full fact sheet can keep its rule.
 - The analysis memo key now includes the retrieved rule set, so a different `top_k` or strategy never replays another prompt's answer.
 - `GET /api/rules/search` now honours `AUTH_REQUIRED` and is rate limited, like the other paid endpoints.
+- Dashboard, Results, Knowledge Base and Settings now show only backend data: metrics come from `/api/reports` and `/api/health`, and results come from the check just run or `GET /api/reports/{id}` (new `/results/:id` route). There is no placeholder score, trace or fact grid.
+- An `http://` API from an `https://` page is reported as a configuration error instead of silently switching to mock data.
+- The sidebar engine status is read from `/api/health` (ONLINE / DEGRADED / OFFLINE) instead of always showing ONLINE.
+- The synthetic sample excerpt moved to `tests/fixtures/kbr/`; the structure, end-to-end and retrieval-gate tests read it from there. The retrieval gate still evaluates gazette + sample (the corpus its thresholds were calibrated on); `scripts/eval_retrieval.py` alone now measures the production corpus.
+- Page tests stub the backend with API-shaped fixtures (`src/test/fixtures.js`); the UI audit (`frontend/scripts/ui-audit`) runs against a real backend with `AUDIT_TOKEN`.
 
 ### Fixed
 - Knowledge page showed static demo statistics and estimated page/chunk counts in live mode; it now shows real numbers from the index, and marks uploaded-but-not-ingested documents as `NOT INDEXED`.
 - Knowledge page reported a failed ingestion as "Ingestion completed".
+- PDF certificate export (`/api/v2/check/pdf/export-report`) now sends the bearer token, so it works when `AUTH_REQUIRED` is on.
+- The Knowledge Base document table read `size`/`modified`, but the API sends `size_bytes`/`modified_at`.
+- The analysis screen labelled every failure "HTTP 400 non-architectural document".
 
 ## [1.0.0] - 2026-10-27
 

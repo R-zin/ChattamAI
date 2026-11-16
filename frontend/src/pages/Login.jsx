@@ -4,7 +4,6 @@ import { toast } from '../components/Toast.jsx'
 import Field from '../components/Field.jsx'
 import AuthLayout from '../components/AuthLayout.jsx'
 import {
-  apiAvailable,
   fetchAuthConfig,
   isAuthed,
   login,
@@ -19,11 +18,11 @@ export default function Login() {
   const nav = useNavigate()
   const location = useLocation()
   const registeredEmail = location.state?.registeredEmail || ''
-  const live = apiAvailable()
   const [stage, setStage] = useState('credentials')
   const [busy, setBusy] = useState(false)
   // null = unknown (older/unreachable backend): offer sign-up, server decides.
   const [registrationOpen, setRegistrationOpen] = useState(null)
+  const [googleEnabled, setGoogleEnabled] = useState(null)
   const [email, setEmail] = useState(registeredEmail)
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(false)
@@ -41,7 +40,10 @@ export default function Login() {
   useEffect(() => {
     let active = true
     fetchAuthConfig().then((cfg) => {
-      if (active && cfg) setRegistrationOpen(!!cfg.registration_open)
+      if (active && cfg) {
+        setRegistrationOpen(!!cfg.registration_open)
+        if (typeof cfg.google_enabled === 'boolean') setGoogleEnabled(cfg.google_enabled)
+      }
     })
     return () => {
       active = false
@@ -94,22 +96,8 @@ export default function Login() {
     nav('/')
   }
 
-  const fillDemoCredentials = () => {
-    setEmail('admin@chattamai.com')
-    setPassword('ChattamAI@2026')
-    setError(null)
-  }
-
-  const continueAsGuest = () => {
-    finish('guest-auditor-session')
-  }
-
   const handleGoogleSignIn = async () => {
     if (busy) return
-    if (!apiAvailable()) {
-      toast('Google OAuth is only enabled when connected to a live backend API.', 'info')
-      return
-    }
     setBusy(true)
     setError(null)
     try {
@@ -215,7 +203,7 @@ export default function Login() {
                 setEmail(e.target.value)
                 setError(null)
               }}
-              placeholder={live ? 'you@example.com' : 'admin@chattamai.com'}
+              placeholder="you@example.com"
             />
             <Field
               label="Password"
@@ -239,15 +227,6 @@ export default function Login() {
                 />
                 Remember me
               </label>
-              {!live && (
-                <button
-                  type="button"
-                  onClick={fillDemoCredentials}
-                  className="text-ink-2 hover:text-ink underline cursor-pointer transition-colors"
-                >
-                  Fill Demo Credentials
-                </button>
-              )}
             </div>
 
             <button
@@ -258,6 +237,8 @@ export default function Login() {
               {busy ? 'AUTHENTICATING…' : 'SIGN IN WITH PASSWORD →'}
             </button>
 
+            {googleEnabled !== false && (
+              <>
             <div className="flex items-center gap-3 my-4">
               <div className="h-px bg-surface-3 flex-1" />
               <span className="text-[10px] mono text-ink-3 uppercase tracking-wider">
@@ -293,17 +274,7 @@ export default function Login() {
               </svg>
               <span>SIGN IN WITH GOOGLE</span>
             </button>
-
-            {!live && (
-              <div className="pt-2 border-t border-line">
-                <button
-                  type="button"
-                  onClick={continueAsGuest}
-                  className="w-full text-xs mono text-ink-3 hover:text-ink py-2.5 border border-line hover:border-line-strong bg-inset transition-colors cursor-pointer text-center block"
-                >
-                  CONTINUE AS GUEST / DEMO →
-                </button>
-              </div>
+              </>
             )}
 
             {registrationOpen !== false && (

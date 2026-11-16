@@ -18,9 +18,16 @@ cd frontend
 npm i --no-save playwright @axe-core/playwright     # not a project dependency
 npx playwright install chromium
 
-# demo mode needs no backend (VITE_USE_MOCKS=true), so every route renders
-VITE_USE_MOCKS=true npx vite build --outDir /tmp/ui-dist
-npx vite preview --outDir /tmp/ui-dist --port 4174 &
+# There is no mock mode: pages render real API data, so audit against a running
+# backend. Build the SPA and let FastAPI serve it (same origin as the API):
+npm run build
+(cd .. && uvicorn app.main:app --port 4174) &
+
+# Protected routes redirect to /login without a session; sign in once and pass
+# the token (any account works; register one first if needed):
+export AUDIT_TOKEN=$(curl -s -X POST http://localhost:4174/auth/login/json \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"…"}' | python3 -c 'import sys,json;print(json.load(sys.stdin)["access_token"])')
 
 node scripts/ui-audit/audit.mjs http://localhost:4174 /tmp/ui-after light,dark
 # to compare against a run taken before your change:

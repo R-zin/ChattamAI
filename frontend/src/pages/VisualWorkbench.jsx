@@ -306,20 +306,9 @@ export default function VisualWorkbench() {
             eyebrow="READY FOR ANALYSIS"
             title="Awaiting Architectural Blueprint"
             description="Upload an architectural drawing PDF with an Area Statement schedule to execute statutory zoning analysis, setback checks, and K-Smart LSGD compliance export."
-            actionLabel="SELECT SAMPLE PDF DRAWING"
+            actionLabel="SELECT PDF DRAWING"
             actionIcon="file"
-            onAction={() => {
-              // Create demo PDF file object
-              const demoBlob = new Blob(['%PDF-1.4 Mock Architectural Drawing'], {
-                type: 'application/pdf',
-              })
-              const sampleFile = new File([demoBlob], 'Kakkanad_Residential_Plan_v2.pdf', {
-                type: 'application/pdf',
-              })
-              setFile(sampleFile)
-              setError(null)
-              toast('Sample blueprint loaded. Click "Run Deep Audit" to verify.', 'ok')
-            }}
+            onAction={() => fileRef.current?.click()}
           />
         )}
 

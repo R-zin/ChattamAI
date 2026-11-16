@@ -28,6 +28,12 @@ from app.rag.ocr import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _tesseract_engine(monkeypatch):
+    """These tests cover the Tesseract path, whatever OCR_PROVIDER the shell sets."""
+    monkeypatch.setattr(ocr, "_provider", lambda: "tesseract")
+
+
 def _box(text, left, top, width=40, height=20, conf=90.0) -> Dict[str, object]:
     """Build one synthetic word box (mirrors a Tesseract TSV word row)."""
     return {

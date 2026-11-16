@@ -1,17 +1,57 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Header } from '../components/AppShell.jsx'
 import { AppFooter } from '../components/Shared.jsx'
 import Pill from '../components/Pill.jsx'
 import { EmptyState } from '../components/ui/index.js'
-import { checks, STATUS_META } from '../data.js'
+import { toast } from '../components/Toast.jsx'
+import { fetchHealth, fetchReports, STATUS_META } from '../data.js'
+
+const RECENT_ROWS = 8
 
 export default function Dashboard() {
+  const [reports, setReports] = useState(null) // null = loading
+  const [health, setHealth] = useState(null)
+
+  useEffect(() => {
+    let active = true
+    fetchReports()
+      .then((r) => active && setReports(r))
+      .catch((err) => {
+        if (!active) return
+        setReports([])
+        toast(`Could not load assessments: ${err.message}`, 'danger')
+      })
+    fetchHealth()
+      .then((h) => active && setHealth(h))
+      .catch(() => active && setHealth(null))
+    return () => {
+      active = false
+    }
+  }, [])
+
+  const list = reports || []
+  const total = list.length
+  const compliant = list.filter((r) => r.status === 'compliant').length
+  const flagged = list.reduce((n, r) => n + (r.violations || 0), 0)
+  const pending = reports === null ? '…' : null
+  const checks = list.slice(0, RECENT_ROWS)
+
   const metricCards = [
-    { label: 'TOTAL ASSESSMENTS', value: '142', sub: '+18 this week', icon: 'file-text' },
-    { label: 'COMPLIANCE RATE', value: '88.4%', sub: 'First-pass compliance', icon: 'check-circle' },
-    { label: 'FLAGGED ISSUES', value: '12', sub: 'Setback & coverage items', icon: 'alert-triangle' },
-    { label: 'STATUTORY RULES', value: '595', sub: 'KBR 2019 indexed rules', icon: 'book-open' },
+    { label: 'ASSESSMENTS', value: pending ?? String(total), sub: 'Recent checks on record', icon: 'file-text' },
+    {
+      label: 'COMPLIANCE RATE',
+      value: pending ?? (total ? `${((compliant / total) * 100).toFixed(1)}%` : '—'),
+      sub: `${compliant} of ${total} compliant`,
+      icon: 'check-circle',
+    },
+    { label: 'FLAGGED ISSUES', value: pending ?? String(flagged), sub: 'Potential violations raised', icon: 'alert-triangle' },
+    {
+      label: 'INDEXED RULE CHUNKS',
+      value: health ? Number(health.index_size || 0).toLocaleString() : '—',
+      sub: health ? `Service status: ${health.status}` : 'Service status unavailable',
+      icon: 'book-open',
+    },
   ]
 
   return (
@@ -66,7 +106,9 @@ export default function Dashboard() {
               </span>
             </div>
 
-            {checks.length === 0 ? (
+            {reports === null ? (
+              <div className="py-6 text-sm text-ink-2">Loading assessments…</div>
+            ) : checks.length === 0 ? (
               <EmptyState
                 icon="file-text"
                 eyebrow="NO ASSESSMENTS RECORDED"
@@ -79,13 +121,13 @@ export default function Dashboard() {
               <ul className="md:hidden border-t-2 border-ink divide-y divide-line" aria-label="Recent plan assessments">
                 {checks.map((c) => {
                   const s = STATUS_META[c.status] || STATUS_META.review
-                  const to = c.status === 'insufficient' ? '/results/insufficient' : '/results/demo'
+                  const to = `/results/${c.id}`
                   return (
                     <li key={c.id} className="py-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-ink">{c.project}</div>
-                          <div className="text-xs text-ink-2 mt-0.5 tabular-nums">{c.plan}</div>
+                          <div className="text-xs text-ink-2 mt-0.5 tabular-nums">{c.source || '—'}</div>
                         </div>
                         <Link
                           to={to}
@@ -98,10 +140,10 @@ export default function Dashboard() {
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
                         <Pill kind={s.pill}>{s.label}</Pill>
-                        {c.violations !== null && c.violations > 0 && (
+                        {c.violations > 0 && (
                           <span className="text-xs font-bold text-danger tabular-nums">{c.violations} Issues</span>
                         )}
-                        <span className="text-xs text-ink-2 tabular-nums">{c.analyzed}</span>
+                        <span className="text-xs text-ink-2 tabular-nums">{c.date}</span>
                       </div>
                     </li>
                   )
@@ -117,7 +159,7 @@ export default function Dashboard() {
                 <table className="w-full min-w-[620px] text-left border-collapse" role="table">
                   <thead>
                     <tr className="border-b-2 border-ink">
-                      {['Project Name', 'Plan File', 'Status', 'Violations', 'Date', 'Action'].map(
+                      {['Plan', 'Source', 'Status', 'Violations', 'Date', 'Action'].map(
                         (h, i) => (
                           <th
                             key={h}
@@ -135,25 +177,22 @@ export default function Dashboard() {
                   <tbody className="divide-y divide-line">
                     {checks.map((c) => {
                       const s = STATUS_META[c.status] || STATUS_META.review
-                      const to =
-                        c.status === 'insufficient' ? '/results/insufficient' : '/results/demo'
+                      const to = `/results/${c.id}`
                       return (
                         <tr key={c.id} className="hover:bg-surface-2 transition-colors">
                           <td className="py-3.5 pr-4 text-sm font-semibold text-ink">{c.project}</td>
-                          <td className="py-3.5 pr-4 text-xs text-ink-2 tabular-nums">{c.plan}</td>
+                          <td className="py-3.5 pr-4 text-xs text-ink-2 tabular-nums">{c.source || '—'}</td>
                           <td className="py-3.5 pr-4">
                             <Pill kind={s.pill}>{s.label}</Pill>
                           </td>
                           <td className="py-3.5 pr-4 text-xs text-right tabular-nums">
-                            {c.violations === null ? (
-                              <span className="text-ink-3">—</span>
-                            ) : c.violations > 0 ? (
+                            {c.violations > 0 ? (
                               <span className="font-bold text-danger">{c.violations} Issues</span>
                             ) : (
                               <span className="text-ink-2">Compliant</span>
                             )}
                           </td>
-                          <td className="py-3.5 pr-4 text-xs text-ink-2 tabular-nums whitespace-nowrap">{c.analyzed}</td>
+                          <td className="py-3.5 pr-4 text-xs text-ink-2 tabular-nums whitespace-nowrap">{c.date}</td>
                           <td className="py-3.5 text-right">
                             <Link
                               to={to}

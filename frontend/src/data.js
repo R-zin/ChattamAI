@@ -1,45 +1,48 @@
 // ChattamAI data + API layer.
 //
-// Honesty boundary (from the design system): the live FastAPI backend emits
+// Honesty boundary: everything the UI shows about a plan, a report or the rule
+// corpus comes from the FastAPI backend. There is no mock or demo mode and no
+// fallback data: when a call fails, the error reaches the page and is shown.
+//
+// The live FastAPI backend emits
 //   - extracted_facts: string[]
 //   - violations[]:     { rule_reference, severity(high|medium|low|info), description, plan_value?, required_value? }
 //   - retrieved_rules[]:{ source<filename>, rule_id, section?, page?, topics[], excerpt, score<higher=more relevant> }
 //   - retrieval:        { strategy, queries[], coverage[{topic,label,status,rule_ids,reason}], gaps[] }
 //   - grounding:        { score, grounded, partial, ungrounded, uncited, items[{violation_index,status,citations,note}] }
-// It does NOT emit an overall verdict enum, a 0-100 score, per-fact confidence,
-// rule numbering, page numbers, or persisted history. Those are PRESENTATIONAL —
-// we derive a display status from the real payload and treat the rest as framing.
+// It does NOT emit an overall verdict enum, so the display status is derived
+// from the real payload (deriveStatus below).
 //
-// API mode vs. demo mode:
-//   - VITE_API_URL points at the FastAPI base (e.g. http://127.0.0.1:8000). When
-//     empty/unset the app talks to the SAME ORIGIN that served it, which is how
-//     the Docker/Azure build is deployed (API and SPA share one container). In
-//     `npm run dev` the Vite dev server proxies /api and /auth to the backend.
-//   - VITE_USE_MOCKS=true opts in to realistic mock data with no backend (the
-//     standalone Vercel demo). It is never the silent default, so a live
-//     deployment can never show fake results by accident.
+// VITE_API_URL points at the FastAPI base (e.g. https://api.example.com). When
+// empty/unset the app talks to the SAME ORIGIN that served it, which is how the
+// Docker/Azure build is deployed (API and SPA share one container). In
+// `npm run dev` the Vite dev server proxies /api and /auth to the backend.
 
-const TRUTHY = ['1', 'true', 'yes', 'on']
-export const USE_MOCKS = TRUTHY.includes(String(import.meta.env.VITE_USE_MOCKS || '').trim().toLowerCase())
 export const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
-export const apiAvailable = () => {
-  if (USE_MOCKS) return false
-  // Guard against browser mixed-content blocks: An HTTPS web app cannot fetch insecure http:// URLs
+
+// An HTTPS page cannot call an http:// API (the browser blocks mixed content).
+// Returns a readable configuration error, or null when the API URL is usable.
+export function apiConfigError() {
   if (
     typeof window !== 'undefined' &&
     window.location &&
     window.location.protocol === 'https:' &&
     API_URL.startsWith('http://')
   ) {
-    return false
+    return `Misconfigured API URL: this page is served over HTTPS but VITE_API_URL (${API_URL}) uses http://, which the browser blocks.`
   }
-  return true
+  return null
 }
 
-// ---- auth token storage (2FA / login, plan slice A) --------------------------
+function endpoint(path) {
+  const problem = apiConfigError()
+  if (problem) throw new Error(problem)
+  return `${API_URL}${path}`
+}
+
+// ---- auth token storage --------------------------------------------------------
 // Stored in sessionStorage by default (closing the tab logs you out, matching the
-// 1-hr JWT); localStorage only when the user opts "remember me". Keyed 'chattam.*'
-// to match the existing sessionStorage convention.
+// 1-hr JWT); localStorage only when the user opts "remember me".
 const TOKEN_KEY = 'chattam.token'
 export const getToken = () => {
   try {
@@ -64,8 +67,10 @@ export const clearToken = () => {
 }
 export const isAuthed = () => !!getToken()
 
-export const embeddingModel = 'nvidia/nemotron-3-embed-1b (2048-dim)'
-export const analysisModel = 'nvidia/nemotron-3.5-super-vl-120b-a12b'
+const authHeaders = () => {
+  const token = getToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 // ---- status derivation (design-system rule) -------------------------------
 export function deriveStatus(response) {
@@ -128,183 +133,6 @@ export const SEARCH_MODES = [
   { value: 'advanced', label: 'Topic-aware', hint: 'What the compliance check uses' },
 ]
 
-// ---- static reference data -------------------------------------------------
-export const metrics = [
-  { label: 'Checks Completed', value: '128', delta: '+12%', tone: 'var(--ok)' },
-  { label: 'Potential Violations', value: '37', delta: '+4%', tone: 'var(--danger)' },
-  { label: 'Plans Analyzed', value: '214', delta: 'TOTAL', tone: 'var(--text)' },
-  { label: 'KBR Rules Indexed', value: '2,481', delta: 'CHUNKS', tone: 'var(--accent)' },
-]
-
-export const checks = [
-  { id: 'kak', project: 'Residential Building — Kakkanad', plan: 'plan_014.pdf', status: 'review', violations: 3, rules: 8, analyzed: '2026-08-12 14:22' },
-  { id: 'kochi', project: 'Commercial Complex — Kochi', plan: 'kochi_cc_plan.pdf', status: 'violation', violations: 5, rules: 11, analyzed: '2026-08-11 09:47' },
-  { id: 'tvm', project: 'Apartment Block — Thiruvananthapuram', plan: 'tvm_apt.txt', status: 'compliant', violations: 0, rules: 6, analyzed: '2026-08-08 16:03' },
-  { id: 'villa', project: 'Villa Extension — Kozhikode', plan: 'villa_ext.pdf', status: 'insufficient', violations: null, rules: 0, analyzed: '2026-08-05 11:30' },
-  { id: 'thr', project: 'Mixed-Use Development — Thrissur', plan: 'thrissur_mxd.pdf', status: 'review', violations: 2, rules: 9, analyzed: '2026-08-01 17:12' },
-]
-
-// Demo analysis result for the flagship flow (Residential Building — Kakkanad).
-export const demoResponse = {
-  extracted_facts: [
-    'building type: residential',
-    'floors: 3',
-    'building height: 12m',
-    'front setback: 1m',
-    'rear setback: 2m',
-    'plot area: 240 sq m',
-    'built-up area: 410 sq m',
-  ],
-  violations: [
-    {
-      severity: 'high',
-      rule_reference: 'Rule 23(4)',
-      title: 'Front Setback',
-      plan_value: '1.0 m',
-      required_value: '≥ 3.0 m',
-      description:
-        'The submitted plan indicates a 1m front setback, while the retrieved KBR requirement specifies a minimum setback of 3m for this building classification.',
-    },
-    {
-      severity: 'medium',
-      rule_reference: 'Rule 27(1)',
-      title: 'Parking Provision',
-      plan_value: '4 spaces',
-      required_value: '≥ 6 spaces',
-      description:
-        'The current configuration provides 4 off-street parking slots. Based on the total built-up area of 410 m², a minimum of 6 spaces is mandated for residential multi-unit occupancy.',
-    },
-    {
-      severity: 'low',
-      rule_reference: 'Rule 31(2)',
-      title: 'Staircase Width',
-      plan_value: '1.0 m',
-      required_value: '≥ 1.2 m',
-      description:
-        'The clear width of the main internal staircase is marked as 1.0m. Rule 31(2) requires a minimum clear width of 1.2m for the primary means of escape.',
-    },
-  ],
-  retrieved_rules: [
-    {
-      source: 'Kerala_Building_Rules_2019.pdf',
-      rule_id: '23(4)',
-      page: 'p. 47',
-      score: 0.91,
-      excerpt:
-        'Every building shall have a front setback of not less than the value prescribed for its occupancy group. For a residential building of this classification, the minimum front setback shall not be less than 3 metres measured from the plot boundary abutting the street, and such setback shall be kept free of any permanent construction.',
-    },
-    {
-      source: 'Kerala_Building_Rules_2019.pdf',
-      rule_id: '27(1)',
-      page: 'p. 63',
-      score: 0.84,
-      excerpt:
-        'Off-street parking shall be provided on the same plot as the building it serves. For residential buildings, one car parking space shall be provided for every 75 square metres of built-up area or part thereof in excess of the first 150 square metres.',
-    },
-    {
-      source: 'Kerala_Building_Rules_2019.pdf',
-      rule_id: '31(2)',
-      page: 'p. 81',
-      score: 0.79,
-      excerpt:
-        'The minimum clear width of a staircase serving as a primary means of escape shall not be less than 1.2 metres. Handrails may project into this width by not more than 75 millimetres on each side.',
-    },
-  ],
-  retrieval: {
-    strategy: 'advanced',
-    queries: [
-      { label: 'Full query', text: 'extracted fact sheet', topic: null },
-      { label: 'Setbacks', text: 'minimum front rear and side setback', topic: 'setbacks' },
-      { label: 'Parking', text: 'off-street car parking spaces required', topic: 'parking' },
-      { label: 'Fire safety & stairs', text: 'staircase width fire safety', topic: 'fire_stair' },
-    ],
-    coverage: [
-      { topic: 'setbacks', label: 'Setbacks', status: 'covered', rule_ids: ['23(4)'], reason: null },
-      { topic: 'parking', label: 'Parking', status: 'covered', rule_ids: ['27(1)'], reason: null },
-      { topic: 'fire_stair', label: 'Fire safety & stairs', status: 'covered', rule_ids: ['31(2)'], reason: null },
-      { topic: 'fsi', label: 'FSI / FAR', status: 'gap', rule_ids: [], reason: 'not_in_index' },
-    ],
-    gaps: ['FSI / FAR'],
-    candidates: 24,
-    corrective_hits: 0,
-  },
-  grounding: {
-    total: 3,
-    score: 0.833,
-    grounded: 2,
-    partial: 1,
-    ungrounded: 0,
-    uncited: 0,
-    items: [
-      { violation_index: 0, rule_reference: 'Rule 23(4)', status: 'grounded', citations: [1], value_supported: true, note: 'Cited rule was retrieved and states the required value.' },
-      { violation_index: 1, rule_reference: 'Rule 27(1)', status: 'partial', citations: [2], value_supported: false, note: 'Cited rule was retrieved, but it does not state the required value.' },
-      { violation_index: 2, rule_reference: 'Rule 31(2)', status: 'grounded', citations: [3], value_supported: true, note: 'Cited rule was retrieved and states the required value.' },
-    ],
-  },
-  score: 78, // presentational
-  trace: [
-    { node: 'extract_facts', status: 'done', detail: '1.8s', ts: '2026-08-12 14:21:42' },
-    { node: 'retrieve', status: 'done', detail: '0.9s · 8 chunks', ts: '2026-08-12 14:21:43' },
-    { node: 'analyze', status: 'done', detail: '3.1s · claude-3-5-sonnet', ts: '2026-08-12 14:21:46' },
-    { node: 'summarize', status: 'done', detail: '1.2s · report_gen', ts: '2026-08-12 14:21:47' },
-  ],
-  verification: {
-    status: 'confirmed',
-    verified_by_model: 'DeepSeek-R1 (Verifier)',
-    confidence_score: 0.98,
-    cross_check_notes:
-      'All candidate violations verified against KMBR/KPBR 2019 excerpts. Front setback and parking deficit confirmed.',
-    discrepancies: [],
-    primary_violations_count: 3,
-    final_violations_count: 3,
-  },
-}
-
-// structured fact grid (presentational confidence overlay)
-export const demoFactGrid = [
-  { label: 'Building Type', value: 'Residential', conf: 99 },
-  { label: 'Floors', value: '3', conf: 100 },
-  { label: 'Building Height', value: '12 m', conf: 98 },
-  { label: 'Front Setback', value: '1 m', conf: 97 },
-  { label: 'Rear Setback', value: '2 m', conf: 96 },
-  { label: 'Plot Area', value: '240 m²', conf: 95 },
-  { label: 'Built-up Area', value: '410 m²', conf: 92 },
-]
-
-export const kbrDocs = [
-  { doc: 'Kerala Building Rules 2019.pdf', type: 'KBR', pages: 142, rules: '109', chunks: '1,284', indexed: '2026-08-02', status: 'INDEXED' },
-  { doc: 'KBR Amendment 2021.pdf', type: 'KBR', pages: 38, rules: '31', chunks: '512', indexed: '2026-08-02', status: 'INDEXED' },
-  { doc: 'Municipal Building Rules 1999.pdf', type: 'MBR', pages: 96, rules: '74', chunks: '685', indexed: '2026-06-18', status: 'INDEXED' },
-]
-
-export const kbrStats = [
-  { label: 'Documents Indexed', value: '3' },
-  { label: 'Chunks Indexed', value: '2,481' },
-  { label: 'Last Ingestion', value: '2026-08-02 09:14' },
-  { label: 'Embedding Model', value: 'text-embedding-3-small' },
-  { label: 'Vector Store', value: 'FAISS · IndexFlatIP (cosine)', ok: true },
-]
-
-export const reports = [
-  { project: 'Residential Building — Kakkanad', date: '2026-08-12', status: 'review', violations: 3, reviewer: 'Pending' },
-  { project: 'Commercial Complex — Kochi', date: '2026-08-11', status: 'violation', violations: 5, reviewer: 'Reviewed · E. Nair' },
-  { project: 'Apartment Block — Thiruvananthapuram', date: '2026-08-08', status: 'compliant', violations: 0, reviewer: 'Signed off · E. Nair' },
-  { project: 'Villa Extension — Kozhikode', date: '2026-08-05', status: 'insufficient', violations: null, reviewer: 'Pending' },
-]
-
-// Sequential script for the animated pipeline (Precision direction).
-export const pipelineScript = [
-  { t: 1, log: 'Parsing building plan structure…', stage: 0 },
-  { t: 3, log: 'Extracted building height: 12m', stage: 0 },
-  { t: 3.4, log: 'Extracted front setback: 1m', stage: 0 },
-  { t: 5, log: 'Searching 2,481 indexed KBR chunks…', stage: 1 },
-  { t: 6.2, log: 'Retrieved 8 relevant rules for this occupancy…', stage: 1 },
-  { t: 8, log: 'Comparing setback requirements (KBR §4.2)…', stage: 2 },
-  { t: 10.5, log: 'Checking parking & staircase provisions…', stage: 2 },
-  { t: 12, log: 'Generating compliance assessment…', stage: 3 },
-  { t: 14, log: 'Assessment complete — 3 potential issues detected.', stage: 4 },
-]
-
 // Validation for architectural building plan specifications
 const BUILDING_ENTITIES = [
   'building', 'buildings', 'structure', 'structures', 'house', 'houses',
@@ -360,272 +188,93 @@ export function isBuildingPlanText(text) {
   return (entityHits >= 1 && paramHits >= 1) || paramHits >= 2
 }
 
-// ---- live API (optional) ----------------------------------------------------
-async function request(path, opts = {}) {
-  const headers = { ...(opts.headers || {}) }
-  const token = getToken()
-  if (token) headers.Authorization = `Bearer ${token}`
+// ---- transport -----------------------------------------------------------------
+const UNREACHABLE = 'Backend service is currently unreachable.'
+const isNetworkError = (err) =>
+  err instanceof TypeError || /Failed to fetch|Load failed|NetworkError/i.test(err?.message || '')
+
+async function errorDetail(res) {
+  try {
+    const body = await res.json()
+    const d = body?.detail ?? body?.message
+    if (typeof d === 'string') return d
+    if (Array.isArray(d)) return d.map((x) => String(x?.msg || '')).filter(Boolean).join('. ')
+  } catch (_) {}
+  return ''
+}
+
+// Authenticated fetch: adds the bearer token, maps network failures to a
+// readable message and sends the user to /login on 401. Returns the Response.
+async function send(path, opts = {}) {
+  const headers = { ...authHeaders(), ...(opts.headers || {}) }
   let res
   try {
-    res = await fetch(`${API_URL}${path}`, { ...opts, headers })
+    res = await fetch(endpoint(path), { ...opts, headers })
   } catch (err) {
-    throw new Error(
-      err.message === 'Load failed' || err.message === 'Failed to fetch'
-        ? 'Backend service is currently unreachable.'
-        : err.message || 'Network request failed'
-    )
+    throw new Error(isNetworkError(err) ? UNREACHABLE : err.message || 'Network request failed')
   }
   if (res.status === 401) {
     clearToken()
-    if (apiAvailable() && window.location.pathname !== '/login') {
+    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
       window.location.assign('/login')
     }
-    throw new Error('API 401')
+    throw new Error('Your session has expired. Please sign in again.')
   }
   if (!res.ok) {
-    let detail = ''
-    try {
-      const errJson = await res.json()
-      detail = errJson?.detail || errJson?.message || ''
-    } catch (_) {}
-    throw new Error(detail || `API ${res.status}`)
+    throw new Error((await errorDetail(res)) || `API ${res.status}`)
   }
+  return res
+}
+
+async function request(path, opts = {}) {
+  const res = await send(path, opts)
   return res.json()
 }
 
-const MOCK_PDF_ASSESSMENT = {
-  is_compliant: false,
-  verdict: 'Non-Compliant',
-  executive_summary:
-    'Building plan has 1 statutory violation requiring design revision. Front Setback is 2.2m, falling short of the required 3.0m under Rule 25.',
-  plan_facts: {
-    jurisdiction: 'panchayat',
-    occupancy: 'A1',
-    plot_area_sqm: 240.0,
-    ground_coverage_sqm: 96.0,
-    built_up_area_sqm: 165.0,
-    building_height_m: 8.2,
-    number_of_floors: 2,
-    road_width_m: 4.5,
-    front_setback_m: 2.2,
-    rear_setback_m: 2.0,
-    side_setback_1_m: 1.5,
-    side_setback_2_m: 1.2,
-    parking_slots_provided: 1,
-  },
-  violations: [
-    {
-      rule_reference: 'Rule 25(1) / Table 6',
-      parameter: 'Front Setback',
-      severity: 'high',
-      actual_value: 2.2,
-      required_value: 3.0,
-      unit: 'm',
-      deficit: 0.8,
-      description:
-        'Front Setback is 2.2m, but statutory minimum is 3.0m (deficit of 0.8m).',
-      statutory_clause: 'Rule 25(1) Table 6: Minimum Open Spaces',
-    },
-  ],
-  exonerated_violations: [],
-  applied_concessions: ['KPBR Rule 27 rural coverage relaxation applied'],
-  eligible_concessions: ['KPBR Rule 27'],
-  remediations: [
-    {
-      parameter: 'Front Setback',
-      deficit_summary: 'Short by 0.8 m',
-      action:
-        'Recede ground-floor car porch canopy and front boundary projection by 0.8m to satisfy Rule 25.',
-      target_value: 'Minimum 3.0 m clear setback',
-    },
-  ],
-  telemetry: { intake_ms: 22.4, symbolic_eval_ms: 2.1, critic_ms: 1.8 },
-  verification: {
-    status: 'confirmed',
-    verified_by_model: 'Nemotron-4-340B (Statutory Verifier)',
-    confidence_score: 0.98,
-    cross_check_notes:
-      'Statutory cross-checker verified plan facts against Rule 25 / Table 6. Front setback deficit of 0.8m confirmed.',
-    discrepancies: [],
-    primary_violations_count: 1,
-    final_violations_count: 1,
-  },
-}
-
-export async function checkPdfV2(file) {
-  if (!apiAvailable()) {
-    await new Promise((r) => setTimeout(r, 100))
-    return MOCK_PDF_ASSESSMENT
-  }
-
-  const fd = new FormData()
-  fd.append('file', file)
-  // Errors propagate so the page can show them: never substitute a fake
-  // compliance assessment for a real plan.
-  return request('/api/v2/check/pdf', { method: 'POST', body: fd })
-}
-
-export async function exportPdfReportV2(file) {
-  if (!apiAvailable()) {
-    throw new Error('API server not connected. Connect backend to download compiled PDF certificate.')
-  }
-  const fd = new FormData()
-  fd.append('file', file)
-  const res = await fetch(`${API_URL}/api/v2/check/pdf/export-report`, {
+const postJson = (path, body) =>
+  request(path, {
     method: 'POST',
-    body: fd,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   })
-  if (!res.ok) throw new Error('Failed to export PDF report')
-  const blob = await res.blob()
-  const url = window.URL.createObjectURL(blob)
+
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
   try {
     const a = document.createElement('a')
     a.href = url
-    a.download = `LSGD_KBR_Audit_${file.name.replace(/\.pdf$/i, '')}.pdf`
+    a.download = filename
     document.body.appendChild(a)
     a.click()
     a.remove()
   } finally {
-    window.URL.revokeObjectURL(url)
+    URL.revokeObjectURL(url)
   }
+}
+
+// ---- symbolic V2 engine ----------------------------------------------------------
+export async function checkPdfV2(file) {
+  const fd = new FormData()
+  fd.append('file', file)
+  return request('/api/v2/check/pdf', { method: 'POST', body: fd })
+}
+
+export async function exportPdfReportV2(file) {
+  const fd = new FormData()
+  fd.append('file', file)
+  const res = await send('/api/v2/check/pdf/export-report', { method: 'POST', body: fd })
+  saveBlob(await res.blob(), `LSGD_KBR_Audit_${file.name.replace(/\.pdf$/i, '')}.pdf`)
 }
 
 export async function evaluatePlanFactsV2(facts = {}) {
-  if (!apiAvailable()) {
-    const plot = facts.plot_area_sqm || 200.0
-    const built = facts.built_up_area_sqm || 165.0
-    const coverage = facts.ground_coverage_sqm || 85.0
-    const covPct = parseFloat(((coverage / plot) * 100).toFixed(1))
-    const fsi = parseFloat((built / plot).toFixed(2))
-    const front = facts.front_setback_m !== undefined ? facts.front_setback_m : 2.2
-    const rear = facts.rear_setback_m !== undefined ? facts.rear_setback_m : 2.0
-    const s1 = facts.side_setback_1_m !== undefined ? facts.side_setback_1_m : 1.5
-    const s2 = facts.side_setback_2_m !== undefined ? facts.side_setback_2_m : 1.2
-    const height = facts.building_height_m !== undefined ? facts.building_height_m : 8.2
-
-    const violations = []
-    if (front < 3.0) {
-      violations.push({
-        rule_reference: 'Rule 25(1) / Table 6',
-        parameter: 'Front Setback',
-        severity: 'high',
-        actual_value: front,
-        required_value: 3.0,
-        unit: 'm',
-        deficit: parseFloat((3.0 - front).toFixed(2)),
-        description: `Front Setback is ${front}m, but statutory minimum is 3.0m.`,
-      })
-    }
-    if (rear < 1.5) {
-      violations.push({
-        rule_reference: 'Rule 25(1) / Table 6',
-        parameter: 'Rear Setback',
-        severity: 'medium',
-        actual_value: rear,
-        required_value: 1.5,
-        unit: 'm',
-        deficit: parseFloat((1.5 - rear).toFixed(2)),
-        description: `Rear Setback is ${rear}m, but statutory minimum is 1.5m.`,
-      })
-    }
-    if (s1 < 1.0) {
-      violations.push({
-        rule_reference: 'Rule 25(1) / Table 6',
-        parameter: 'Side Setback 1',
-        severity: 'medium',
-        actual_value: s1,
-        required_value: 1.0,
-        unit: 'm',
-        deficit: parseFloat((1.0 - s1).toFixed(2)),
-        description: `Side Setback 1 is ${s1}m, but statutory minimum is 1.0m.`,
-      })
-    }
-    if (s2 < 1.0) {
-      violations.push({
-        rule_reference: 'Rule 25(1) / Table 6',
-        parameter: 'Side Setback 2',
-        severity: 'medium',
-        actual_value: s2,
-        required_value: 1.0,
-        unit: 'm',
-        deficit: parseFloat((1.0 - s2).toFixed(2)),
-        description: `Side Setback 2 is ${s2}m, but statutory minimum is 1.0m.`,
-      })
-    }
-    if (covPct > 65.0) {
-      violations.push({
-        rule_reference: 'Rule 24 / Table 4',
-        parameter: 'Ground Coverage',
-        severity: 'high',
-        actual_value: covPct,
-        required_value: 65.0,
-        unit: '%',
-        deficit: parseFloat((covPct - 65.0).toFixed(1)),
-        description: `Ground coverage is ${covPct}%, exceeding statutory limit of 65%.`,
-      })
-    }
-    if (fsi > 2.75) {
-      violations.push({
-        rule_reference: 'Rule 24 / Table 4',
-        parameter: 'FSI / FAR Limit',
-        severity: 'high',
-        actual_value: fsi,
-        required_value: 2.75,
-        unit: '',
-        deficit: parseFloat((fsi - 2.75).toFixed(2)),
-        description: `FAR is ${fsi}, exceeding maximum permitted FAR of 2.75.`,
-      })
-    }
-    if (height > 16.0) {
-      violations.push({
-        rule_reference: 'Rule 28',
-        parameter: 'Building Height',
-        severity: 'high',
-        actual_value: height,
-        required_value: 16.0,
-        unit: 'm',
-        deficit: parseFloat((height - 16.0).toFixed(1)),
-        description: `Building height is ${height}m, exceeding permissible limit of 16.0m.`,
-      })
-    }
-
-    const isCompliant = violations.length === 0
-    return {
-      is_compliant: isCompliant,
-      summary_verdict: isCompliant
-        ? 'Fully Compliant with KMBR/KPBR 2019'
-        : `${violations.length} statutory non-compliance issues identified`,
-      violations,
-      coverage_percent: covPct,
-      max_coverage_percent: 65.0,
-      fsi_actual: fsi,
-      base_fsi: 2.75,
-      max_fsi_permitted: 2.75,
-      parking_required: built > 150 ? 1 : 0,
-      parking_slots_provided: facts.parking_slots_provided || 1,
-      concessions_eligible: [],
-      applied_concessions: [],
-      rule_citations: ['KMBR/KPBR 2019 Rule 24 Table 4', 'Rule 25 Table 6'],
-    }
-  }
-  return request('/api/v2/evaluate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(facts),
-  })
+  return postJson('/api/v2/evaluate', facts)
 }
 
 export async function exportKSmartV2(payload) {
-  if (!apiAvailable()) {
-    return { status: "MOCK_EXPORTED", payload }
-  }
-  return request('/api/v2/reports/ksmart', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
+  return postJson('/api/v2/reports/ksmart', payload)
 }
 
+// ---- RAG compliance check ----------------------------------------------------------
 let _pendingAnalysisPromise = null
 
 export function setPendingAnalysis(promise) {
@@ -639,20 +288,6 @@ export function getPendingAnalysis() {
 }
 
 export async function analyzePlan({ planText, file, top_k }) {
-  if (!apiAvailable()) {
-    // graceful fallback: simulate latency + return the flagship demo payload
-    await new Promise((r) => setTimeout(r, 600))
-    if (file) {
-      const nonPlanKeywords = ['recipe', 'resume', 'invoice', 'code', 'script', 'dummy', 'invalid', 'random', 'test_non_plan']
-      const lowerName = (file.name || '').toLowerCase()
-      if (nonPlanKeywords.some((kw) => lowerName.includes(kw))) {
-        throw new Error('The content of the file is not a building plan.')
-      }
-    } else if (planText && !isBuildingPlanText(planText)) {
-      throw new Error('The content of the file is not a building plan.')
-    }
-    return demoResponse
-  }
   if (file) {
     const isImage = /\.(png|jpe?g|webp|tiff?)$/i.test(file.name || '') || file.type?.startsWith('image/')
     const fd = new FormData()
@@ -664,104 +299,52 @@ export async function analyzePlan({ planText, file, top_k }) {
     const qs = top_k ? `?top_k=${top_k}` : ''
     return request(`/api/check/upload${qs}`, { method: 'POST', body: fd })
   }
-  return request('/api/check', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ plan_text: planText, top_k }),
-  })
+  return postJson('/api/check', { plan_text: planText, top_k })
 }
 
 export async function fetchHealth() {
-  if (!apiAvailable()) return { status: 'ok', index_size: 2481, embeddings_ready: true, llm_ready: true }
   return request('/api/health')
 }
 
+// ---- reports ---------------------------------------------------------------------
+const REPORT_STATUS = { fail: 'violation', warning: 'review', insufficient: 'insufficient', pass: 'compliant' }
+
+export function summarizeReport(r) {
+  const status = REPORT_STATUS[r.status] || deriveStatus(r)
+  const plan = (r.plan_text || '').trim()
+  return {
+    id: r.report_id,
+    project: plan ? (plan.length > 35 ? plan.slice(0, 32) + '…' : plan) : `Assessment #${r.report_id}`,
+    source: r.source || null,
+    date: r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : '—',
+    status,
+    violations: Array.isArray(r.violations) ? r.violations.length : 0,
+    reviewer: r.user_id ? `User ${String(r.user_id).slice(0, 8)}` : 'Engine Check',
+  }
+}
+
 export async function fetchReports() {
-  if (!apiAvailable()) return reports
-  // Live mode: a failure rejects (the page shows the error) and an empty
-  // archive is genuinely empty, never replaced by demo reports.
   const data = await request('/api/reports')
-  if (!Array.isArray(data)) return []
-  return data.map((r) => {
-    let status = 'compliant'
-    if (r.status === 'fail') status = 'violation'
-    else if (r.status === 'warning') status = 'review'
-    else if (r.status === 'insufficient') status = 'insufficient'
+  return Array.isArray(data) ? data.map(summarizeReport) : []
+}
 
-    const dateStr = r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : 'Recent'
-    const projectName = r.plan_text
-      ? (r.plan_text.length > 35 ? r.plan_text.slice(0, 32) + '…' : r.plan_text)
-      : `Assessment #${r.report_id}`
-
-    return {
-      id: r.report_id,
-      project: projectName,
-      date: dateStr,
-      status: status,
-      violations: Array.isArray(r.violations) ? r.violations.length : 0,
-      reviewer: r.user_id ? `User ${r.user_id.slice(0, 8)}` : 'Engine Check',
-    }
-  })
+// Full persisted report (same shape as a /api/check response plus metadata).
+export async function fetchReport(id) {
+  return request(`/api/reports/${encodeURIComponent(id)}`)
 }
 
 export async function downloadReport(id, format = 'pdf') {
-  if (!apiAvailable()) {
-    const blob = new Blob(
-      [`Kerala Building Rules Compliance Report (Demo #${id})\nStatus: Review Required\nEngine: ChattamAI AI-Assisted Assessment`],
-      { type: format === 'html' ? 'text/html' : 'text/plain' }
-    )
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `compliance_report_${id}.${format === 'html' ? 'html' : 'pdf'}`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
-    return
-  }
-  const token = getToken()
-  const headers = token ? { Authorization: `Bearer ${token}` } : {}
-  const res = await fetch(`${API_URL}/api/reports/${id}/export?format=${format}`, { headers })
-  if (!res.ok) throw new Error(`Export failed (${res.status})`)
-  const blob = await res.blob()
-  const ext = format === 'html' ? 'html' : 'pdf'
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `compliance_report_${id}.${ext}`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  const res = await send(`/api/reports/${encodeURIComponent(id)}/export?format=${format}`)
+  saveBlob(await res.blob(), `compliance_report_${id}.${format === 'html' ? 'html' : 'pdf'}`)
 }
 
+// ---- KBR corpus ------------------------------------------------------------------
 // What is actually in the rule index (per document) and how it is searched.
-// Live mode: real numbers from /api/kbr/index; failures reject.
 export async function fetchIndexStats() {
-  if (!apiAvailable()) {
-    return {
-      index_size: 2481,
-      documents: [
-        { source: 'Kerala Building Rules 2019.pdf', chunks: 1284, rules: 109, pages: 142 },
-        { source: 'KBR Amendment 2021.pdf', chunks: 512, rules: 31, pages: 38 },
-        { source: 'Municipal Building Rules 1999.pdf', chunks: 685, rules: 74, pages: 96 },
-      ],
-      embedding_provider: 'nim',
-      embedding_model: 'nvidia/nemotron-3-embed-1b',
-      embedding_dim: 2048,
-      retrieval_strategy: 'advanced',
-      hybrid: true,
-      hybrid_weight: 0.7,
-      structured_chunking: true,
-    }
-  }
   return request('/api/kbr/index')
 }
 
 export async function fetchKbrDocuments() {
-  if (!apiAvailable()) return kbrDocs
-  // Live mode: failures reject and an empty corpus is shown as empty.
   const data = await request('/api/kbr/documents')
   if (!Array.isArray(data) || data.length === 0) return []
   // Chunk / page counts are real numbers from the index, never estimates. If
@@ -792,128 +375,51 @@ export async function fetchKbrDocuments() {
 }
 
 export async function searchKbrRules(query, limit = 5, mode = 'hybrid') {
-  if (!apiAvailable()) {
-    await new Promise((r) => setTimeout(r, 300))
-    return [
-      {
-        rule_id: 'Rule 23(4)',
-        source: 'Kerala_Building_Rules_2019.pdf',
-        section: 'CHAPTER IV OCCUPANCY > 23. Open spaces',
-        page: 47,
-        chunk: 47,
-        excerpt: `Every building shall have a front setback not less than prescribed for its occupancy group. (Query: "${query}")`,
-        score: 0.91,
-        dense_score: 0.84,
-        lexical_score: 1,
-        matched_terms: ['front', 'setback'],
-      },
-    ]
-  }
   const qs = `q=${encodeURIComponent(query)}&limit=${limit}&mode=${encodeURIComponent(mode)}`
   return request(`/api/rules/search?${qs}`)
 }
 
 // Ask the indexed rulebook a question. The backend answers only from retrieved
 // excerpts, verifies every [n] citation, and abstains when the rules do not
-// cover the question. Live mode: errors propagate (never a canned answer).
+// cover the question. Errors propagate (never a canned answer).
 export async function askRulebook(question, topK) {
-  if (!apiAvailable()) {
-    await new Promise((r) => setTimeout(r, 400))
-    return {
-      question,
-      answer:
-        'For a residential building of this classification the front setback shall not be less than 3 metres, measured from the plot boundary abutting the street [1].',
-      abstained: false,
-      confidence: 'high',
-      citations: [
-        {
-          index: 1,
-          cited: true,
-          source: 'Kerala_Building_Rules_2019.pdf',
-          rule_id: 'Rule 23(4)',
-          section: 'CHAPTER IV OCCUPANCY > 23. Open spaces',
-          page: 47,
-          excerpt:
-            'Every building shall have a front setback of not less than the value prescribed for its occupancy group. For a residential building of this classification, the minimum front setback shall not be less than 3 metres measured from the plot boundary abutting the street.',
-          score: 0.91,
-        },
-        {
-          index: 2,
-          cited: false,
-          source: 'Kerala_Building_Rules_2019.pdf',
-          rule_id: 'Rule 27(1)',
-          section: 'CHAPTER IV OCCUPANCY > 27. Parking',
-          page: 63,
-          excerpt: 'Off-street parking shall be provided on the same plot as the building it serves.',
-          score: 0.42,
-        },
-      ],
-      retrieval: { strategy: 'advanced', queries: [], coverage: [], gaps: [] },
-    }
-  }
   const body = { question }
   if (topK) body.top_k = topK
-  return request('/api/rules/ask', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  return postJson('/api/rules/ask', body)
 }
 
 export async function ingestRules(rebuild = false) {
-  if (!apiAvailable()) {
-    await new Promise((r) => setTimeout(r, 1200))
-    return { status: 'rebuilt', chunks: 2481, documents: 3 }
-  }
-  return request('/api/ingest', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rebuild }),
-  })
+  return postJson('/api/ingest', { rebuild })
 }
 
 export async function uploadKbrDocument(file) {
-  if (!apiAvailable()) {
-    await new Promise((r) => setTimeout(r, 800))
-    return { filename: file.name, status: 'uploaded', size: file.size }
-  }
   const fd = new FormData()
   fd.append('file', file)
   return request('/api/kbr/upload', { method: 'POST', body: fd })
 }
 
-// ---- auth / 2FA API (all live-only; mock-simulated when the API is unset) -------
-export async function login({ email, password }) {
-  if (!apiAvailable()) {
-    await new Promise((r) => setTimeout(r, 500))
-    return { access_token: 'demo-token', token_type: 'bearer', expires_in: 3600 }
-  }
+// ---- auth / 2FA ----------------------------------------------------------------------
+// Unauthenticated calls (login, register, TOTP challenge) use fetch directly so a
+// 401 here means "wrong credentials", not "session expired".
+async function publicPost(path, body, fallbackMessage) {
+  let res
   try {
-    const res = await fetch(`${API_URL}/auth/login/json`, {
+    res = await fetch(endpoint(path), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(body),
     })
-    if (!res.ok) {
-      let detail = ''
-      try {
-        const errJson = await res.json()
-        detail = errJson?.detail || errJson?.message || ''
-      } catch (_) {}
-      throw new Error(detail || `Login failed (${res.status})`)
-    }
-    return await res.json() // TokenResponse | OtpRequiredResponse
   } catch (err) {
-    // Never fake a session when the backend is unreachable: every later call
-    // would 401. Surface the real problem instead.
-    if (err instanceof TypeError || /Failed to fetch|Load failed|NetworkError/i.test(err.message || '')) {
-      throw new Error('Backend service is currently unreachable.')
-    }
-    throw err
+    throw new Error(isNetworkError(err) ? UNREACHABLE : err.message)
   }
+  if (!res.ok) throw new Error((await errorDetail(res)) || `${fallbackMessage} (${res.status})`)
+  return res.json()
 }
 
-// ---- self-service registration ------------------------------------------------
+export async function login({ email, password }) {
+  return publicPost('/auth/login/json', { email, password }, 'Login failed') // TokenResponse | OtpRequiredResponse
+}
+
 // Turn a FastAPI error body into one readable sentence. Validation errors (422)
 // arrive as a list of {msg}; pydantic prefixes custom messages with "Value error, ".
 function registrationErrorMessage(status, body) {
@@ -930,19 +436,15 @@ function registrationErrorMessage(status, body) {
 }
 
 export async function registerUser({ email, password }) {
-  if (!apiAvailable()) {
-    await new Promise((r) => setTimeout(r, 400))
-    return { email: String(email).trim().toLowerCase() }
-  }
   let res
   try {
-    res = await fetch(`${API_URL}/auth/register`, {
+    res = await fetch(endpoint('/auth/register'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     })
   } catch (err) {
-    throw new Error('Backend service is currently unreachable.')
+    throw new Error(isNetworkError(err) ? UNREACHABLE : err.message)
   }
   let body = null
   try {
@@ -956,11 +458,8 @@ export async function registerUser({ email, password }) {
 // Returns null when unknown (backend unreachable / older backend): callers then
 // show the option and let the server decide.
 export async function fetchAuthConfig() {
-  if (!apiAvailable()) {
-    return { registration_open: true, totp_required: false, google_enabled: false }
-  }
   try {
-    const res = await fetch(`${API_URL}/auth/config`)
+    const res = await fetch(endpoint('/auth/config'))
     if (!res.ok) return null
     return await res.json()
   } catch (_) {
@@ -968,124 +467,48 @@ export async function fetchAuthConfig() {
   }
 }
 
-// These helpers go through the auth-aware request() choke point (bearer header +
-// 401 handling). The challenge-token calls (verify/recover) pass the otp_token in
-// the body, NOT as a bearer token, so they never collide with request()'s header.
 export async function totpSetup() {
-  if (!apiAvailable()) {
-    return {
-      otpauth_uri: 'otpauth://totp/ChattamAI:demo?secret=DEMO',
-      qr_png_data_uri: '',
-      secret: 'DEMO',
-    }
-  }
   return request('/auth/totp/setup', { method: 'POST' })
 }
 
 export async function totpEnable({ password, code }) {
-  if (!apiAvailable()) return { enabled: true, recovery_codes: ['demo-recovery-code'] }
-  return request('/auth/totp/enable', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password, code }),
-  })
+  return postJson('/auth/totp/enable', { password, code })
 }
 
 export async function totpDisable({ password, code }) {
-  if (!apiAvailable())
-    return { totp_enabled: false, totp_required: false, recovery_codes_remaining: 0 }
-  return request('/auth/totp/disable', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ password, code }),
-  })
+  return postJson('/auth/totp/disable', { password, code })
 }
 
 export async function totpStatus() {
-  if (!apiAvailable())
-    return { totp_enabled: false, totp_required: false, recovery_codes_remaining: 0 }
   return request('/auth/totp/status')
 }
 
-// Complete a 2FA login. The challenge token goes in the body; no bearer header is
-// used because the request() helper only adds one when a stored access token exists.
+// Complete a 2FA login. The challenge token goes in the body, not as a bearer.
 export async function totpVerify({ otpToken, code }) {
-  if (!apiAvailable())
-    return { access_token: 'demo-token', token_type: 'bearer', expires_in: 3600 }
-  const res = await fetch(`${API_URL}/auth/totp/verify`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ otp_token: otpToken, code }),
-  })
-  if (!res.ok) throw new Error(`Verification failed (${res.status})`)
-  return res.json()
+  return publicPost('/auth/totp/verify', { otp_token: otpToken, code }, 'Verification failed')
 }
 
 export async function totpRecover({ otpToken, recoveryCode }) {
-  if (!apiAvailable())
-    return { access_token: 'demo-token', token_type: 'bearer', expires_in: 3600 }
-  const res = await fetch(`${API_URL}/auth/totp/recover`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ otp_token: otpToken, recovery_code: recoveryCode }),
-  })
-  if (!res.ok) throw new Error(`Recovery failed (${res.status})`)
-  return res.json()
+  return publicPost('/auth/totp/recover', { otp_token: otpToken, recovery_code: recoveryCode }, 'Recovery failed')
 }
 
-// ---- Google OAuth 2.0 API ----------------------------------------------------
+// ---- Google OAuth 2.0 ----------------------------------------------------------------
 export async function getGoogleAuthUrl({ redirectUri } = {}) {
-  if (!apiAvailable()) {
-    return {
-      url: `${window.location.origin}/login?code=mock-google-code-demo&state=mock-state`,
-      state: 'mock-state',
-      client_id: 'demo-google-client-id',
-    }
-  }
   const query = redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ''
-  const res = await fetch(`${API_URL}/auth/google/url${query}`)
-  if (!res.ok) throw new Error(`Failed to initialize Google OAuth (${res.status})`)
+  let res
+  try {
+    res = await fetch(endpoint(`/auth/google/url${query}`))
+  } catch (err) {
+    throw new Error(isNetworkError(err) ? UNREACHABLE : err.message)
+  }
+  if (!res.ok) throw new Error((await errorDetail(res)) || `Failed to initialize Google OAuth (${res.status})`)
   return res.json()
 }
 
 export async function googleCallbackLogin({ code, state, redirectUri } = {}) {
-  if (!apiAvailable()) {
-    await new Promise((r) => setTimeout(r, 400))
-    return { access_token: 'demo-google-token', token_type: 'bearer', expires_in: 3600 }
-  }
-  const res = await fetch(`${API_URL}/auth/google/callback`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code, state, redirect_uri: redirectUri }),
-  })
-  if (!res.ok) {
-    let msg = `Google sign in failed (${res.status})`
-    try {
-      const err = await res.json()
-      if (err?.detail) msg = err.detail
-    } catch (_) {}
-    throw new Error(msg)
-  }
-  return res.json()
+  return publicPost('/auth/google/callback', { code, state, redirect_uri: redirectUri }, 'Google sign in failed')
 }
 
 export async function googleTokenLogin({ credential }) {
-  if (!apiAvailable()) {
-    await new Promise((r) => setTimeout(r, 400))
-    return { access_token: 'demo-google-token', token_type: 'bearer', expires_in: 3600 }
-  }
-  const res = await fetch(`${API_URL}/auth/google/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ credential }),
-  })
-  if (!res.ok) {
-    let msg = `Google token verification failed (${res.status})`
-    try {
-      const err = await res.json()
-      if (err?.detail) msg = err.detail
-    } catch (_) {}
-    throw new Error(msg)
-  }
-  return res.json()
+  return publicPost('/auth/google/token', { credential }, 'Google token verification failed')
 }

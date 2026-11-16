@@ -1,19 +1,20 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import React from 'react'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import AppShell, { Header } from '../components/AppShell.jsx'
 import Pill from '../components/Pill.jsx'
 import AuthLayout from '../components/AuthLayout.jsx'
+import { stubBackend } from './fixtures.js'
+
+afterEach(() => vi.unstubAllGlobals())
 
 const NAV = [
   ['Dashboard', '/'],
   ['PDF Visual Workbench', '/workbench'],
   ['New Compliance Check', '/new-check'],
-  ['Projects', '/projects'],
   ['Reports', '/reports'],
   ['KBR Knowledge Base', '/kbr'],
-  ['Activity', '/activity'],
   ['Settings', '/settings'],
 ]
 
@@ -49,10 +50,22 @@ describe('AppShell', () => {
     expect(screen.getByRole('link', { name: /skip to content/i })).toHaveAttribute('href', '#main-content')
   })
 
-  it('exposes the theme switch and the engine status', () => {
+  it('exposes the theme switch and the engine status from /api/health', async () => {
+    stubBackend({ '/api/health': { status: 'ok', issues: [] } })
     renderShell()
     expect(screen.getAllByRole('button', { name: /switch to (dark|light) theme/i }).length).toBeGreaterThan(0)
-    expect(screen.getByText('ONLINE')).toBeInTheDocument()
+    expect(await screen.findByText('ONLINE')).toBeInTheDocument()
+  })
+
+  it('reports a degraded or unreachable engine instead of ONLINE', async () => {
+    stubBackend({ '/api/health': { status: 'degraded', issues: ['Rule index is empty'] } })
+    const { unmount } = renderShell()
+    expect(await screen.findByText('DEGRADED')).toBeInTheDocument()
+    unmount()
+    stubBackend({})
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))))
+    renderShell()
+    expect(await screen.findByText('OFFLINE')).toBeInTheDocument()
   })
 
   it('opens and closes the mobile menu, including with Escape', () => {

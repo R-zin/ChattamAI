@@ -8,7 +8,10 @@ const themes = (themesArg || 'default').split(',')
 fs.mkdirSync(out, { recursive: true })
 
 const ROUTES = ['/login', '/register', '/', '/new-check', '/workbench', '/analysis',
-  '/results/demo', '/results/insufficient', '/kbr', '/reports', '/projects', '/activity', '/settings']
+  '/results', '/results/insufficient', '/kbr', '/reports', '/settings']
+// Protected pages need a signed-in session against a real backend (there is no
+// mock mode): pass a bearer token from POST /auth/login/json as AUDIT_TOKEN.
+const token = process.env.AUDIT_TOKEN || ''
 const VIEWPORTS = { desktop: { width: 1440, height: 900 }, mobile: { width: 390, height: 844 } }
 
 const browser = await chromium.launch()
@@ -19,6 +22,9 @@ for (const theme of themes) {
       viewport: vp,
       colorScheme: theme === 'dark' ? 'dark' : theme === 'light' ? 'light' : 'no-preference',
     })
+    if (token) {
+      await ctx.addInitScript((t) => { try { sessionStorage.setItem('chattam.token', t) } catch {} }, token)
+    }
     if (theme === 'dark' || theme === 'light') {
       await ctx.addInitScript((t) => { try { localStorage.setItem('chattam.theme', t) } catch {} }, theme)
     }

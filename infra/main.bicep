@@ -85,6 +85,17 @@ param llmProvider string = ''
 ])
 param embeddingProvider string = ''
 
+@description('Accept image / image-only PDF floor plans (POST /api/check/plan-ocr).')
+param ocrEnabled bool = true
+
+@description('OCR engine for floor plans. Leave empty to use PaddleOCR on NVIDIA NIM when the NVIDIA key is set, otherwise Tesseract (bundled in the image).')
+@allowed([
+  ''
+  'nim'
+  'tesseract'
+])
+param ocrProvider string = ''
+
 @description('Number of reverse proxies in front of the app that append to X-Forwarded-For (Container Apps ingress = 1; add 1 if a Cloudflare Worker proxies to it).')
 param trustedProxyCount int = 1
 
@@ -103,6 +114,7 @@ param allowSelfRegistration bool = false
 // --- Providers: always passed to the app explicitly, never auto-detected there ---
 var resolvedLlmProvider = !empty(llmProvider) ? llmProvider : (!empty(geminiApiKey) ? 'gemini' : (!empty(anthropicApiKey) ? 'anthropic' : (!empty(nvidiaApiKey) ? 'nim' : 'gemini')))
 var resolvedEmbeddingProvider = !empty(embeddingProvider) ? embeddingProvider : (!empty(nvidiaApiKey) ? 'nim' : 'openai')
+var resolvedOcrProvider = !empty(ocrProvider) ? ocrProvider : (!empty(nvidiaApiKey) ? 'nim' : 'tesseract')
 
 // --- Resource Unique Names ---
 var uniqueSuffix = uniqueString(resourceGroup().id)
@@ -373,6 +385,14 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'ALLOW_SELF_REGISTRATION'
               value: allowSelfRegistration ? 'true' : 'false'
+            }
+            {
+              name: 'OCR_ENABLED'
+              value: ocrEnabled ? 'true' : 'false'
+            }
+            {
+              name: 'OCR_PROVIDER'
+              value: resolvedOcrProvider
             }
           ]
           probes: [

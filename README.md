@@ -252,7 +252,7 @@ flowchart, call graph, and extension/test seams), see
 ## Production Deployment
 
 - **Microsoft Azure (Container Apps) — primary target**: one container serves the API and the web app. `infra/main.bicep` provisions it; `.github/workflows/deploy-azure.yml` deploys the commit that passed CI and only succeeds once `/api/health/ready` returns `ok`. Set `LLM_PROVIDER` / `EMBEDDING_PROVIDER` and the matching key. Keep `maxReplicas` at 1: the SQLite database, FAISS index and rate limiter are per-replica. See [docs/DEPLOYMENT_AZURE.md](docs/DEPLOYMENT_AZURE.md).
-- **Fly.io + Vercel + Cloudflare (Option A) — optional, not the active deployment**: `fly.toml` and `cloudflare/wrangler.toml` are templates (e.g. `BACKEND_ORIGIN` is a placeholder). A Vercel frontend with no backend must build with `VITE_USE_MOCKS=true`. See [docs/DEPLOYMENT_OPTION_A.md](docs/DEPLOYMENT_OPTION_A.md).
+- **Fly.io + Vercel + Cloudflare (Option A) — optional, not the active deployment**: `fly.toml` and `cloudflare/wrangler.toml` are templates (e.g. `BACKEND_ORIGIN` is a placeholder). A Vercel frontend needs `VITE_API_URL` pointing at a reachable HTTPS backend; there is no offline demo mode. See [docs/DEPLOYMENT_OPTION_A.md](docs/DEPLOYMENT_OPTION_A.md).
 
 ## Production & Security Hardening
 

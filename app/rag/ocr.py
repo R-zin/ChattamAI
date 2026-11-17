@@ -21,12 +21,21 @@ are FEATURE-FLAGGED and lazily imported INSIDE the functions below. Importing th
 module therefore never fails on a box without them; only calling the OCR functions
 does. Use :func:`ocr_available` to give callers a clear 503 before that happens.
 
-Requires the ``tesseract`` binary at runtime (``brew install tesseract`` /
-``apt install tesseract-ocr``); it is NOT a pip dependency.
+Two engines, chosen by ``Settings.ocr_provider`` (``OCR_PROVIDER``):
+
+* ``nim`` — PaddleOCR via NVIDIA NIM (:mod:`app.rag.paddle_ocr`). Needs Pillow +
+  PyMuPDF and an NVIDIA API key (or a self-hosted NIM URL); no Tesseract. It
+  always returns geometry, so both the plain and layout entry points produce
+  layout-aware text. If the NIM call fails and Tesseract is installed, OCR falls
+  back to Tesseract and logs a warning.
+* ``tesseract`` — local pytesseract. Requires the ``tesseract`` binary at runtime
+  (``brew install tesseract`` / ``apt install tesseract-ocr``); it is NOT a pip
+  dependency.
 """
 
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 from pathlib import Path
@@ -74,6 +83,16 @@ _MULTI_NEWLINE_RE = re.compile(r"\n[ \t]*\n(?:[ \t]*\n)+")
 _WS_RUN_RE = re.compile(r"[ \t]{2,}")
 
 
+logger = logging.getLogger(__name__)
+
+
+def _provider() -> str:
+    """The configured OCR engine: ``"nim"`` (PaddleOCR) or ``"tesseract"``."""
+    from app.config import get_settings
+
+    return (get_settings().ocr_provider or "tesseract").strip().lower()
+
+
 def _import(name: str):
     """Import an OCR dependency lazily, raising a clear error if it is absent."""
     try:
@@ -90,19 +109,101 @@ def _import(name: str):
     return module
 
 
-def ocr_available() -> bool:
-    """Return True iff OCR can actually run on this box.
-
-    Checks that the Python deps import AND the Tesseract binary resolves on PATH.
-    Used to answer a clear 503 when OCR is requested but unavailable. Never raises;
-    offline and import-safe.
-    """
+def tesseract_available() -> bool:
+    """True iff pytesseract/Pillow/PyMuPDF import and the binary is on PATH."""
     for mod in ("pytesseract", "PIL", "fitz"):
         try:
             __import__(mod)
         except ImportError:
             return False
     return shutil.which("tesseract") is not None
+
+
+def ocr_unavailable_reason() -> Optional[str]:
+    """Why OCR cannot run with the configured engine, or None when it can.
+
+    Never raises; offline and import-safe (no network call is made).
+    """
+    provider = _provider()
+    if provider == "nim":
+        for mod in ("PIL", "fitz"):
+            try:
+                __import__(mod)
+            except ImportError:
+                return (
+                    "OCR is unavailable: Pillow and PyMuPDF are required for PaddleOCR."
+                )
+        from app.config import get_settings
+
+        settings = get_settings()
+        if (
+            "api.nvidia.com" in (settings.paddleocr_url or "")
+            and not settings.nvidia_api_key
+        ):
+            return "PaddleOCR (OCR_PROVIDER=nim) needs NVIDIA_API_KEY for the hosted NIM endpoint."
+        return None
+    if provider == "tesseract":
+        if tesseract_available():
+            return None
+        return (
+            "OCR is unavailable on this server (missing Pillow/pytesseract/"
+            "PyMuPDF or the Tesseract binary)."
+        )
+    return f"Unknown OCR_PROVIDER '{provider}' (use 'nim' or 'tesseract')."
+
+
+def ocr_available() -> bool:
+    """Return True iff OCR can actually run with the configured engine.
+
+    Used to answer a clear 503 when OCR is requested but unavailable. Never raises;
+    offline and import-safe.
+    """
+    return ocr_unavailable_reason() is None
+
+
+def _paddle_boxes(img) -> List["WordBox"]:
+    from app.rag.paddle_ocr import client_from_settings
+
+    return client_from_settings().image_word_boxes(img)
+
+
+def _with_tesseract_fallback(nim_call, tesseract_call):
+    """Run the PaddleOCR path; on failure fall back to Tesseract when installed."""
+    try:
+        return nim_call()
+    except Exception as exc:
+        if not tesseract_available():
+            raise
+        logger.warning("PaddleOCR failed (%s); falling back to Tesseract", exc)
+        return tesseract_call()
+
+
+def _paddle_image_text(path: Path) -> str:
+    gray = _load_gray_image(path)
+    try:
+        return word_boxes_to_text(_paddle_boxes(gray))
+    finally:
+        gray.close()
+
+
+def _paddle_pdf_text(path: Path) -> str:
+    fitz = _import("fitz")
+    Image = _import("PIL.Image")
+
+    import io
+
+    pages = []
+    zoom = _PDF_RENDER_DPI / 72.0
+    matrix = fitz.Matrix(zoom, zoom)
+    with fitz.open(str(path)) as doc:
+        for page in doc:
+            pix = page.get_pixmap(matrix=matrix)
+            img = Image.open(io.BytesIO(pix.tobytes("png"))).convert("L")
+            try:
+                pages.append(word_boxes_to_text(_paddle_boxes(img)))
+            finally:
+                img.close()
+    return "\n".join(pages)
 
 
 def _load_gray_image(path: Path):
@@ -135,7 +236,16 @@ def image_to_text(path: Path) -> str:
     Opens with Pillow, normalises for legibility (grayscale, light autocontrast,
     upscale if the image is small), then runs ``pytesseract.image_to_string``.
     ``path`` may be anything Pillow can open (see :data:`IMAGE_EXTS`).
+    With ``OCR_PROVIDER=nim`` the PaddleOCR NIM is used instead.
     """
+    if _provider() == "nim":
+        return _with_tesseract_fallback(
+            lambda: _paddle_image_text(path), lambda: _tesseract_image_text(path)
+        )
+    return _tesseract_image_text(path)
+
+
+def _tesseract_image_text(path: Path) -> str:
     pytesseract = _import("pytesseract")
 
     gray = _load_gray_image(path)
@@ -152,7 +262,16 @@ def pdf_images_to_text(path: Path) -> str:
     Renders each page via PyMuPDF (``fitz``) to a raster pixmap at
     ``_PDF_RENDER_DPI`` and runs Tesseract per page. Text PDFs should use
     ``ingestion._read_pdf`` instead; this is for scans / image-only exports.
+    With ``OCR_PROVIDER=nim`` each page goes to the PaddleOCR NIM instead.
     """
+    if _provider() == "nim":
+        return _with_tesseract_fallback(
+            lambda: _paddle_pdf_text(path), lambda: _tesseract_pdf_text(path)
+        )
+    return _tesseract_pdf_text(path)
+
+
+def _tesseract_pdf_text(path: Path) -> str:
     fitz = _import("fitz")
     pytesseract = _import("pytesseract")
     Image = _import("PIL.Image")
@@ -326,7 +445,26 @@ def image_to_layout_text(
     plain :func:`image_to_text` path instead and set ``note`` to a short reason —
     OCR NEVER crashes because geometry failed. If ``fallback_to_plain`` is False,
     a hard failure re-raises the original exception.
+
+    With ``OCR_PROVIDER=nim`` PaddleOCR supplies the geometry; if it fails and
+    ``fallback_to_plain`` is True, the Tesseract layout pass runs instead (when
+    installed) and ``note`` records why.
     """
+    if _provider() == "nim":
+        try:
+            return _paddle_image_text(path), None
+        except Exception as exc:
+            if not fallback_to_plain or not tesseract_available():
+                raise
+            logger.warning("PaddleOCR failed (%s); falling back to Tesseract", exc)
+            text, note = _tesseract_layout_text(path, fallback_to_plain)
+            return text, note or f"paddleocr_failed: {exc}"
+    return _tesseract_layout_text(path, fallback_to_plain)
+
+
+def _tesseract_layout_text(
+    path: Path, fallback_to_plain: bool = True
+) -> Tuple[str, Optional[str]]:
     try:
         pytesseract = _import("pytesseract")
         Output = _import("pytesseract.Output")
@@ -337,7 +475,7 @@ def image_to_layout_text(
             except Exception as exc:  # bad frame, engine hiccup, no binary
                 if not fallback_to_plain:
                     raise
-                return image_to_text(path), f"layout_ocr_failed: {exc}"
+                return _plain(path), f"layout_ocr_failed: {exc}"
         finally:
             gray.close()
         boxes = tsv_to_word_boxes(data)
@@ -345,17 +483,27 @@ def image_to_layout_text(
             # Degenerate TSV (nothing recognised) — plain string is more useful.
             if not fallback_to_plain:
                 raise RuntimeError("no usable word boxes from Tesseract TSV")
-            return image_to_text(path), "layout_ocr_failed: no word boxes"
+            return _plain(path), "layout_ocr_failed: no word boxes"
         return word_boxes_to_text(boxes), None
     except Exception as exc:
         if not fallback_to_plain:
             raise
         try:
-            return image_to_text(path), f"layout_ocr_failed: {exc}"
+            return _plain(path), f"layout_ocr_failed: {exc}"
         except Exception:
             # Even the plain path failed (e.g. Pillow cannot open the file):
             # surface a clear empty result rather than crash the pipeline.
             return "", f"ocr_unavailable: {exc}"
+
+
+def _plain(path: Path) -> str:
+    """Words-only Tesseract fallback for the layout pass.
+
+    Resolved through the module attribute so tests can stub ``image_to_text``.
+    """
+    if _provider() == "nim":
+        return _tesseract_image_text(path)
+    return image_to_text(path)
 
 
 def normalize_ocr_text(text: str) -> str:
@@ -393,6 +541,8 @@ __all__ = [
     "IMAGE_EXTS",
     "WordBox",
     "ocr_available",
+    "ocr_unavailable_reason",
+    "tesseract_available",
     "image_to_text",
     "image_to_layout_text",
     "pdf_images_to_text",

@@ -1,7 +1,7 @@
 // Knowledge base page and the evidence shown on the Results page: rulebook
 // Q&A with citations, search modes, live index statistics, citation grounding
-// and rule coverage. Runs against the demo data layer (see vitest.config.js).
-import { describe, it, expect, afterEach } from 'vitest'
+// and rule coverage. The backend is stubbed with API-shaped fixtures.
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import React from 'react'
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { BrowserRouter } from 'react-router-dom'
@@ -12,10 +12,23 @@ import {
   COVERAGE_META,
   ANSWER_CONFIDENCE_META,
   SEARCH_MODES,
-  demoResponse,
   askRulebook,
   fetchIndexStats,
 } from '../data.js'
+import { ASK_ANSWER, INDEX_STATS, KBR_DOCUMENTS, RESULT, SEARCH_HITS, stubBackend } from './fixtures.js'
+
+let fetchMock
+beforeEach(() => {
+  fetchMock = stubBackend({
+    '/api/kbr/index': INDEX_STATS,
+    '/api/kbr/documents': KBR_DOCUMENTS,
+    '/api/rules/search': SEARCH_HITS,
+    '/api/rules/ask': ASK_ANSWER,
+  })
+})
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
 const renderPage = (Page) =>
   render(
@@ -41,11 +54,19 @@ describe('display metadata', () => {
     expect(SEARCH_MODES.map((m) => m.value)).toEqual(['hybrid', 'dense', 'lexical', 'advanced'])
   })
 
-  it('demo data layer answers with a verified citation', async () => {
-    const result = await askRulebook('What is the front setback?')
+  it('asks the backend and returns its answer unchanged', async () => {
+    const result = await askRulebook('What is the front setback?', 4)
     expect(result.abstained).toBe(false)
     expect(result.citations.some((c) => c.cited)).toBe(true)
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/rules/ask')
+    expect(JSON.parse(opts.body)).toEqual({ question: 'What is the front setback?', top_k: 4 })
     expect((await fetchIndexStats()).retrieval_strategy).toBe('advanced')
+  })
+
+  it('surfaces a backend failure instead of a canned answer', async () => {
+    stubBackend({ '/api/rules/ask': [{ detail: 'LLM is not configured.' }, 503] })
+    await expect(askRulebook('What is the front setback?')).rejects.toThrow('LLM is not configured.')
   })
 })
 
@@ -61,7 +82,7 @@ describe('Knowledge page', () => {
   it('lists documents with their rule and chunk counts', async () => {
     renderPage(Knowledge)
     const table = screen.getByRole('table')
-    expect(within(table).getByText('Kerala Building Rules 2019.pdf')).toBeInTheDocument()
+    expect(await within(table).findByText('Kerala Building Rules 2019.pdf')).toBeInTheDocument()
     expect(within(table).getByText('Rules')).toBeInTheDocument()
     expect(within(table).getAllByText(/INDEXED/).length).toBeGreaterThan(0)
   })
@@ -114,12 +135,14 @@ describe('Results page evidence', () => {
   afterEach(() => sessionStorage.clear())
 
   it('labels each finding with whether its citation was verified', () => {
+    sessionStorage.setItem('chattam.result', JSON.stringify(RESULT))
     renderPage(Results)
     expect(screen.getAllByText(/CITATION VERIFIED/)).toHaveLength(2)
     expect(screen.getAllByText(/PARTLY VERIFIED/)).toHaveLength(1)
   })
 
   it('shows which topics had a rule retrieved and says gaps were not assessed', () => {
+    sessionStorage.setItem('chattam.result', JSON.stringify(RESULT))
     renderPage(Results)
     const panel = screen.getByRole('region', { name: /rule coverage/i })
     expect(within(panel).getByText('3/4 TOPICS')).toBeInTheDocument()
@@ -129,8 +152,8 @@ describe('Results page evidence', () => {
     expect(within(panel).getByText(/not assessed/i)).toBeInTheDocument()
   })
 
-  it('never borrows demo evidence for a stored result that has none', async () => {
-    const stored = { ...demoResponse, retrieval: undefined, grounding: undefined }
+  it('shows no evidence panels for a result that has none', async () => {
+    const stored = { ...RESULT, retrieval: undefined, grounding: undefined }
     sessionStorage.setItem('chattam.result', JSON.stringify(stored))
     renderPage(Results)
     await waitFor(() => expect(screen.queryByText(/CITATION VERIFIED/)).not.toBeInTheDocument())
@@ -139,7 +162,7 @@ describe('Results page evidence', () => {
 
   it('flags a citation the retrieved rules do not contain', async () => {
     const stored = {
-      ...demoResponse,
+      ...RESULT,
       grounding: {
         total: 3,
         score: 0,

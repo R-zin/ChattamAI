@@ -1,11 +1,10 @@
-// Live (non-demo) behaviour of the data layer: same-origin API calls and no
-// silent fallback to mock data. The suite default is demo mode (see
-// vitest.config.js), so each test opts out explicitly and reloads the module.
+// Data layer: every call goes to the backend (same origin unless VITE_API_URL is
+// set), failures reach the caller, and nothing is ever substituted with
+// placeholder data.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-async function loadData({ mocks = '', apiUrl = '' } = {}) {
+async function loadData({ apiUrl = '' } = {}) {
   vi.resetModules()
-  vi.stubEnv('VITE_USE_MOCKS', mocks)
   vi.stubEnv('VITE_API_URL', apiUrl)
   return import('../data.js')
 }
@@ -13,55 +12,19 @@ async function loadData({ mocks = '', apiUrl = '' } = {}) {
 const json = (body, status = 200) =>
   Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) })
 
-describe('API availability', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs()
-    vi.unstubAllGlobals()
-  })
-
-  it('treats an empty VITE_API_URL as same-origin, not as "no API"', async () => {
-    const data = await loadData()
-    expect(data.USE_MOCKS).toBe(false)
-    expect(data.apiAvailable()).toBe(true)
-  })
-
-  it('uses mocks only when VITE_USE_MOCKS is explicitly truthy', async () => {
-    for (const v of ['true', '1', 'yes', 'on', 'TRUE']) {
-      const data = await loadData({ mocks: v })
-      expect(data.apiAvailable(), v).toBe(false)
-    }
-    for (const v of ['', 'false', '0', 'no']) {
-      const data = await loadData({ mocks: v })
-      expect(data.apiAvailable(), v).toBe(true)
-    }
-  })
-
-  it('refuses an http API URL from an https page (mixed content)', async () => {
-    const data = await loadData({ apiUrl: 'http://api.example.com' })
-    const original = window.location
-    Object.defineProperty(window, 'location', {
-      value: { ...original, protocol: 'https:' },
-      configurable: true,
-    })
-    try {
-      expect(data.apiAvailable()).toBe(false)
-    } finally {
-      Object.defineProperty(window, 'location', { value: original, configurable: true })
-    }
-  })
+let fetchMock
+beforeEach(() => {
+  fetchMock = vi.fn()
+  vi.stubGlobal('fetch', fetchMock)
+  sessionStorage.clear()
+  localStorage.clear()
+})
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
 })
 
-describe('live mode requests', () => {
-  let fetchMock
-  beforeEach(() => {
-    fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-  })
-  afterEach(() => {
-    vi.unstubAllEnvs()
-    vi.unstubAllGlobals()
-  })
-
+describe('API base URL', () => {
   it('calls relative same-origin URLs when VITE_API_URL is empty', async () => {
     const data = await loadData()
     fetchMock.mockReturnValue(json({ status: 'ok' }))
@@ -76,14 +39,74 @@ describe('live mode requests', () => {
     expect(fetchMock.mock.calls[0][0]).toBe('https://api.example.com/api/health')
   })
 
-  it('does not call the network in demo mode', async () => {
-    const data = await loadData({ mocks: 'true' })
-    const health = await data.fetchHealth()
-    expect(health.status).toBe('ok')
-    expect(fetchMock).not.toHaveBeenCalled()
+  it('refuses an http API URL from an https page with a clear error instead of faking data', async () => {
+    const data = await loadData({ apiUrl: 'http://api.example.com' })
+    const original = window.location
+    Object.defineProperty(window, 'location', {
+      value: { ...original, protocol: 'https:' },
+      configurable: true,
+    })
+    try {
+      expect(data.apiConfigError()).toMatch(/Misconfigured API URL/)
+      await expect(data.fetchHealth()).rejects.toThrow(/Misconfigured API URL/)
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      Object.defineProperty(window, 'location', { value: original, configurable: true })
+    }
   })
 
-  it('fetchReports rejects on failure instead of returning demo reports', async () => {
+  it('exposes no mock or demo switches', async () => {
+    const data = await loadData()
+    for (const name of ['USE_MOCKS', 'apiAvailable', 'demoResponse', 'demoFactGrid', 'checks', 'reports', 'kbrDocs', 'kbrStats', 'metrics']) {
+      expect(data[name], name).toBeUndefined()
+    }
+  })
+})
+
+describe('authenticated requests', () => {
+  it('sends the stored bearer token', async () => {
+    const data = await loadData()
+    data.setToken('tok-123')
+    fetchMock.mockReturnValue(json([]))
+    await data.fetchReports()
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer tok-123')
+  })
+
+  it('PDF certificate export sends the bearer token', async () => {
+    const data = await loadData()
+    data.setToken('tok-456')
+    fetchMock.mockReturnValue(
+      Promise.resolve({ ok: true, status: 200, blob: () => Promise.resolve(new Blob(['%PDF'])) })
+    )
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    // jsdom cannot navigate to a blob: URL; the download click itself is not under test.
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+    await data.exportPdfReportV2(new File(['%PDF'], 'plan.pdf', { type: 'application/pdf' }))
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/v2/check/pdf/export-report')
+    expect(opts.headers.Authorization).toBe('Bearer tok-456')
+    expect(click).toHaveBeenCalledOnce()
+    click.mockRestore()
+  })
+
+  it('clears the token on 401', async () => {
+    const data = await loadData()
+    data.setToken('expired')
+    // Already on /login, so the redirect is a no-op (jsdom cannot navigate).
+    window.history.pushState({}, '', '/login')
+    try {
+      fetchMock.mockReturnValue(json({ detail: 'Not authenticated' }, 401))
+      await expect(data.fetchReports()).rejects.toThrow(/session has expired/i)
+      expect(data.getToken()).toBeNull()
+    } finally {
+      window.history.pushState({}, '', '/')
+    }
+  })
+})
+
+describe('no fallback data', () => {
+  it('fetchReports rejects on failure', async () => {
     const data = await loadData()
     fetchMock.mockReturnValue(json({ detail: 'boom' }, 500))
     await expect(data.fetchReports()).rejects.toThrow('boom')
@@ -95,37 +118,73 @@ describe('live mode requests', () => {
     expect(await data.fetchReports()).toEqual([])
   })
 
-  it('fetchKbrDocuments rejects on failure instead of returning demo documents', async () => {
+  it('fetchReports maps persisted statuses', async () => {
     const data = await loadData()
-    fetchMock.mockRejectedValue(new Error('Failed to fetch'))
-    await expect(data.fetchKbrDocuments()).rejects.toThrow('unreachable')
+    fetchMock.mockReturnValue(
+      json([
+        { report_id: 3, status: 'fail', violations: [{}, {}], plan_text: 'plan A', created_at: '2026-11-01T10:00:00' },
+        { report_id: 2, status: 'warning', violations: [{}] },
+        { report_id: 1, status: 'pass', violations: [] },
+      ])
+    )
+    const rows = await data.fetchReports()
+    expect(rows.map((r) => [r.id, r.status, r.violations])).toEqual([
+      [3, 'violation', 2],
+      [2, 'review', 1],
+      [1, 'compliant', 0],
+    ])
+    expect(rows[0].date).toBe('2026-11-01')
+    expect(rows[1].project).toBe('Assessment #2')
   })
 
-  it('fetchKbrDocuments returns an empty list for an empty corpus', async () => {
+  it('fetchReport loads one persisted report by id', async () => {
     const data = await loadData()
-    fetchMock.mockReturnValue(json([]))
-    expect(await data.fetchKbrDocuments()).toEqual([])
+    fetchMock.mockReturnValue(json({ report_id: 7, violations: [], retrieved_rules: [] }))
+    const r = await data.fetchReport(7)
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/reports/7')
+    expect(r.report_id).toBe(7)
   })
 
-  it('checkPdfV2 never substitutes a mock assessment for a failed audit', async () => {
+  it('fetchKbrDocuments rejects when the backend is unreachable', async () => {
+    const data = await loadData()
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+    await expect(data.fetchKbrDocuments()).rejects.toThrow(/unreachable/i)
+  })
+
+  it('fetchKbrDocuments joins documents with real counts from the index', async () => {
+    const data = await loadData()
+    fetchMock.mockImplementation((url) =>
+      url === '/api/kbr/index'
+        ? json({ documents: [{ source: 'kbr-2019.pdf', chunks: 40, rules: 12, pages: 9 }] })
+        : json([
+            { filename: 'kbr-2019.pdf', size_bytes: 2048, modified_at: '2026-10-02T09:14:00', ext: '.pdf' },
+            { filename: 'new-upload.txt', size_bytes: 10, modified_at: '2026-10-03T09:14:00', ext: '.txt' },
+          ])
+    )
+    expect(await data.fetchKbrDocuments()).toEqual([
+      { doc: 'kbr-2019.pdf', type: 'KBR (PDF)', pages: 9, chunks: '40', rules: '12', indexed: '2026-10-02', status: 'INDEXED' },
+      { doc: 'new-upload.txt', type: 'KBR (TXT)', pages: '—', chunks: '0', rules: '0', indexed: '2026-10-03', status: 'NOT INDEXED' },
+    ])
+  })
+
+  it('checkPdfV2 surfaces a failed audit', async () => {
     const data = await loadData()
     fetchMock.mockReturnValue(json({ detail: 'Embeddings are not configured.' }, 503))
     const file = new File(['%PDF'], 'plan.pdf', { type: 'application/pdf' })
     await expect(data.checkPdfV2(file)).rejects.toThrow('Embeddings are not configured.')
   })
+
+  it('analyzePlan posts plan text to /api/check', async () => {
+    const data = await loadData()
+    fetchMock.mockReturnValue(json({ violations: [], retrieved_rules: [], extracted_facts: [], summary: '' }))
+    await data.analyzePlan({ planText: '3 floor building, 12m tall' })
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toBe('/api/check')
+    expect(JSON.parse(opts.body).plan_text).toBe('3 floor building, 12m tall')
+  })
 })
 
-describe('registration and sign-in data layer (live mode)', () => {
-  let fetchMock
-  beforeEach(() => {
-    fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-  })
-  afterEach(() => {
-    vi.unstubAllEnvs()
-    vi.unstubAllGlobals()
-  })
-
+describe('registration and sign-in', () => {
   it('registerUser POSTs the JSON body to /auth/register', async () => {
     const data = await loadData()
     fetchMock.mockReturnValue(json({ email: 'a@example.com' }, 201))
@@ -158,13 +217,6 @@ describe('registration and sign-in data layer (live mode)', () => {
     await expect(data.registerUser({ email: 'a@example.com', password: 'Abcdef12' })).rejects.toThrow(
       /unreachable/i
     )
-  })
-
-  it('registerUser only simulates success in demo mode (no network)', async () => {
-    const data = await loadData({ mocks: 'true' })
-    const user = await data.registerUser({ email: ' A@Example.com ', password: 'x' })
-    expect(user.email).toBe('a@example.com')
-    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('login never fakes a session when the backend is unreachable', async () => {

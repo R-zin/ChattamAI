@@ -268,8 +268,8 @@ def load_plan_text(path: Path) -> str:
         if not get_settings().ocr_enabled:
             raise ValueError(
                 f"Plan file '{suffix}' is an image and requires OCR, but OCR is "
-                "disabled. Set OCR_ENABLED=true and install Tesseract "
-                "(see plan.md Phase 3), or upload a text/PDF plan."
+                "disabled. Set OCR_ENABLED=true (OCR_PROVIDER=nim for PaddleOCR "
+                "on NVIDIA NIM, or tesseract), or upload a text/PDF plan."
             )
         return _ocr_image_plan(path)
     raise ValueError(f"Unsupported plan file type: {suffix}")

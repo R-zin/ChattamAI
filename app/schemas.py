@@ -275,6 +275,12 @@ class HealthResponse(BaseModel):
     database_ready: bool = Field(
         default=True, description="Whether the database answered a probe query"
     )
+    ocr_enabled: bool = Field(
+        default=False, description="Whether image/image-PDF plan OCR is enabled"
+    )
+    ocr_provider: Optional[str] = Field(
+        default=None, description="OCR engine: nim (PaddleOCR) or tesseract"
+    )
     issues: list[str] = Field(
         default_factory=list,
         description="Human-readable reasons the service is not fully ready",

@@ -5,21 +5,6 @@ import { AppFooter } from '../components/Shared.jsx'
 import Icon from '../components/Icon.jsx'
 import { analyzePlan, isBuildingPlanText, setPendingAnalysis } from '../data.js'
 
-const SAMPLES = [
-  {
-    label: 'Group A1 Residential (KBR 2019)',
-    text: 'Single family residential building under Group A1 in Category-II Village Panchayat with total built-up area of 90 sq. metres, 2 storeys. The proposed front distance from the street boundary is 1.0 metre and side distance is 50 centimetres. Plot area 240 sq m.',
-  },
-  {
-    label: 'Group F Commercial Complex',
-    text: 'Commercial building under Group F Occupancy on a plot of 850 sq. metres. Abutting public street width is 6.5 metres. Proposed building height is 16 metres with 4 storeys. Front open space provided is 2.5 metres, rear setback 2.0 metres, and side setbacks 1.5 metres.',
-  },
-  {
-    label: 'Insufficient Specification',
-    text: 'Proposed small shed structure in residential plot. Details on height and exact setbacks pending surveyor measurements.',
-  },
-]
-
 export default function NewCheck() {
   const nav = useNavigate()
   const fileRef = useRef(null)
@@ -89,29 +74,6 @@ export default function NewCheck() {
 
       <div className="p-6 md:p-8 flex-1 bg-bg">
         <div className="max-w-4xl mx-auto space-y-6">
-          {/* Action Ribbon & Quick Samples */}
-          <div className="border border-line bg-surface p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="text-[10px] mono text-ink-3 uppercase tracking-wider font-semibold">
-              SAMPLE PRESETS:
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {SAMPLES.map((s, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => {
-                    setPlanText(s.text)
-                    setFile(null)
-                    setFileError(null)
-                  }}
-                  className="text-[10px] mono border border-line hover:border-ink text-ink-2 hover:text-ink px-2.5 py-1 bg-bg transition-colors"
-                >
-                  [{s.label}]
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* File Upload Dropzone */}
           <div
             role="button"

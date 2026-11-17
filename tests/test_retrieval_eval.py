@@ -1,9 +1,11 @@
 """Retrieval quality gate on the bundled rulebook.
 
 Runs the golden cases (``tests/fixtures/retrieval_golden.json``) through the
-offline evaluation harness (``scripts/eval_retrieval.py``) against the real
-corpus in ``data/kbr`` - the sample excerpt and the 179-page Kerala Panchayat
-Building Rules gazette. Asserts that the shipped configuration (structure-aware
+offline evaluation harness (``scripts/eval_retrieval.py``) against the corpus
+the thresholds were calibrated on: the 179-page Kerala Panchayat Building Rules
+gazette (``data/kbr``) plus the synthetic sample excerpt, which is a test
+fixture (``tests/fixtures/kbr``) and is not shipped or indexed in production.
+Run ``python scripts/eval_retrieval.py`` for the production corpus alone. Asserts that the shipped configuration (structure-aware
 chunks + the topic-aware retriever) finds the governing rule, and that it is
 not worse than the previous pipeline (flat chunks + one hybrid query).
 
@@ -25,9 +27,18 @@ if str(ROOT / "scripts") not in sys.path:
 import eval_retrieval  # noqa: E402
 
 
+GAZETTE_PDF = ROOT / "data" / "kbr" / "kerala-panchayat-building-rules-2019.pdf"
+SAMPLE_FIXTURE = ROOT / "tests" / "fixtures" / "kbr" / "sample_kbr_excerpt.txt"
+
+
 @pytest.fixture(scope="module")
-def reports():
-    out = eval_retrieval.run(top_k=8)
+def reports(tmp_path_factory):
+    import shutil
+
+    corpus = tmp_path_factory.mktemp("eval-corpus")
+    shutil.copy2(GAZETTE_PDF, corpus)
+    shutil.copy2(SAMPLE_FIXTURE, corpus)
+    out = eval_retrieval.run(top_k=8, corpus_dir=corpus)
     return {(r["index"], r["strategy"]): r for r in out}
 
 
@@ -79,7 +90,7 @@ def test_rule_base_normalisation():
 
 def test_cli_prints_a_table(capsys, tmp_path):
     # A corpus of just the sample excerpt keeps the CLI smoke test fast.
-    sample = ROOT / "data" / "kbr" / "sample_kbr_excerpt.txt"
+    sample = ROOT / "tests" / "fixtures" / "kbr" / "sample_kbr_excerpt.txt"
     (tmp_path / sample.name).write_text(sample.read_text(encoding="utf-8"))
     args = ["--corpus", str(tmp_path), "--cases", "q-parking", "--top-k", "4", "-v"]
     assert eval_retrieval.main(args) == 0
@@ -92,7 +103,7 @@ def test_cli_prints_a_table(capsys, tmp_path):
 def test_cli_json_output(capsys, tmp_path):
     import json
 
-    sample = ROOT / "data" / "kbr" / "sample_kbr_excerpt.txt"
+    sample = ROOT / "tests" / "fixtures" / "kbr" / "sample_kbr_excerpt.txt"
     (tmp_path / sample.name).write_text(sample.read_text(encoding="utf-8"))
     args = ["--corpus", str(tmp_path), "--cases", "q-parking", "--json"]
     assert eval_retrieval.main(args) == 0

@@ -361,6 +361,8 @@ def _build_health(rag: RAGSystem) -> HealthResponse:
         verifier_model=verifier_model,
         verifier_ready=verifier_ready,
         retrieval_strategy=getattr(rag, "retrieval_strategy", None),
+        ocr_enabled=get_settings().ocr_enabled,
+        ocr_provider=get_settings().ocr_provider,
     )
 
 
@@ -520,8 +522,9 @@ def check_plan_ocr(
         raise HTTPException(
             status_code=503,
             detail=(
-                "OCR is disabled. Set OCR_ENABLED=true and install Tesseract "
-                "(see plan.md Phase 3) to check image/image-PDF plans."
+                "OCR is disabled. Set OCR_ENABLED=true (OCR_PROVIDER=nim uses "
+                "PaddleOCR on NVIDIA NIM; tesseract needs the local binary) to "
+                "check image/image-PDF plans."
             ),
         )
 
@@ -529,18 +532,13 @@ def check_plan_ocr(
         image_to_layout_text,
         image_to_text,
         normalize_ocr_text,
-        ocr_available,
+        ocr_unavailable_reason,
         pdf_images_to_text,
     )
 
-    if not ocr_available():
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "OCR is unavailable on this server (missing Pillow/pytesseract/"
-                "PyMuPDF or the Tesseract binary)."
-            ),
-        )
+    unavailable = ocr_unavailable_reason()
+    if unavailable:
+        raise HTTPException(status_code=503, detail=unavailable)
 
     content = file.file.read(MAX_UPLOAD_SIZE + 1)
     if len(content) > MAX_UPLOAD_SIZE:

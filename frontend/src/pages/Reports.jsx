@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { toast } from '../components/Toast.jsx'
 import { Header } from '../components/AppShell.jsx'
 import { AppFooter } from '../components/Shared.jsx'
@@ -131,11 +131,14 @@ export default function Reports() {
                         className="hover:bg-surface-2 transition-colors group"
                       >
                         <td className="px-4 py-3.5">
-                          <div className="text-xs font-semibold text-ink">
+                          <Link
+                            to={`/results/${r.id}`}
+                            className="text-xs font-semibold text-ink hover:underline"
+                          >
                             {r.project}
-                          </div>
+                          </Link>
                           <div className="text-[9px] mono text-ink-3">
-                            AUDIT #{r.id || idx + 1}
+                            AUDIT #{r.id}
                           </div>
                         </td>
                         <td className="px-4 py-3.5 text-xs mono text-ink-2">
@@ -145,9 +148,7 @@ export default function Reports() {
                           <Pill kind={s.pill}>{s.label}</Pill>
                         </td>
                         <td className="px-4 py-3.5 text-xs mono text-ink">
-                          {r.violations === null ? (
-                            '—'
-                          ) : r.violations > 0 ? (
+                          {r.violations > 0 ? (
                             <span className="text-danger font-semibold">
                               {r.violations} FLAGGED
                             </span>

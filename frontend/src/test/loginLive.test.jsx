@@ -3,12 +3,11 @@ import React from 'react'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
-// Live mode (a real backend is configured): demo affordances must be gone.
+// Sign-in page against a backend: no demo affordances, real Google call.
 vi.mock('../data.js', async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,
-    apiAvailable: () => true,
     fetchAuthConfig: vi.fn().mockResolvedValue({ registration_open: true }),
     getGoogleAuthUrl: vi.fn().mockRejectedValue(new Error('google is not configured')),
   }
@@ -16,7 +15,7 @@ vi.mock('../data.js', async (importOriginal) => {
 
 import Login from '../pages/Login.jsx'
 
-describe('Login in live mode', () => {
+describe('Login', () => {
   it('hides demo credentials and guest access, keeps sign up', async () => {
     render(
       <MemoryRouter>
@@ -31,8 +30,6 @@ describe('Login in live mode', () => {
   })
 
   it('Google sign-in reaches the backend call and reports its error', async () => {
-    // Before the fix, apiAvailable was never imported into Login.jsx, so clicking
-    // the button threw a ReferenceError and nothing was shown.
     render(
       <MemoryRouter>
         <Login />

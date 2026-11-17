@@ -5,8 +5,6 @@ import Pill from '../components/Pill.jsx'
 import Icon from '../components/Icon.jsx'
 import { toast } from '../components/Toast.jsx'
 import {
-  apiAvailable,
-  kbrDocs,
   fetchKbrDocuments,
   fetchIndexStats,
   searchKbrRules,
@@ -124,8 +122,7 @@ function RulebookAnswer({ result }) {
 }
 
 export default function Knowledge() {
-  // Live mode starts empty (never flashes demo documents); demo mode uses mocks.
-  const [docList, setDocList] = useState(apiAvailable() ? [] : kbrDocs)
+  const [docList, setDocList] = useState([])
   const [stats, setStats] = useState(null)
   const [ingesting, setIngesting] = useState(false)
   const [step, setStep] = useState(0)

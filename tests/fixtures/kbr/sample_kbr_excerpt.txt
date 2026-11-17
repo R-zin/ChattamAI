@@ -10,7 +10,7 @@ Status         : SUBSET of the Kerala Building Rules, prepared as a deterministi
                  sample and are indicative, NOT a substitute for the gazetted
                  rules. Always verify against the official Kerala Building Rules
                  (as amended) before acting on any value.
-Source file    : data/kbr/sample_kbr_excerpt.txt
+Source file    : tests/fixtures/kbr/sample_kbr_excerpt.txt
 --------------------------------------------------------------------------------
 
 

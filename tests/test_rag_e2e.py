@@ -22,7 +22,7 @@ from app.schemas import ComplianceResponse
 from tests.conftest import FakeEmbeddingProvider, FakeLLM
 
 ROOT = Path(__file__).resolve().parent.parent
-SAMPLE = ROOT / "data" / "kbr" / "sample_kbr_excerpt.txt"
+SAMPLE = ROOT / "tests" / "fixtures" / "kbr" / "sample_kbr_excerpt.txt"
 
 PLAN = "Three floor residential building, 12 m tall, 1 m front setback, plot 240 sq.m."
 

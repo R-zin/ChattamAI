@@ -56,6 +56,25 @@ def _env_choice(name: str) -> Optional[str]:
     return cleaned.lower() if cleaned else None
 
 
+_OCR_PROVIDER_ALIASES = {
+    "nim": "nim",
+    "nvidia": "nim",
+    "paddle": "nim",
+    "paddleocr": "nim",
+    "tesseract": "tesseract",
+}
+
+
+def _default_ocr_provider() -> str:
+    """``OCR_PROVIDER`` (tesseract | nim); unset -> nim when an NVIDIA key exists."""
+    explicit = _env_choice("OCR_PROVIDER")
+    if explicit:
+        return _OCR_PROVIDER_ALIASES.get(explicit, explicit)
+    if _env_key("NVIDIA_API_KEY", "NIM_API_KEY"):
+        return "nim"
+    return "tesseract"
+
+
 def _default_llm_provider() -> str:
     explicit = _env_choice("LLM_PROVIDER")
     if explicit:
@@ -196,11 +215,31 @@ class Settings(BaseModel):
     # and the Pillow/pytesseract/PyMuPDF deps still boots and serves text/PDF
     # plans unchanged. OCR deps are lazily imported only when this is on; see
     # app/rag/ocr.py. Requires the system `tesseract` binary at runtime.
-    ocr_enabled: bool = os.getenv("OCR_ENABLED", "").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
+    ocr_enabled: bool = Field(
+        default_factory=lambda: os.getenv("OCR_ENABLED", "").strip().lower()
+        in ("1", "true", "yes", "on")
+    )
+    # Engine: "nim" = PaddleOCR via NVIDIA NIM (app/rag/paddle_ocr.py; needs
+    # NVIDIA_API_KEY for the hosted endpoint, no Tesseract binary), "tesseract" =
+    # local pytesseract. PADDLEOCR_URL may point at a self-hosted NIM
+    # (http://<host>:8000/v1/infer); PADDLEOCR_MAX_B64 caps the inline image
+    # payload (hosted default 180000, 0 = unlimited) and larger plans are tiled.
+    ocr_provider: str = Field(default_factory=_default_ocr_provider)
+    paddleocr_url: str = Field(
+        default_factory=lambda: (
+            os.getenv("PADDLEOCR_URL", "").strip()
+            or "https://ai.api.nvidia.com/v1/cv/baidu/paddleocr"
+        )
+    )
+    paddleocr_timeout: float = Field(
+        default_factory=lambda: float(os.getenv("PADDLEOCR_TIMEOUT", "60"))
+    )
+    paddleocr_max_b64: Optional[int] = Field(
+        default_factory=lambda: (
+            int(os.getenv("PADDLEOCR_MAX_B64", "").strip())
+            if os.getenv("PADDLEOCR_MAX_B64", "").strip()
+            else None
+        )
     )
 
     # --- Embeddings (OpenAI / NVIDIA NIM) ---

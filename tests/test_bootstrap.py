@@ -13,9 +13,11 @@ class StubRag:
         self.index_size = size
         self.fail = fail
         self.ingest_calls = 0
+        self.rebuilds = 0
 
-    def ingest(self):
+    def ingest(self, rebuild=False):
         self.ingest_calls += 1
+        self.rebuilds += int(rebuild)
         if self.fail:
             raise RuntimeError("boom")
         self.index_size = 3
@@ -108,3 +110,46 @@ def test_background_thread_runs_ingest(enabled):
     rag = StubRag()
     bootstrap.start_background_ingest(rag).join(timeout=5)
     assert rag.ingest_calls == 1
+
+
+# -- retired seed files --------------------------------------------------------
+RETIRED_HEADER = (
+    "=====\nSAMPLE / SUBSET -- KERALA MUNICIPALITY BUILDING RULES (KBR)\n=====\n"
+    "Rule 5 setback 1.8m\n"
+)
+
+
+def test_retired_sample_is_removed_and_index_rebuilt(enabled):
+    enabled.mkdir(parents=True)
+    (enabled / "kbr-2019.pdf").write_bytes(b"%PDF")
+    (enabled / "sample_kbr_excerpt.txt").write_text(RETIRED_HEADER)
+    rag = StubRag(size=40)
+    result = bootstrap.auto_ingest_if_empty(rag)
+    assert not (enabled / "sample_kbr_excerpt.txt").exists()
+    assert (enabled / "kbr-2019.pdf").exists()
+    assert rag.rebuilds == 1
+    assert result["index_size"] == 3
+
+
+def test_user_file_with_retired_name_is_kept(enabled):
+    enabled.mkdir(parents=True)
+    (enabled / "sample_kbr_excerpt.txt").write_text("My own notes on Rule 23")
+    rag = StubRag(size=40)
+    assert bootstrap.auto_ingest_if_empty(rag) is None
+    assert (enabled / "sample_kbr_excerpt.txt").exists()
+    assert rag.ingest_calls == 0
+
+
+def test_retired_cleanup_skipped_when_auto_ingest_disabled(enabled, monkeypatch):
+    monkeypatch.setenv("AUTO_INGEST", "0")
+    enabled.mkdir(parents=True)
+    (enabled / "sample_kbr_excerpt.txt").write_text(RETIRED_HEADER)
+    assert bootstrap.auto_ingest_if_empty(StubRag(size=40)) is None
+    assert (enabled / "sample_kbr_excerpt.txt").exists()
+
+
+def test_retired_sample_is_not_shipped_in_seed_corpus():
+    from app.config import BASE_DIR
+
+    for name in bootstrap.RETIRED_KBR_FILES:
+        assert not (BASE_DIR / "data" / "kbr" / name).exists()

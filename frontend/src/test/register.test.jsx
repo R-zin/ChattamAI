@@ -3,7 +3,7 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
-// Keep the real demo-mode data layer, but let tests steer the config and the
+// Keep the real data layer, but let tests steer the config and the
 // registration call.
 const cfg = vi.hoisted(() => ({ fetchAuthConfig: vi.fn(), registerUser: vi.fn() }))
 vi.mock('../data.js', async (importOriginal) => {
@@ -127,7 +127,7 @@ describe('Register page', () => {
   })
 })
 
-describe('Login <-> Register link (demo mode)', () => {
+describe('Login <-> Register link', () => {
   const renderLogin = () =>
     render(
       <MemoryRouter initialEntries={['/login']}>
